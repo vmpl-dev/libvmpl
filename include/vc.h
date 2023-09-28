@@ -2,8 +2,8 @@
 #define __VC_H_
 
 #include <stdint.h>
-#include <asm/msr.h>
 
+#include "cpu-x86.h"
 #include "globals.h"
 #include "ghcb.h"
 

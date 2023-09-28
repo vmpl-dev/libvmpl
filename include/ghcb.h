@@ -5,6 +5,8 @@
  * Authors: Carlos Bilbao <carlos.bilbao@amd.com> and
  *          Tom Lendacky <thomas.lendacky@amd.com>
  */
+#ifndef __GHCB_H_
+#define __GHCB_H_
 
 #include <stdint.h>
 #include <stddef.h>
@@ -50,13 +52,13 @@ typedef struct Ghcb {
     uint32_t usage;
 } Ghcb;
 
-void set_offset_valid(Ghcb* ghcb, size_t offset) {
+inline void set_offset_valid(Ghcb* ghcb, size_t offset) {
     size_t idx = (offset / 8) / 8;
     size_t bit = (offset / 8) % 8;
     ghcb->valid_bitmap[idx] |= BIT(bit);
 }
 
-bool is_offset_valid(const Ghcb* ghcb, size_t offset) {
+inline bool is_offset_valid(const Ghcb* ghcb, size_t offset) {
     size_t idx = (offset / 8) / 8;
     size_t bit = (offset / 8) % 8;
     return (ghcb->valid_bitmap[idx] & BIT(bit)) != 0;
@@ -108,7 +110,7 @@ inline void ghcb_clear(Ghcb* ghcb) {
     memset(ghcb->valid_bitmap, 0, sizeof(ghcb->valid_bitmap));
 }
 
-void ghcb_get_shared_buffer(Ghcb* ghcb, uint8_t* data, size_t len) {
+inline void ghcb_get_shared_buffer(Ghcb* ghcb, uint8_t* data, size_t len) {
     if (len > SHARED_BUFFER_SIZE) {
         return;
     }
@@ -117,7 +119,7 @@ void ghcb_get_shared_buffer(Ghcb* ghcb, uint8_t* data, size_t len) {
 }
 
 // TODO: pgtable_va_to_pa(ghcb->shared_buffer)
-void ghcb_set_shared_buffer(Ghcb* ghcb, const uint8_t* data, size_t len) {
+inline void ghcb_set_shared_buffer(Ghcb* ghcb, const uint8_t* data, size_t len) {
     if (len > SHARED_BUFFER_SIZE) {
         return;
     }
@@ -127,3 +129,5 @@ void ghcb_set_shared_buffer(Ghcb* ghcb, const uint8_t* data, size_t len) {
 }
 
 _Static_assert(sizeof(struct Ghcb) == PAGE_SIZE, "Ghcb size is not equal to PAGE_SIZE");
+
+#endif

@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #include "svsm-vmpl.h"
+#include "procmap.h"
 
 #define MAX_LINE_LENGTH 256
 
@@ -84,6 +85,8 @@ typedef void (*dune_syscall_cb) (struct dune_tf *tf);
 
 // XXX: Must match kern/dune.h
 #define DUNE_SIGNAL_INTR_BASE 200
+
+void grant_vmpl2_access(MemoryMapping *mapping);
 
 // vmpl initialization
 int vmpl_init();

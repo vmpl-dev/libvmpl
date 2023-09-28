@@ -1,6 +1,8 @@
 /*
  * cpu-x86.h - header for X86 hardware features
  */
+#ifndef __CPU_X86_H_
+#define __CPU_X86_H_
 
 static inline void native_write_msr(unsigned int msr,
                                     unsigned low, unsigned high)
@@ -82,3 +84,5 @@ struct idtd {
 // These are arbitrarily chosen, but with care not to overlap
 // processor defined exceptions or interrupt vectors.
 #define T_SYSCALL   48		// system call
+
+#endif

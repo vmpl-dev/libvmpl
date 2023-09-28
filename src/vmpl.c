@@ -13,7 +13,11 @@
 #include "svsm-vmpl.h"
 #include "procmap.h"
 #include "vmpl.h"
+// #include "globals.h"
 #include "vc.h"
+#include "hypercall.h"
+
+#define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 
 int dune_fd;
 
@@ -58,8 +62,8 @@ void grant_vmpl2_access(MemoryMapping *mapping) {
     switch (get_mapping_type(mapping->pathname)) {
     case PROCMAP_TYPE_UNKNOWN:
     case PROCMAP_TYPE_ANONYMOUS:
-    case PROCMAP_TYPE_VSYSCALL:
-    case PROCMAP_TYPE_VVAR:
+    case PROCMAP_TYPE_VSYSCALL: // TOTO: page_vmpl_set: 页面获取失败
+    case PROCMAP_TYPE_VVAR: // page_vmpl_set: 页面获取失败
         return;
     default:
         break;
@@ -68,11 +72,30 @@ void grant_vmpl2_access(MemoryMapping *mapping) {
     nr_pages = (mapping->end - mapping->start) >> 12;
 
     print_mapping_oneline(mapping);
-    set_pages_vmpl(mapping->start, RMP_4K, Vmpl2 | VMPL_RWX, nr_pages);
+
+    uint64_t attrs = Vmpl2;
+    if (mapping->perms[0] == 'r')
+        attrs |= VMPL_R;
+    if (mapping->perms[1] == 'w')
+        attrs |= VMPL_W;
+    if (mapping->perms[2] == 'x')
+        attrs |= VMPL_X_SUPER;
+
+    if (get_mapping_type(mapping->pathname) == PROCMAP_TYPE_VDSO) {
+        attrs = VMPL_R | VMPL_X_USER | VMPL_X_SUPER | Vmpl2;
+    }
+
+    if (get_mapping_type(mapping->pathname) == PROCMAP_TYPE_VVAR) {
+        attrs = VMPL_R | Vmpl2;
+    }
+
+    set_pages_vmpl(mapping->start, RMP_4K, attrs, nr_pages);
 }
 
 static inline void setup_vmpl(void) {
-    // 调用解析虚拟地址信息函数并传入回调函数
+    // 设置vmpl
+    printf("setup vmpl\n");
+    //  1. 获取当前进程的内存映射
     parse_proc_maps(grant_vmpl2_access);
 }
 
@@ -161,57 +184,59 @@ void dune_trap_handler(int num, struct dune_tf *tf) {
 
 }
 
-uint64_t call_vmpl1(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
-{
-	u64 val, resp;
-	int ret;
-
-	val = sev_es_rd_ghcb_msr();
-
-	sev_es_wr_ghcb_msr(GHCB_MSR_VMPL_REQ_LEVEL(1));
-
-    // Assuming that syscall_number, arg1, arg2, arg3, arg4, arg5, and arg6 are variables
-    unsigned long long result;
-    asm volatile(
-        "movq %1, %%rax\n" // move the syscall number to RAX register
-        "movq %2, %%rdi\n" // move the first argument to RDI register
-        "movq %3, %%rsi\n" // move the second argument to RSI register
-        "movq %4, %%rdx\n" // move the third argument to RDX register
-        "movq %5, %%r10\n" // move the fourth argument to R10 register
-        "movq %6, %%r8\n"  // move the fifth argument to R8 register
-        "movq %7, %%r9\n"  // move the sixth argument to R9 register
-        "rep; vmmcall\n"           // call the syscall
-        "movq %%rax, %0\n" // move the return value to result
-        : "=r"(result)
-        : "r"(syscall_number), "r"(arg1), "r"(arg2), "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)
-        : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9");
-
-    resp = sev_es_rd_ghcb_msr();
-
-	sev_es_wr_ghcb_msr(val);
-
-	if (GHCB_MSR_INFO(resp) != GHCB_MSR_VMPL_RES)
-		ret = -EINVAL;
-
-	if (GHCB_MSR_VMPL_RESP_VAL(resp) != 0)
-		ret = -EINVAL;
-
-	return ret;
+/**
+ * @brief Asserts the offsets of various fields in the vmsa_config struct.
+ * 
+ * This function asserts that the offsets of various fields in the vmsa_config struct
+ * are equal to their corresponding values in the DUNE_ENTER macro. This is done to ensure
+ * that the struct is properly aligned and can be used with the Dune library.
+ * 
+ * @return void
+ */
+void vmpl_build_assert() {
+    BUILD_ASSERT(IOCTL_DUNE_ENTER == DUNE_ENTER);
+	BUILD_ASSERT(DUNE_CFG_RET == offsetof(struct vmsa_config, ret));
+	BUILD_ASSERT(DUNE_CFG_RAX == offsetof(struct vmsa_config, rax));
+	BUILD_ASSERT(DUNE_CFG_RBX == offsetof(struct vmsa_config, rbx));
+	BUILD_ASSERT(DUNE_CFG_RCX == offsetof(struct vmsa_config, rcx));
+	BUILD_ASSERT(DUNE_CFG_RDX == offsetof(struct vmsa_config, rdx));
+	BUILD_ASSERT(DUNE_CFG_RSI == offsetof(struct vmsa_config, rsi));
+	BUILD_ASSERT(DUNE_CFG_RDI == offsetof(struct vmsa_config, rdi));
+	BUILD_ASSERT(DUNE_CFG_RSP == offsetof(struct vmsa_config, rsp));
+	BUILD_ASSERT(DUNE_CFG_RBP == offsetof(struct vmsa_config, rbp));
+	BUILD_ASSERT(DUNE_CFG_R8 == offsetof(struct vmsa_config, r8));
+	BUILD_ASSERT(DUNE_CFG_R9 == offsetof(struct vmsa_config, r9));
+	BUILD_ASSERT(DUNE_CFG_R10 == offsetof(struct vmsa_config, r10));
+	BUILD_ASSERT(DUNE_CFG_R11 == offsetof(struct vmsa_config, r11));
+	BUILD_ASSERT(DUNE_CFG_R12 == offsetof(struct vmsa_config, r12));
+	BUILD_ASSERT(DUNE_CFG_R13 == offsetof(struct vmsa_config, r13));
+	BUILD_ASSERT(DUNE_CFG_R14 == offsetof(struct vmsa_config, r14));
+	BUILD_ASSERT(DUNE_CFG_R15 == offsetof(struct vmsa_config, r15));
+	BUILD_ASSERT(DUNE_CFG_RIP == offsetof(struct vmsa_config, rip));
+	BUILD_ASSERT(DUNE_CFG_RFLAGS == offsetof(struct vmsa_config, rflags));
+	BUILD_ASSERT(DUNE_CFG_CR3 == offsetof(struct vmsa_config, cr3));
+	BUILD_ASSERT(DUNE_CFG_STATUS == offsetof(struct vmsa_config, status));
+	BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct vmsa_config, vcpu));
 }
 
 int vmpl_init() {
+    int ret = 0;
+
     // Grant VMPL2 access permission
     setup_vmpl();
 
-    // Implementation of vmpl_init function
-    printf("Implementation of vmpl_init function\n");
+    // Build assert
+    vmpl_build_assert();
 
     dune_fd = open("/dev/svsm-vmpl", O_RDWR);
-    if (dune_fd == -1)
-    {
+    if (dune_fd == -1) {
         perror("Failed to open /dev/svsm-vmpl");
-        return 0;
+        ret = -errno;
+        return ret;
     }
+
+    // Setup signal
+    setup_signal();
 
     // Setup IDT
     setup_idt();
@@ -219,17 +244,23 @@ int vmpl_init() {
     return 0;
 }
 
-int vmpl_enter() {
-    // Implementation of vmpl_enter function
-    printf("Implementation of vmpl_enter function\n");
-    struct vmsa_config *conf;
-    int ret;
-
-    conf = malloc(sizeof(struct vmsa_config));
-
+void vmsa_config_init(struct vmsa_config *conf) {
+    memset(conf, 0, sizeof(struct vmsa_config));
     conf->rip = (__u64) &__dune_ret;
     conf->rsp = 0;
     conf->rflags = 0x2;
+}
+
+int vmpl_enter() {
+    int ret;
+    struct vmsa_config *conf;
+    const char *buf = "Hello, World\n";
+
+    // Implementation of vmpl_enter function
+    printf("Implementation of vmpl_enter function\n");
+
+    conf = malloc(sizeof(struct vmsa_config));
+    vmsa_config_init(conf);
 
     /* NOTE: We don't setup the general purpose registers because __dune_ret
         * will restore them as they were before the __dune_enter call */
@@ -237,8 +268,12 @@ int vmpl_enter() {
     ret = __dune_enter(dune_fd, conf);
     if (ret) {
         printf("dune: entry to Dune mode failed, ret is %d\n", ret);
+        perror("dune: entry to Dune mode failed");
         return -EIO;
     }
+
+    hp_write(STDOUT_FILENO, buf, strlen(buf));
+    hp_exit();
 
     return 0;
 }

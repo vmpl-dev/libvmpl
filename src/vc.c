@@ -11,7 +11,7 @@ void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
     value |= reason_set << 12;
     value |= reason_code << 16;
 
-    wrmsr(MSR_AMD64_SEV_ES_GHCB, value);
+    wrmsrl(MSR_AMD64_SEV_ES_GHCB, value);
     vc_vmgexit();
 
     while (1) {
@@ -44,18 +44,18 @@ inline void vc_terminate_ghcb_feature() {
 }
 
 uint64_t vc_msr_protocol(uint64_t request) {
-    uint64_t response;
+    uint64_t response, value;
 
     // Save the current GHCB MSR value
-    uint64_t value = rdmsr(MSR_AMD64_SEV_ES_GHCB);
+    rdmsrl(MSR_AMD64_SEV_ES_GHCB, value);
 
     // Perform the MSR protocol
-    wrmsr(MSR_AMD64_SEV_ES_GHCB, request);
+    wrmsrl(MSR_AMD64_SEV_ES_GHCB, request);
     vc_vmgexit();
-    response = rdmsr(MSR_AMD64_SEV_ES_GHCB);
+    rdmsrl(MSR_AMD64_SEV_ES_GHCB, response);
 
     // Restore the GHCB MSR value
-    wrmsr(MSR_AMD64_SEV_ES_GHCB, value);
+    wrmsrl(MSR_AMD64_SEV_ES_GHCB, value);
 
     return response;
 }
@@ -256,7 +256,7 @@ void vc_register_ghcb(uint64_t pa) {
         vc_terminate_svsm_general();
     }
 
-    wrmsr(MSR_AMD64_SEV_ES_GHCB, pa);
+    wrmsrl(MSR_AMD64_SEV_ES_GHCB, pa);
 }
 
 #ifdef PAGE_TABLE

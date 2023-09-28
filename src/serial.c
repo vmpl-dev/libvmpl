@@ -56,15 +56,13 @@ void serial_in(char *string) {
         }
     }
 }
-#endif
-
-#ifndef VERBOSE
+#else
 void serial_out(const char *string) {}
-void serial_init() {}
+void serial_init(void) {}
 #endif
 
 #ifdef VERBOSE
-void serial_init() {
+void serial_init(void) {
     outb(PORT + IER, 0); /* Disable all interrupts */
     outb(PORT + FCR, 0); /* Disable all FIFOs */
     outb(PORT + LCR, 3); /* 8n1 */
