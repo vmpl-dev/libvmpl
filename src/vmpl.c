@@ -9,10 +9,11 @@
 #include <string.h>
 
 #include "cpu-x86.h"
-#include "svsm-dev.h"
+// #include "svsm-dev.h"
 #include "svsm-vmpl.h"
 #include "procmap.h"
 #include "vmpl.h"
+#include "vc.h"
 
 int dune_fd;
 
@@ -79,9 +80,9 @@ typedef uintptr_t phys_addr_t;
 
 static inline void set_idt_addr(struct idtd *id, phys_addr_t addr)
 {       
-        id->low    = addr & 0xFFFF;
-        id->middle = (addr >> 16) & 0xFFFF;
-        id->high   = (addr >> 32) & 0xFFFFFFFF;
+    id->low    = addr & 0xFFFF;
+    id->middle = (addr >> 16) & 0xFFFF;
+    id->high   = (addr >> 32) & 0xFFFFFFFF;
 }
 
 #define ISR_LEN 16
@@ -90,6 +91,7 @@ static void setup_idt(void)
 {
 	int i;
 
+    printf("setup idt\n");
 	for (i = 0; i < IDT_ENTRIES; i++) {
 		struct idtd *id = &idt[i];
 		uintptr_t isr = (uintptr_t) &__dune_intr;
@@ -115,11 +117,20 @@ static void setup_idt(void)
 	}
 }
 
+/**
+ * @brief Sets up signal handling for the VMPL library.
+ * 
+ * This function disables signals until better support is available.
+ * 
+ * @return void
+ */
 static void setup_signal(void)
 {
     size_t i;
+    printf("setup signal\n");
 
     // disable signals for now until we have better support
+    printf("disable signals for now until we have better support\n");
     for (i = 1; i < 32; i++) {
         struct sigaction sa;
 
@@ -144,6 +155,48 @@ static void setup_signal(void)
 
 void dune_syscall_handler(struct dune_tf *tf) {
 
+}
+
+void dune_trap_handler(int num, struct dune_tf *tf) {
+
+}
+
+uint64_t call_vmpl1(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
+{
+	u64 val, resp;
+	int ret;
+
+	val = sev_es_rd_ghcb_msr();
+
+	sev_es_wr_ghcb_msr(GHCB_MSR_VMPL_REQ_LEVEL(1));
+
+    // Assuming that syscall_number, arg1, arg2, arg3, arg4, arg5, and arg6 are variables
+    unsigned long long result;
+    asm volatile(
+        "movq %1, %%rax\n" // move the syscall number to RAX register
+        "movq %2, %%rdi\n" // move the first argument to RDI register
+        "movq %3, %%rsi\n" // move the second argument to RSI register
+        "movq %4, %%rdx\n" // move the third argument to RDX register
+        "movq %5, %%r10\n" // move the fourth argument to R10 register
+        "movq %6, %%r8\n"  // move the fifth argument to R8 register
+        "movq %7, %%r9\n"  // move the sixth argument to R9 register
+        "rep; vmmcall\n"           // call the syscall
+        "movq %%rax, %0\n" // move the return value to result
+        : "=r"(result)
+        : "r"(syscall_number), "r"(arg1), "r"(arg2), "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)
+        : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9");
+
+    resp = sev_es_rd_ghcb_msr();
+
+	sev_es_wr_ghcb_msr(val);
+
+	if (GHCB_MSR_INFO(resp) != GHCB_MSR_VMPL_RES)
+		ret = -EINVAL;
+
+	if (GHCB_MSR_VMPL_RESP_VAL(resp) != 0)
+		ret = -EINVAL;
+
+	return ret;
 }
 
 int vmpl_init() {
@@ -193,6 +246,8 @@ int vmpl_enter() {
 int vmpl_exit() {
     // Implementation of vmpl_exit function
     printf("Implementation of vmpl_exit function\n");
+
+    return 0;
 }
 
 /**

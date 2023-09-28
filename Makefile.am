@@ -4,7 +4,7 @@ ACLOCAL_AMFLAGS = -I m4
 # Specify static libraries that should not be installed
 noinst_LIBRARIES = libvmpl.a
 libvmpl_a_SOURCES = src/vmpl.c src/procmap.c src/ghcb.c src/vmsa.c src/dune.S src/vsyscall.S src/vc.c src/serial.c
-libvmpl_a_CFLAGS = -static $(EXTRA_FLAGS)
+libvmpl_a_CFLAGS = -static -fPIE -pie $(EXTRA_FLAGS)
 
 # Specify shared libraries to be built
 # lib_LTLIBRARIES = libvmpl.la
