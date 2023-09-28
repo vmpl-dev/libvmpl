@@ -7,16 +7,7 @@ AC_ENABLE_STATIC
 AC_PROG_CC
 
 # Specify the desired archiver program with options
-AR=ar crD
-
-# Specify static libraries that should not be installed
-noinst_LIBRARIES = libvmpl.a
-
-# Specify shared libraries to be built
-# lib_LTLIBRARIES = libvmpl.la
-
-# Specify static libraries to be built
-# lib_LIBRARIES = libvmpl.a
+AR=ar
 
 # Checks for programs
 AM_PROG_AR
