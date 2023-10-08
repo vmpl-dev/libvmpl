@@ -8,12 +8,15 @@ AM_LDFLAGS = -L. -lvmpl
 lib_LTLIBRARIES = libvmpl.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/procmap.c \
+                    src/mm.c \
                     src/ghcb.c src/vmsa.c src/vc.c \
                     src/dune.S src/vsyscall.S \
                     src/serial.c \
                     src/hypercall.c
-libvmpl_la_CFLAGS = -Wall -g -O3 -MD -static
+libvmpl_la_CFLAGS = -Wall -g -O3 -MD -static -DVERBOSE @EXTRA_FLAGS@
 libvmpl_la_LDFLAGS = -static -L.
+# 将config.h包含在编译中
+my_program_CPPFLAGS = -include config.h
 
 # 指定需要安装的头文件
 # include_HEADERS =

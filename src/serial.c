@@ -11,6 +11,7 @@
 
 #include "globals.h"
 #include "vc.h"
+#include "serial.h"
 
 #define TTYS0 0x3f8
 #define DIV_BASE 115200
@@ -35,7 +36,7 @@ void serial_out(const char *string) {
     }
 
     const char *c = string;
-    while (*c != '\\0') {
+    while (*c != '\0') {
         outb(PORT, *c);
         c++;
     }
@@ -51,7 +52,7 @@ void serial_in(char *string) {
         *string = b;
         string++;
 
-        if (b == '\\n') {
+        if (b == '\n') {
             break;
         }
     }

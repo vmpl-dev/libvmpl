@@ -11,7 +11,8 @@ __dune_vsyscall_page:
 	test $3, %rax
 	mov $__NR_gettimeofday, %rax
 	jnz 1f
-	vmcall
+	mov $1, %rsi
+	call vc_run_vmpl
 	ret
 1:
 	syscall
@@ -23,7 +24,8 @@ __dune_vsyscall_page:
 	test $3, %rax
 	mov $__NR_time, %rax
 	jnz 2f
-	vmcall
+	mov $1, %rsi
+	call vc_run_vmpl
 	ret
 2:
 	syscall
@@ -35,7 +37,8 @@ __dune_vsyscall_page:
 	test $3, %rax
 	mov $__NR_getcpu, %rax
 	jnz 3f
-	vmcall
+	mov $1, %rsi
+	call vc_run_vmpl
 	ret
 3:
 	syscall

@@ -7,15 +7,11 @@
 #include "globals.h"
 #include "ghcb.h"
 
-typedef uint64_t PhysFrame;
-typedef uint64_t PhysAddr;
-typedef uint64_t VirtAddr;
-
 #define LOWER_8BITS(value) ((value) & 0xFF)
 #define LOWER_16BITS(value) ((value) & 0xFFFF)
 #define LOWER_32BITS(value) ((value) & 0xFFFFFFFF)
 
-#define BIT(x) (1ULL << (x))
+// #define BIT(x) (1ULL << (x))
 
 /// 1
 #define GHCB_PROTOCOL_MIN 1

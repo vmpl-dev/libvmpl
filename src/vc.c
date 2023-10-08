@@ -19,28 +19,60 @@ void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
     }
 }
 
-inline void vc_terminate_svsm_general() {
+static inline void vc_terminate_svsm_general() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_GENERAL);
 }
 
-inline void vc_terminate_svsm_resp_invalid() {
+static inline void vc_terminate_svsm_enomem() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_ENOMEM);
+}
+
+static inline void vc_terminate_svsm_fwcfg() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_FW_CFG_ERROR);
+}
+
+static inline void vc_terminate_svsm_resp_invalid() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_GHCB_RESP_INVALID);
 }
 
-inline void vc_terminate_unhandled_vc() {
+static inline void vc_terminate_svsm_page_err() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_SET_PAGE_ERROR);
+}
+
+static inline void vc_terminate_svsm_psc() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_PSC_ERROR);
+}
+
+static inline void vc_terminate_svsm_bios() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_BIOS_FORMAT);
+}
+
+static inline void vc_terminate_unhandled_vc() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_UNHANDLED_VC);
 }
 
-inline void vc_terminate_ghcb_general() {
+static inline void vc_terminate_ghcb_general() {
     vc_terminate(GHCB_REASON_CODE_SET, GHCB_TERM_GENERAL);
 }
 
-inline void vc_terminate_ghcb_unsupported_protocol() {
+static inline void vc_terminate_ghcb_unsupported_protocol() {
     vc_terminate(GHCB_REASON_CODE_SET, GHCB_TERM_UNSUPPORTED_PROTOCOL);
 }
 
-inline void vc_terminate_ghcb_feature() {
+static inline void vc_terminate_ghcb_feature() {
     vc_terminate(GHCB_REASON_CODE_SET, GHCB_TERM_FEATURE_SUPPORT);
+}
+
+static inline void vc_terminate_vmpl1_sev_features() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_VMPL1_SEV_FEATURES);
+}
+
+static inline void vc_terminate_vmpl0_sev_features() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_VMPL0_SEV_FEATURES);
+}
+
+static inline void vc_terminate_svsm_incorrect_vmpl() {
+    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_INCORRECT_VMPL);
 }
 
 uint64_t vc_msr_protocol(uint64_t request) {
@@ -59,6 +91,21 @@ uint64_t vc_msr_protocol(uint64_t request) {
 
     return response;
 }
+
+#ifdef __VC_HANDLER__
+void vc_handler(uint64_t rip, uint64_t error_code, uint64_t cr2, uint64_t stack[5]) {
+    prints("Unhandled #VC exception: %x\n");
+    print_hex(error_code);
+    prints("\n");
+    print_stack(stack);
+    prints("RIP=");
+    print_hex(rip);
+    prints(", CR2=");
+    print_hex(cr2);
+    prints("\n");
+    vc_terminate_unhandled_vc();
+}
+#endif
 
 uint64_t vc_establish_protocol() {
     uint64_t response;
@@ -93,10 +140,19 @@ uint64_t vc_establish_protocol() {
     return response;
 }
 
-Ghcb* vc_get_ghcb() {
-    // TODO: map ghcb into virtual address
-    uint64_t ghcb_gpa = sev_es_rd_ghcb_msr();
+#ifdef __PERCPU__
+Ghcb* vc_get_ghcb()
+{
+    Ghcb* ghcb = (Ghcb*)PERCPU.ghcb();
+
+    return ghcb;
 }
+#else
+Ghcb* vc_get_ghcb() {
+    Ghcb* ghcb = pgtable_pa_to_va(sev_es_rd_ghcb_msr());
+    return ghcb;
+}
+#endif
 
 void vc_perform_vmgexit(Ghcb* ghcb, uint64_t code, uint64_t info1, uint64_t info2) {
     ghcb_set_version(ghcb, GHCB_VERSION_1);
@@ -259,6 +315,7 @@ void vc_register_ghcb(uint64_t pa) {
     wrmsrl(MSR_AMD64_SEV_ES_GHCB, pa);
 }
 
+// #define PAGE_TABLE
 #ifdef PAGE_TABLE
 #define PSC_SHARED (2ull << 52)
 #define PSC_PRIVATE (1ull << 52)
@@ -293,12 +350,12 @@ void pvalidate_psc_entries(PscOp* op, uint32_t pvalidate_op) {
         uint32_t size = GHCB_PSC_SIZE(op->entries[i].data);
 
         VirtAddr va = pgtable_pa_to_va((PhysAddr)gpa);
-        uint32_t ret = pvalidate(va.as_u64(), size, pvalidate_op);
+        uint32_t ret = pvalidate(va, size, pvalidate_op);
         if (ret == PVALIDATE_FAIL_SIZE_MISMATCH && size > 0) {
             VirtAddr va_end = va + PAGE_2MB_SIZE;
 
             while (va < va_end) {
-                ret = pvalidate(va.as_u64(), 0, pvalidate_op);
+                ret = pvalidate(va, 0, pvalidate_op);
                 if (ret != 0) {
                     break;
                 }
@@ -319,10 +376,10 @@ void build_psc_entries(PscOp* op, PhysAddr begin, PhysAddr end, uint64_t page_op
 
     while (pa < end && i < PSC_ENTRIES) {
         if (pa.is_aligned(PAGE_2MB_SIZE) && (end - pa) >= PAGE_2MB_SIZE) {
-            op->entries[i].data = GHCB_2MB_PSC_ENTRY(pa.as_u64(), page_op);
+            op->entries[i].data = GHCB_2MB_PSC_ENTRY(pa, page_op);
             pa += PAGE_2MB_SIZE;
         } else {
-            op->entries[i].data = GHCB_4KB_PSC_ENTRY(pa.as_u64(), page_op);
+            op->entries[i].data = GHCB_4KB_PSC_ENTRY(pa, page_op);
             pa += PAGE_SIZE;
         }
         op->header.end_entry = (uint16_t)i;
@@ -351,12 +408,12 @@ void perform_page_state_change(Ghcb* ghcb, PhysFrame begin, PhysFrame end, uint6
         void* set_bytes = &op;
         void* get_bytes = &op;
 
-        ghcb->clear();
-        ghcb->set_shared_buffer(set_bytes, size);
+        ghcb_clear(ghcb);
+        ghcb_set_shared_buffer(ghcb, set_bytes, size);
 
         while (op.header.cur_entry <= last_entry) {
             vc_perform_vmgexit(ghcb, GHCB_NAE_PSC, 0, 0);
-            if (!ghcb->is_sw_exit_info_2_valid() || ghcb->sw_exit_info_2() != 0) {
+            if (!ghcb_is_sw_exit_info_2_valid(ghcb) || ghcb_get_sw_exit_info_2(ghcb) != 0) {
                 vc_terminate_svsm_psc();
             }
 
@@ -394,12 +451,12 @@ void vc_early_make_pages_private(PhysFrame begin, PhysFrame end) {
     perform_page_state_change(ghcb, begin, end, PSC_PRIVATE);
 }
 
-#endif
-
-// TODO: implement pgtable_va_to_pa, pgtable_va_to_pa
 void vc_init() {
-    // uint64_t ghcb_pa = (uint64_t)pgtable_va_to_pa(get_early_ghcb());
+    // TODO: implement pgtable_va_to_pa, pgtable_va_to_pa
+    uint64_t ghcb_pa = (uint64_t)pgtable_va_to_pa(get_early_ghcb());
 
-    // vc_establish_protocol();
-    // vc_register_ghcb(ghcb_pa);
+    vc_establish_protocol();
+    vc_register_ghcb(ghcb_pa);
 }
+
+#endif

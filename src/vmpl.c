@@ -99,6 +99,21 @@ static inline void setup_vmpl(void) {
     parse_proc_maps(grant_vmpl2_access);
 }
 
+// 通过内联汇编加载 GDTR
+void load_gdtr(uint64_t gdtr_address) {
+    asm volatile ("lgdt (%0)" : : "r" (gdtr_address));
+}
+
+// 通过内联汇编加载 TR
+void load_tr(uint16_t tr_selector) {
+    asm volatile ("ltr %0" : : "m" (tr_selector));
+}
+
+// 通过内联汇编加载 IDTR
+void load_idtr(uint64_t idtr_address) {
+    asm volatile ("lidt (%0)" : : "r" (idtr_address));
+}
+
 typedef uintptr_t phys_addr_t;
 
 static inline void set_idt_addr(struct idtd *id, phys_addr_t addr)
@@ -110,8 +125,14 @@ static inline void set_idt_addr(struct idtd *id, phys_addr_t addr)
 
 #define ISR_LEN 16
 
+/**
+ * Sets up the Interrupt Descriptor Table (IDT) with the appropriate entries.
+ * @note Table 4-6. System-Segment Descriptor Types—Long Mode (continued)
+ * @return void
+ */
 static void setup_idt(void)
 {
+    // function implementation
 	int i;
 
     printf("setup idt\n");
@@ -176,6 +197,39 @@ static void setup_signal(void)
     }
 }
 
+/**
+ * Sets up the system call handler.
+ * 
+ * @return void
+ */
+static void setup_syscall(void)
+{
+    uint64_t *lstar;
+    printf("setup syscall\n");
+
+	assert((uint64_t) __dune_syscall_end  -
+	       (uint64_t) __dune_syscall < PAGE_SIZE);
+
+    lstar = (void *)native_read_msr(MSR_LSTAR);
+
+    memcpy(lstar, __dune_syscall,
+           (uint64_t)__dune_syscall_end -
+               (uint64_t)__dune_syscall);
+}
+
+
+/**
+ * Sets up the vsyscall handler.
+ * 
+ * @return void
+ */
+static void setup_vsyscall(void)
+{
+    // 1. 设置vsyscall
+    void *vsyscall_addr = (void *)0xffffffffff600000UL;
+    memcpy(vsyscall_addr, &__dune_vsyscall_page, PAGE_SIZE);
+}
+
 void dune_syscall_handler(struct dune_tf *tf) {
 
 }
@@ -219,68 +273,147 @@ void vmpl_build_assert() {
 	BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct vmsa_config, vcpu));
 }
 
-int vmpl_init() {
-    int ret = 0;
+/**
+ * Initializes a vmsa_config struct with default values.
+ * 
+ * @param conf Pointer to the vmsa_config struct to be initialized.
+ */
+void vmsa_config_init(struct vmsa_config *conf) {
+    memset(conf, 0, sizeof(struct vmsa_config));
+#ifndef __NO_ASM__
+    __asm__ volatile (
+        "leaq __dune_ret(%%rip), %0\n\t"   // 设置rip
+        "xorq %1, %1\n\t"                  // 清空rsp
+        "movq $0x2, %2"                   // 设置rflags
+        : "=r" (conf->rip), "=r" (conf->rsp), "=r" (conf->rflags)
+        : // 无输入操作数
+        : // clobbered 寄存器
+    );
+#else
+    conf->rip = (__u64) &__dune_ret;
+    conf->rsp = 0;
+    conf->rflags = 0x2;
+#endif
+}
 
+
+/**
+ * Initializes the VMPL library before the main program starts.
+ * This function sets up VMPL2 access permission, builds assert, sets up signal, and sets up IDT.
+ */
+void vmpl_init_pre() {
+    printf("vmpl_init_pre\n");
     // Grant VMPL2 access permission
     setup_vmpl();
 
     // Build assert
     vmpl_build_assert();
 
-    dune_fd = open("/dev/svsm-vmpl", O_RDWR);
-    if (dune_fd == -1) {
-        perror("Failed to open /dev/svsm-vmpl");
-        ret = -errno;
-        return ret;
-    }
-
     // Setup signal
     setup_signal();
 
     // Setup IDT
     setup_idt();
-
-    return 0;
 }
 
-void vmsa_config_init(struct vmsa_config *conf) {
-    memset(conf, 0, sizeof(struct vmsa_config));
-    conf->rip = (__u64) &__dune_ret;
-    conf->rsp = 0;
-    conf->rflags = 0x2;
-}
-
-int vmpl_enter() {
-    int ret;
-    struct vmsa_config *conf;
-    const char *buf = "Hello, World\n";
-
-    // Implementation of vmpl_enter function
-    printf("Implementation of vmpl_enter function\n");
-
-    conf = malloc(sizeof(struct vmsa_config));
-    vmsa_config_init(conf);
+/**
+ * Initializes the VMPL library with the given configuration.
+ *
+ * @param conf The configuration to use for initialization.
+ * @return 0 on success, or a negative error code on failure.
+ */
+int vmpl_init(struct vmsa_config *conf) {
+    int rc;
+    printf("vmpl_init\n");
 
     /* NOTE: We don't setup the general purpose registers because __dune_ret
-        * will restore them as they were before the __dune_enter call */
+     * will restore them as they were before the __dune_enter call */
+    dune_fd = open("/dev/svsm-vmpl", O_RDWR);
+    if (dune_fd == -1) {
+        perror("Failed to open /dev/svsm-vmpl");
+        rc = -errno;
+        goto failed;
+    }
 
-    ret = __dune_enter(dune_fd, conf);
-    if (ret) {
-        printf("dune: entry to Dune mode failed, ret is %d\n", ret);
+    rc = __dune_enter(dune_fd, conf);
+    if (rc) {
+        printf("dune: entry to Dune mode failed, ret is %d\n", rc);
         perror("dune: entry to Dune mode failed");
         return -EIO;
     }
 
+    return 0;
+failed:
+    return rc;
+}
+
+/**
+ * Initializes the VMPL library after the main program has started.
+ * This function sets up the necessary system calls for the library to function properly.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int vmpl_init_post() {
+
+    // 1. 设置syscall
+    setup_syscall();
+    // 2. 设置vsyscall
+    setup_vsyscall();
+
+    return 0;
+}
+
+/**
+ * Initializes a test for the VMPL library.
+ * This function writes "Hello, World" to the standard output and exits.
+ *
+ * @return 0 on success.
+ */
+int vmpl_init_test() {
+    const char *buf = "Hello, World\n";
     hp_write(STDOUT_FILENO, buf, strlen(buf));
     hp_exit();
 
     return 0;
 }
 
+/**
+ * Initializes the VMPL library and enters the VMPL mode.
+ * 
+ * @return 0 if successful, otherwise an error code.
+ */
+int vmpl_enter() {
+    int rc;
+    struct vmsa_config *conf;
+
+    printf("vmpl_enter\n");
+
+    conf = malloc(sizeof(struct vmsa_config));
+    vmsa_config_init(conf);
+
+    vmpl_init_pre();
+
+    rc = vmpl_init(conf);
+    if (rc)
+        goto failed;
+
+    vmpl_init_post();
+    vmpl_init_test();
+
+    return 0;
+
+failed:
+    return rc;
+}
+
+/**
+ * This function is used to exit the VMPL program.
+ * It prints "vmpl_exit" to the console and returns 0.
+ *
+ * @return 0
+ */
 int vmpl_exit() {
-    // Implementation of vmpl_exit function
-    printf("Implementation of vmpl_exit function\n");
+    printf("vmpl_exit\n");
 
     return 0;
 }

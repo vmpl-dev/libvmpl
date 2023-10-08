@@ -15,11 +15,11 @@
 #include <assert.h>
 
 #include "globals.h"
+#include "mm.h"
 
 #define GHCB_VERSION_1 1
 #define GHCB_USAGE 0
 #define SHARED_BUFFER_SIZE 2032
-#define PAGE_SIZE 4096
 
 #define MSR_AMD64_SEV_ES_GHCB         0xc0010130
 
@@ -118,14 +118,13 @@ inline void ghcb_get_shared_buffer(Ghcb* ghcb, uint8_t* data, size_t len) {
     memcpy(data, ghcb->shared_buffer, len);
 }
 
-// TODO: pgtable_va_to_pa(ghcb->shared_buffer)
 inline void ghcb_set_shared_buffer(Ghcb* ghcb, const uint8_t* data, size_t len) {
     if (len > SHARED_BUFFER_SIZE) {
         return;
     }
 
     memcpy(ghcb->shared_buffer, data, len);
-    ghcb_set_sw_scratch(ghcb, (uintptr_t)ghcb->shared_buffer);
+    ghcb_set_sw_scratch(ghcb, (uintptr_t)pgtable_va_to_pa(ghcb->shared_buffer));
 }
 
 _Static_assert(sizeof(struct Ghcb) == PAGE_SIZE, "Ghcb size is not equal to PAGE_SIZE");
