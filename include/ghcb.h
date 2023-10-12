@@ -52,6 +52,8 @@ typedef struct Ghcb {
     uint32_t usage;
 } Ghcb;
 
+void dump_ghcb(struct Ghcb *ghcb);
+
 inline void set_offset_valid(Ghcb* ghcb, size_t offset) {
     size_t idx = (offset / 8) / 8;
     size_t bit = (offset / 8) % 8;

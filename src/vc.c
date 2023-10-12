@@ -1,8 +1,10 @@
 #include <asm/msr.h>
 
+#include "sys.h"
 #include "vc.h"
 
 static uint64_t HV_FEATURES;
+static Ghcb* this_ghcb;
 
 void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
     uint64_t value;
@@ -144,13 +146,18 @@ uint64_t vc_establish_protocol() {
 Ghcb* vc_get_ghcb()
 {
     Ghcb* ghcb = (Ghcb*)PERCPU.ghcb();
-
+    // 1. check if the GHCB is already saved in a percpu variable
+    // 2. if not, perform run-vmpl to get the GHCB
+    // 3. save the GHCB to a percpu variable
+    // 4. return the GHCB
     return ghcb;
 }
 #else
 Ghcb* vc_get_ghcb() {
-    Ghcb* ghcb = pgtable_pa_to_va(sev_es_rd_ghcb_msr());
-    return ghcb;
+    // 1. perform run-vmpl to get the GHCB
+    // 2. save the GHCB to a global variable
+    // 3. return the GHCB
+    return this_ghcb;
 }
 #endif
 
@@ -178,6 +185,36 @@ void vc_run_vmpl(VMPL vmpl) {
     Ghcb* ghcb = vc_get_ghcb();
 
     vc_perform_vmgexit(ghcb, GHCB_NAE_RUN_VMPL, (uint64_t)vmpl, 0);
+
+    ghcb_clear(ghcb);
+}
+
+static void vc_cpuid_vmgexit(uint32_t leaf, uint32_t subleaf, uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx) {
+    Ghcb* ghcb = vc_get_ghcb();
+
+    ghcb_set_rax(ghcb, leaf);
+    ghcb_set_rcx(ghcb, subleaf);
+    if (leaf == CPUID_EXTENDED_STATE) {
+        if (read_xcr0() & 0x6) {
+            ghcb_set_xcr0(ghcb, read_xcr0());
+        } else {
+            ghcb_set_xcr0(ghcb, 1);
+        }
+    }
+
+    vc_perform_vmgexit(ghcb, GHCB_NAE_CPUID, 0, 0);
+
+    if (!ghcb_is_rax_valid(ghcb) 
+        || !ghcb_is_rbx_valid(ghcb)
+        || !ghcb_is_rcx_valid(ghcb)
+        || !ghcb_is_rdx_valid(ghcb)) {
+        vc_terminate_svsm_resp_invalid();
+    }
+
+    *eax = ghcb_get_rax(ghcb);
+    *ebx = ghcb_get_rbx(ghcb);
+    *ecx = ghcb_get_rcx(ghcb);
+    *edx = ghcb_get_rdx(ghcb);
 
     ghcb_clear(ghcb);
 }
@@ -299,6 +336,7 @@ uint8_t vc_inb(uint16_t port) {
     return value;
 }
 
+// 0x012 - Register GHCB GPA Request
 void vc_register_ghcb(uint64_t pa) {
     // Perform GHCB registration
     uint64_t response = vc_msr_protocol(GHCB_MSR_REGISTER_GHCB(pa));
@@ -313,6 +351,29 @@ void vc_register_ghcb(uint64_t pa) {
     }
 
     wrmsrl(MSR_AMD64_SEV_ES_GHCB, pa);
+}
+
+// 0x014 - SNP Page State Change Request
+void vc_snp_page_state_change(uint64_t pa, uint64_t op) {
+    // Perform SNP page state change
+    uint64_t response = vc_msr_protocol(GHCB_MSR_SNP_PSC(pa, op));
+
+    // Validate the response
+    if (GHCB_MSR_INFO(response) != GHCB_MSR_SNP_PSC_RES) {
+        vc_terminate_svsm_general();
+    }
+
+    if (GHCB_MSR_SNP_PSC_VAL(response) != pa) {
+        vc_terminate_svsm_general();
+    }
+}
+
+void vc_make_page_private(uint64_t pa) {
+    vc_snp_page_state_change(pa, SNP_PSC_OP_ASSIGN_PRIVATE);
+}
+
+void vc_make_page_shared(uint64_t pa) {
+    vc_snp_page_state_change(pa, SNP_PSC_OP_ASSIGN_SHARED);
 }
 
 // #define PAGE_TABLE
@@ -451,12 +512,17 @@ void vc_early_make_pages_private(PhysFrame begin, PhysFrame end) {
     perform_page_state_change(ghcb, begin, end, PSC_PRIVATE);
 }
 
-void vc_init() {
-    // TODO: implement pgtable_va_to_pa, pgtable_va_to_pa
-    uint64_t ghcb_pa = (uint64_t)pgtable_va_to_pa(get_early_ghcb());
+#endif
 
-    vc_establish_protocol();
-    vc_register_ghcb(ghcb_pa);
+Ghcb *get_early_ghcb() {
+    // TODO: implement get_early_ghcb
+
+    return this_ghcb;
 }
 
-#endif
+void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va) {
+    // vc_establish_protocol();
+    // vc_make_page_shared(ghcb_pa);
+    vc_register_ghcb(ghcb_pa);
+    this_ghcb = ghcb_va;
+}

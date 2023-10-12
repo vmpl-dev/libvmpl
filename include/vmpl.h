@@ -9,6 +9,7 @@
 
 #define MAX_LINE_LENGTH 256
 
+extern int arch_prctl(int code, unsigned long *addr);
 // assembly routines from dune.S
 extern int __dune_enter(int fd, struct dune_config *config);
 extern int __dune_ret(void);
@@ -89,7 +90,6 @@ typedef void (*dune_syscall_cb) (struct dune_tf *tf);
 void grant_vmpl2_access(MemoryMapping *mapping);
 
 // vmpl initialization
-int vmpl_init();
 int vmpl_enter();
 int vmpl_exit();
 

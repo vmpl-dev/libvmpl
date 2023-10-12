@@ -46,6 +46,21 @@
 /// 0x13
 #define GHCB_MSR_REGISTER_GHCB_RES 0x13
 
+// MSR protocol: SNP Page State Change
+/// 0x14
+#define GHCB_MSR_SNP_PSC_REQ 0x014
+#define GHCB_MSR_SNP_PSC(x, op) ((op << 52) | (x & 0xfff) | GHCB_MSR_SNP_PSC_REQ)
+#define GHCB_MSR_SNP_PSC_SHARED(x) GHCB_MSR_SNP_PSC(x, SNP_PSC_OP_ASSIGN_SHARED)
+#define GHCB_MSR_SNP_PSC_PRIVATE(x) GHCB_MSR_SNP_PSC(x, SNP_PSC_OP_ASSIGN_PRIVATE)
+/// 0x15
+#define GHCB_MSR_SNP_PSC_RES 0x015
+#define GHCB_MSR_SNP_PSC_VAL(v) (v >> 32)
+
+// 0x0001 - Page assignment, Private
+#define SNP_PSC_OP_ASSIGN_PRIVATE 0x0001
+// 0x0002 - Page assignment, Shared
+#define SNP_PSC_OP_ASSIGN_SHARED 0x0002
+
 /* GHCB Run at VMPL Request/Response */
 /// 0x16
 #define GHCB_MSR_VMPL_REQ 0x016
@@ -138,11 +153,6 @@ static inline void sev_es_wr_ghcb_msr(uint64_t val)
 	native_write_msr(MSR_AMD64_SEV_ES_GHCB, low, high);
 }
 
-static inline void halt(void)
-{
-    __asm__ volatile("hlt");
-}
-
 static inline void vc_vmgexit(void)
 {
     __asm__ volatile("rep; vmmcall");
@@ -157,6 +167,6 @@ uint16_t vc_inw(uint16_t port);
 void vc_outb(uint16_t port, uint8_t value);
 uint8_t vc_inb(uint16_t port);
 
-void vc_init();
+void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va);
 
 #endif

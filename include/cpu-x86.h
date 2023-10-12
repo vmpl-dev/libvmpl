@@ -38,8 +38,8 @@ static inline unsigned long long native_read_msr(unsigned int msr)
 #define MSR_LSTAR		0xc0000082 /* long mode SYSCALL target */
 
 struct tptr {
-	uint16_t	limit;
-	uint64_t	base;
+	uint16_t	limit;         // segment limit
+	uint64_t	base;          // base address
 } __attribute__((packed));
 
 #define IDTD_P                  (1 << 7)
@@ -50,13 +50,13 @@ struct tptr {
 #define IDT_ENTRIES     256
 
 struct idtd {
-        uint16_t        low;
-        uint16_t        selector;
-        uint8_t         ist;
-        uint8_t         type;
-        uint16_t        middle;
-        uint32_t        high;
-        uint32_t        zero;
+        uint16_t        low;           // low 16 bits of handler address
+        uint16_t        selector;      // kernel segment selector
+        uint8_t         ist;           // bits 0..2 holds Interrupt Stack Table offset, rest of bits zero.
+        uint8_t         type;          // type and attributes
+        uint16_t        middle;        // middle 16 bits of handler address
+        uint32_t        high;          // high 32 bits of handler address
+        uint32_t        zero;          // reserved
 } __attribute__((packed)) __attribute__ ((aligned));
 
 /* x86 trap codes */

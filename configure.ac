@@ -15,13 +15,13 @@ AM_PROG_AS
 
 LT_INIT([static])
 
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADERS([include/config.h])
 AC_CONFIG_SRCDIR([src])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_MACRO_DIRS([m4])
 
-AC_DEFINE([LIBVMPL_INCLUDE_DIR], ["/home/benshan/vmpl-process/libvmpl/include"], [libvmpl的头文件目录])
-AC_DEFINE([SVSM_DEV_INCLUDE_DIR], ["/home/benshan/svsm-dev"], [svsm-dev的头文件目录])
+AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
+AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
 
 # 声明一个自定义的Automake变量

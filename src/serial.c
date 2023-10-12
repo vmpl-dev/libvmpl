@@ -29,6 +29,8 @@ unsigned short PORT = TTYS0;
 
 bool SERIAL_READY = false;
 
+#define inb vc_inb
+#define outb vc_outb
 #ifdef VERBOSE
 void serial_out(const char *string) {
     if (!SERIAL_READY) {

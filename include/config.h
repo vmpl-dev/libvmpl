@@ -1,5 +1,5 @@
-/* config.h.  Generated from config.h.in by configure.  */
-/* config.h.in.  Generated from configure.ac by autoheader.  */
+/* include/config.h.  Generated from config.h.in by configure.  */
+/* include/config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
@@ -31,8 +31,8 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
-/* include */
-#define LIBVMPL_INCLUDE_DIR "path/to/include"
+/* libvmpl的头文件目录 */
+#define LIBVMPL_INCLUDE_DIR /home/benshan/vmpl-process/libvmpl/include
 
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
@@ -62,6 +62,9 @@
    required in a freestanding environment). This macro is provided for
    backward compatibility; new code need not use it. */
 #define STDC_HEADERS 1
+
+/* svsm-dev的头文件目录 */
+#define SVSM_DEV_INCLUDE_DIR /home/benshan/svsm-dev
 
 /* Version number of package */
 #define VERSION "1.0"

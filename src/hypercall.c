@@ -9,18 +9,12 @@
 #include "vc.h"
 #include "hypercall.h"
 
+#define RUN_VMPL Vmpl0
 #ifdef __HYPERPARAMS_
-uint64_t hypercall(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
+static inline uint64_t vmmcall6(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
 {
-    uint64_t val, resp;
-    int ret;
-
-    val = sev_es_rd_ghcb_msr();
-
-    sev_es_wr_ghcb_msr(GHCB_MSR_VMPL_REQ_LEVEL(1));
-
     // Assuming that syscall_number, arg1, arg2, arg3, arg4, arg5, and arg6 are variables
-    unsigned long long result;
+    uint64_t result;
     asm volatile(
         "movq %1, %%rax\n" // move the syscall number to RAX register
         "movq %2, %%rdi\n" // move the first argument to RDI register
@@ -34,6 +28,20 @@ uint64_t hypercall(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64
         : "=r"(result)
         : "r"(syscall_number), "r"(arg1), "r"(arg2), "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)
         : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9");
+
+    return result;
+}
+
+uint64_t hypercall_msr(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
+{
+    uint64_t val, resp;
+    int ret;
+
+    val = sev_es_rd_ghcb_msr();
+
+    sev_es_wr_ghcb_msr(GHCB_MSR_VMPL_REQ_LEVEL(RUN_VMPL));
+
+    vmmcall6(syscall_number, arg1, arg2, arg3, arg4, arg5, arg6);
 
     resp = sev_es_rd_ghcb_msr();
 
@@ -82,7 +90,7 @@ static uint64_t hypercall_msr(struct HypercallParam *param)
 
     val = sev_es_rd_ghcb_msr();
 
-    sev_es_wr_ghcb_msr(GHCB_MSR_VMPL_REQ_LEVEL(1));
+    sev_es_wr_ghcb_msr(GHCB_MSR_VMPL_REQ_LEVEL(RUN_VMPL));
 
     ret = vmmcall(param);
 
@@ -109,18 +117,18 @@ static uint64_t hypercall_ghcb(struct HypercallParam *param)
 	ghcb_set_version(ghcb, GHCB_PROTOCOL_MIN);
     ghcb_set_usage(ghcb, GHCB_DEFAULT_USAGE);
 
-	ghcb_set_sw_exit_code(ghcb, SVM_VMGEXIT_RUN_VMPL);
-	ghcb_set_sw_exit_info_1(ghcb, 0);
+	ghcb_set_sw_exit_code(ghcb, GHCB_NAE_RUN_VMPL);
+	ghcb_set_sw_exit_info_1(ghcb, RUN_VMPL);
 	ghcb_set_sw_exit_info_2(ghcb, 0);
 
     ret = vmmcall(param);
 
     if (!ghcb_is_sw_exit_info_1_valid(ghcb)) {
-        vc_terminate_svsm_resp_invalid();
+        ret = -EINVAL;
     }
 
     if (LOWER_32BITS(ghcb_get_sw_exit_info_1(ghcb)) != 0) {
-        vc_terminate_ghcb_general();
+        ret = -EINVAL;
     }
 
     return ret;
