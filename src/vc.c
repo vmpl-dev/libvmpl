@@ -1,11 +1,14 @@
+#include <unistd.h>
 #include <asm/msr.h>
 
 #include "sys.h"
+#include "hypercall.h"
 #include "vc.h"
 
 static uint64_t HV_FEATURES;
 static Ghcb* this_ghcb;
 
+#ifdef SVSM
 void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
     uint64_t value;
 
@@ -20,6 +23,24 @@ void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
         halt();
     }
 }
+#else
+void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
+    uint64_t value;
+
+    wrmsrl(MSR_AMD64_SEV_ES_GHCB, GHCB_MSR_VMPL_REQ_LEVEL(RUN_VMPL));
+
+    value = GHCB_MSR_TERMINATE_REQ;
+    value |= reason_set << 12;
+    value |= reason_code << 16;
+
+    asm volatile("movq %0, %%rax\n\t"
+                 "movq %1, %%rdi\n\t"
+                 "vmgexit\n\t"
+                 :
+                 : "i"(__NR_exit), "r"(value)
+                 : "rax", "rdi");
+}
+#endif
 
 static inline void vc_terminate_svsm_general() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_GENERAL);
@@ -77,7 +98,23 @@ static inline void vc_terminate_svsm_incorrect_vmpl() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_INCORRECT_VMPL);
 }
 
-uint64_t vc_msr_protocol(uint64_t request) {
+#ifdef __VC_HANDLER__
+void vc_handler(uint64_t rip, uint64_t error_code, uint64_t cr2, uint64_t stack[5]) {
+    prints("Unhandled #VC exception: %x\n");
+    print_hex(error_code);
+    prints("\n");
+    print_stack(stack);
+    prints("RIP=");
+    print_hex(rip);
+    prints(", CR2=");
+    print_hex(cr2);
+    prints("\n");
+    vc_terminate_unhandled_vc();
+}
+#endif
+
+static inline uint64_t vc_msr_protocol(uint64_t request)
+{
     uint64_t response, value;
 
     // Save the current GHCB MSR value
@@ -93,21 +130,6 @@ uint64_t vc_msr_protocol(uint64_t request) {
 
     return response;
 }
-
-#ifdef __VC_HANDLER__
-void vc_handler(uint64_t rip, uint64_t error_code, uint64_t cr2, uint64_t stack[5]) {
-    prints("Unhandled #VC exception: %x\n");
-    print_hex(error_code);
-    prints("\n");
-    print_stack(stack);
-    prints("RIP=");
-    print_hex(rip);
-    prints(", CR2=");
-    print_hex(cr2);
-    prints("\n");
-    vc_terminate_unhandled_vc();
-}
-#endif
 
 uint64_t vc_establish_protocol() {
     uint64_t response;
@@ -515,14 +537,15 @@ void vc_early_make_pages_private(PhysFrame begin, PhysFrame end) {
 #endif
 
 Ghcb *get_early_ghcb() {
-    // TODO: implement get_early_ghcb
-
     return this_ghcb;
 }
 
+void vc_init_early() {
+    wrmsr(MSR_AMD64_SEV_ES_GHCB, GHCB_MSR_VMPL_REQ_LEVEL(RUN_VMPL));
+}
+
 void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va) {
-    // vc_establish_protocol();
-    // vc_make_page_shared(ghcb_pa);
+    vc_establish_protocol();
     vc_register_ghcb(ghcb_pa);
-    this_ghcb = ghcb_va;
+    vc_init_early();
 }

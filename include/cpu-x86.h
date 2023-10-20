@@ -49,6 +49,7 @@ struct tptr {
 
 #define IDT_ENTRIES     256
 
+// Figure 4-24. Interrupt-Gate and Trap-Gate Descriptors—Long Mode
 struct idtd {
         uint16_t        low;           // low 16 bits of handler address
         uint16_t        selector;      // kernel segment selector
@@ -80,6 +81,10 @@ struct idtd {
 #define T_ALIGN     17		// aligment check
 #define T_MCHK      18		// machine check
 #define T_SIMDERR   19		// SIMD floating point error
+#define T_CP        21          // Control-Protection Exception
+#define T_HV        28          // Hypervisor Injection Exception
+#define T_VC        29          // VMM communication exception
+#define T_SEC       30          // Security Exception
 
 // These are arbitrarily chosen, but with care not to overlap
 // processor defined exceptions or interrupt vectors.

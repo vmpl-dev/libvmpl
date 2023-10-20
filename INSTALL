@@ -1,0 +1,9 @@
+```bash
+sudo apt install libkeyutils-dev
+```
+
+```bash
+make clean
+make all -j$(nproc)
+sudo make install
+```

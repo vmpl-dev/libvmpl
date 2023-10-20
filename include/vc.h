@@ -7,6 +7,8 @@
 #include "globals.h"
 #include "ghcb.h"
 
+#define RUN_VMPL Vmpl0
+
 #define LOWER_8BITS(value) ((value) & 0xFF)
 #define LOWER_16BITS(value) ((value) & 0xFFFF)
 #define LOWER_32BITS(value) ((value) & 0xFFFFFFFF)

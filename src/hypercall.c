@@ -3,13 +3,13 @@
 #include <sys/select.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <errno.h>
 
 #include "vc.h"
 #include "hypercall.h"
 
-#define RUN_VMPL Vmpl0
 #ifdef __HYPERPARAMS_
 static inline uint64_t vmmcall6(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6)
 {
@@ -290,6 +290,118 @@ int hp_brk(void *addr)
     return ret;
 }
 
+int hp_rt_sigaction(int signum, const struct sigaction *act,
+                    struct sigaction *oldact)
+{
+    struct HypercallParam param = {
+        .rax = __NR_rt_sigaction,
+        .rdi = signum,
+        .rsi = (uint64_t)act,
+        .rdx = (uint64_t)oldact,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_rt_sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
+{
+    struct HypercallParam param = {
+        .rax = __NR_rt_sigprocmask,
+        .rdi = how,
+        .rsi = (uint64_t)set,
+        .rdx = (uint64_t)oldset,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_rt_sigreturn(void)
+{
+    struct HypercallParam param = {
+        .rax = __NR_rt_sigreturn,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_ioctl(int fd, unsigned long request, ...)
+{
+    va_list args;
+    va_start(args, request);
+    void *argp = va_arg(args, void *);
+    va_end(args);
+
+    struct HypercallParam param = {
+        .rax = __NR_ioctl,
+        .rdi = (uint64_t)fd,
+        .rsi = (uint64_t)request,
+        .rdx = (uint64_t)argp,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_pread64(int fd, void *buf, size_t count, off_t offset)
+{
+    struct HypercallParam param = {
+        .rax = __NR_pread64,
+        .rdi = fd,
+        .rsi = (uint64_t)buf,
+        .rdx = count,
+        .r10 = offset,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_pwrite64(int fd, const void *buf, size_t count, off_t offset)
+{
+    struct HypercallParam param = {
+        .rax = __NR_pwrite64,
+        .rdi = fd,
+        .rsi = (uint64_t)buf,
+        .rdx = count,
+        .r10 = offset,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_readv(int fd, const struct iovec *iov, int iovcnt)
+{
+    struct HypercallParam param = {
+        .rax = __NR_readv,
+        .rdi = fd,
+        .rsi = (uint64_t)iov,
+        .rdx = iovcnt,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_writev(int fd, const struct iovec *iov, int iovcnt)
+{
+    struct HypercallParam param = {
+        .rax = __NR_writev,
+        .rdi = fd,
+        .rsi = (uint64_t)iov,
+        .rdx = iovcnt,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_access(const char *pathname, int mode)
+{
+    struct HypercallParam param = {
+        .rax = __NR_access,
+        .rdi = (uint64_t)pathname,
+        .rsi = mode,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
 int hp_pipe(int pipefd[2])
 {
     struct HypercallParam param = {
@@ -319,6 +431,57 @@ int hp_sched_yield(void)
 {
     struct HypercallParam param = {
         .rax = __NR_sched_yield,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_mremap(void *old_address, size_t old_size, size_t new_size,
+              int flags, void *new_address)
+{
+    struct HypercallParam param = {
+        .rax = __NR_mremap,
+        .rdi = (uint64_t)old_address,
+        .rsi = old_size,
+        .rdx = new_size,
+        .r10 = flags,
+        .r8 = (uint64_t)new_address,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_msync(void *addr, size_t length, int flags)
+{
+    struct HypercallParam param = {
+        .rax = __NR_msync,
+        .rdi = (uint64_t)addr,
+        .rsi = length,
+        .rdx = flags,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_mincore(void *addr, size_t length, unsigned char *vec)
+{
+    struct HypercallParam param = {
+        .rax = __NR_mincore,
+        .rdi = (uint64_t)addr,
+        .rsi = length,
+        .rdx = (uint64_t)vec,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_madvise(void *addr, size_t length, int advice)
+{
+    struct HypercallParam param = {
+        .rax = __NR_madvise,
+        .rdi = (uint64_t)addr,
+        .rsi = length,
+        .rdx = advice,
     };
     int ret = hypercall(&param);
     return ret;
@@ -550,6 +713,17 @@ ssize_t hp_recvmsg(int sockfd, struct msghdr *msg, int flags)
     return ret;
 }
 
+int hp_shutdown(int sockfd, int how)
+{
+    struct HypercallParam param = {
+        .rax = __NR_shutdown,
+        .rdi = sockfd,
+        .rsi = how,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
 int hp_bind(int sockfd, const struct sockaddr *addr,
             socklen_t addrlen)
 {
@@ -641,10 +815,29 @@ int hp_setsockopt(int sockfd, int level, int optname,
     return ret;
 }
 
-void hp_exit(void)
+int hp_fork(void)
+{
+    struct HypercallParam param = {
+        .rax = __NR_fork,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_vfork(void)
+{
+    struct HypercallParam param = {
+        .rax = __NR_vfork,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+void hp_exit(int status)
 {
     struct HypercallParam param = {
         .rax = __NR_exit,
+        .rdi = (uint64_t)status,
     };
     hypercall(&param);
 }
@@ -661,11 +854,155 @@ int hp_execve(const char *path, char *const argv[], char *const envp[])
     return ret;
 }
 
+int hp_wait4(pid_t pid, int *status, int options, struct rusage *rusage)
+{
+    struct HypercallParam param = {
+        .rax = __NR_wait4,
+        .rdi = pid,
+        .rsi = (uint64_t)status,
+        .rdx = options,
+        .r10 = (uint64_t)rusage,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_kill(pid_t pid, int sig)
+{
+    struct HypercallParam param = {
+        .rax = __NR_kill,
+        .rdi = pid,
+        .rsi = sig,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_uname(struct utsname *buf)
+{
+    struct HypercallParam param = {
+        .rax = __NR_uname,
+        .rdi = (uint64_t)buf,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_semget(key_t key, int nsems, int semflg)
+{
+    struct HypercallParam param = {
+        .rax = __NR_semget,
+        .rdi = key,
+        .rsi = nsems,
+        .rdx = semflg,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_semop(int semid, struct sembuf *sops, size_t nsops)
+{
+    struct HypercallParam param = {
+        .rax = __NR_semop,
+        .rdi = semid,
+        .rsi = (uint64_t)sops,
+        .rdx = nsops,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_semctl(int semid, int semnum, int cmd, ...)
+{
+    va_list args;
+    va_start(args, cmd);
+    void *arg = va_arg(args, void *);
+    va_end(args);
+
+    struct HypercallParam param = {
+        .rax = __NR_semctl,
+        .rdi = semid,
+        .rsi = semnum,
+        .rdx = cmd,
+        .r10 = (uint64_t)arg,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
 int hp_shmdt(const void *shmaddr)
 {
     struct HypercallParam param = {
         .rax = __NR_shmdt,
         .rdi = (uint64_t)shmaddr,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_msgget(key_t key, int msgflg)
+{
+    struct HypercallParam param = {
+        .rax = __NR_msgget,
+        .rdi = key,
+        .rsi = msgflg,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg)
+{
+    struct HypercallParam param = {
+        .rax = __NR_msgsnd,
+        .rdi = msqid,
+        .rsi = (uint64_t)msgp,
+        .rdx = msgsz,
+        .r10 = msgflg,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+ssize_t hp_msgrcv(int msqid, void *msgp, size_t msgsz, long msgtyp,
+                  int msgflg)
+{
+    struct HypercallParam param = {
+        .rax = __NR_msgrcv,
+        .rdi = msqid,
+        .rsi = (uint64_t)msgp,
+        .rdx = msgsz,
+        .r10 = msgtyp,
+        .r8 = msgflg,
+    };
+    ssize_t ret = hypercall(&param);
+    return ret;
+}
+
+int hp_msgctl(int msqid, int cmd, struct msqid_ds *buf)
+{
+    struct HypercallParam param = {
+        .rax = __NR_msgctl,
+        .rdi = msqid,
+        .rsi = cmd,
+        .rdx = (uint64_t)buf,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_fcntl(int fd, int cmd, ...)
+{
+    va_list args;
+    va_start(args, cmd);
+    void *arg = va_arg(args, void *);
+    va_end(args);
+
+    struct HypercallParam param = {
+        .rax = __NR_fcntl,
+        .rdi = fd,
+        .rsi = cmd,
+        .rdx = (uint64_t)arg,
     };
     int ret = hypercall(&param);
     return ret;
@@ -697,6 +1034,28 @@ int hp_fdatasync(int fd)
     struct HypercallParam param = {
         .rax = __NR_fdatasync,
         .rdi = fd,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_truncate(const char *path, off_t length)
+{
+    struct HypercallParam param = {
+        .rax = __NR_truncate,
+        .rdi = (uint64_t)path,
+        .rsi = length,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
+int hp_ftruncate(int fd, off_t length)
+{
+    struct HypercallParam param = {
+        .rax = __NR_ftruncate,
+        .rdi = fd,
+        .rsi = length,
     };
     int ret = hypercall(&param);
     return ret;
@@ -900,6 +1259,17 @@ __mode_t hp_umask(mode_t mask)
     return ret;
 }
 
+int hp_gettimeofday(struct timeval *tv, struct timezone *tz)
+{
+    struct HypercallParam param = {
+        .rax = __NR_gettimeofday,
+        .rdi = (uint64_t)tv,
+        .rsi = (uint64_t)tz,
+    };
+    int ret = hypercall(&param);
+    return ret;
+}
+
 int hp_getrlimit(int resource, struct rlimit *rlim)
 {
     struct HypercallParam param = {
@@ -939,6 +1309,19 @@ clock_t hp_times(struct tms *buf)
         .rdi = (uint64_t)buf,
     };
     clock_t ret = hypercall(&param);
+    return ret;
+}
+
+int hp_ptrace(long request, pid_t pid, void *addr, void *data)
+{
+    struct HypercallParam param = {
+        .rax = __NR_ptrace,
+        .rdi = request,
+        .rsi = pid,
+        .rdx = (uint64_t)addr,
+        .r10 = (uint64_t)data,
+    };
+    int ret = hypercall(&param);
     return ret;
 }
 
@@ -2052,7 +2435,7 @@ int hp_get_thread_area(struct user_desc *u_info)
     return ret;
 }
 
-int hp_lookup_dcookie(u64 cookie64, char *buf, size_t len)
+int hp_lookup_dcookie(unsigned long cookie64, char *buf, size_t len)
 {
     struct HypercallParam param = {
         .rax = __NR_lookup_dcookie,

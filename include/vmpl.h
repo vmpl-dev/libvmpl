@@ -87,10 +87,18 @@ typedef void (*dune_syscall_cb) (struct dune_tf *tf);
 // XXX: Must match kern/dune.h
 #define DUNE_SIGNAL_INTR_BASE 200
 
+extern int dune_register_intr_handler(int vec, dune_intr_cb cb);
+extern int dune_register_signal_handler(int signum, dune_intr_cb cb);
+extern void dune_register_pgflt_handler(dune_pgflt_cb cb);
+extern void dune_register_syscall_handler(dune_syscall_cb cb);
+
+extern void dune_syscall_handler(struct dune_tf *tf);
+extern void dune_trap_handler(int num, struct dune_tf *tf);
+
 void grant_vmpl2_access(MemoryMapping *mapping);
 
 // vmpl initialization
-int vmpl_enter();
+int vmpl_enter(int argc, char *argv[]);
 int vmpl_exit();
 
 #endif /* __VMPL_H_ */

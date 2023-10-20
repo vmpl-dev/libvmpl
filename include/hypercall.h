@@ -94,10 +94,25 @@ void *hp_mmap(void *addr, size_t length, int prot, int flags,
 int hp_mprotect(void *addr, size_t len, int prot);
 int hp_munmap(void *addr, size_t length);
 int hp_brk(void *addr);
+int hp_rt_sigaction(int signum, const struct sigaction *act,
+                    struct sigaction *oldact);
+int hp_rt_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+int hp_rt_sigreturn(void);
+int hp_ioctl(int fd, unsigned long request, ...);
+int hp_pread64(int fd, void *buf, size_t count, off_t offset);
+int hp_pwrite64(int fd, const void *buf, size_t count, off_t offset);
+int hp_readv(int fd, const struct iovec *iov, int iovcnt);
+int hp_writev(int fd, const struct iovec *iov, int iovcnt);
+int hp_access(const char *pathname, int mode);
 int hp_pipe(int pipefd[2]);
 int hp_select(int nfds, fd_set *readfds, fd_set *writefds,
               fd_set *exceptfds, struct timeval *timeout);
 int hp_sched_yield(void);
+int hp_mremap(void *old_address, size_t old_size, size_t new_size,
+              int flags, void *new_address);
+int hp_msync(void *addr, size_t length, int flags);
+int hp_mincore(void *addr, size_t length, unsigned char *vec);
+int hp_madvise(void *addr, size_t length, int advice);
 int hp_shmget(key_t key, size_t size, int shmflg);
 void *hp_shmat(int shmid, const void *shmaddr, int shmflg);
 int hp_shmctl(int shmid, int cmd, struct shmid_ds *buf);
@@ -121,6 +136,7 @@ ssize_t hp_recvfrom(int sockfd, void *buf, size_t len, int flags,
                     struct sockaddr *src_addr, socklen_t *addrlen);
 ssize_t hp_sendmsg(int sockfd, const struct msghdr *msg, int flags);
 ssize_t hp_recvmsg(int sockfd, struct msghdr *msg, int flags);
+int hp_shutdown(int sockfd, int how);
 int hp_bind(int sockfd, const struct sockaddr *addr,
             socklen_t addrlen);
 int hp_listen(int sockfd, int backlog);
@@ -132,12 +148,28 @@ int hp_getsockopt(int sockfd, int level, int optname,
 int hp_setsockopt(int sockfd, int level, int optname,
                   const void *optval, socklen_t optlen);
 pid_t hp_gettid(void);
-void hp_exit(void);
+pid_t hp_fork(void);
+pid_t hp_vfork(void);
+void hp_exit(int status);
 int hp_execve(const char *path, char *const argv[], char *const envp[]);
+int hp_wait4(pid_t pid, int *status, int options, struct rusage *rusage);
+int hp_kill(pid_t pid, int sig);
+int hp_uname(struct utsname *buf);
+int hp_semget(key_t key, int nsems, int semflg);
+int hp_semop(int semid, struct sembuf *sops, size_t nsops);
+int hp_semctl(int semid, int semnum, int cmd, ...);
 int hp_shmdt(const void *shmaddr);
+int hp_msgget(key_t key, int msgflg);
+int hp_msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg);
+ssize_t hp_msgrcv(int msqid, void *msgp, size_t msgsz, long msgtyp,
+                  int msgflg);
+int hp_msgctl(int msqid, int cmd, struct msqid_ds *buf);
+int hp_fcntl(int fd, int cmd, ... /* arg */ );
 int hp_flock(int fd, int operation);
 int hp_fsync(int fd);
 int hp_fdatasync(int fd);
+int hp_truncate(const char *path, off_t length);
+int hp_ftruncate(int fd, off_t length);
 long hp_getdents(unsigned int fd, void *dirp,
                  unsigned int count);
 char *hp_getcwd(char *buf, size_t size);
@@ -157,11 +189,12 @@ int hp_chown(const char *pathname, uid_t owner, gid_t group);
 int hp_fchown(int fd, uid_t owner, gid_t group);
 int hp_lchown(const char *pathname, uid_t owner, gid_t group);
 __mode_t hp_umask(mode_t mask);
+int hp_gettimeofday(struct timeval *tv, struct timezone *tz);
 int hp_getrlimit(int resource, struct rlimit *rlim);
 int hp_getrusage(int who, struct rusage *usage);
 int hp_sysinfo(struct sysinfo *info);
 clock_t hp_times(struct tms *buf);
-// int hp_ptrace(long request, pid_t pid, void *addr, void *data);
+int hp_ptrace(long request, pid_t pid, void *addr, void *data);
 __uid_t hp_getuid(void);
 void hp_syslog(int type, char *bufp, int len);
 __gid_t hp_getgid(void);
@@ -280,7 +313,7 @@ int hp_io_submit(aio_context_t ctx_id, long nr, struct iocb **iocbpp);
 int hp_io_cancel(aio_context_t ctx_id, struct iocb *iocb,
                  struct io_event *result);
 int hp_get_thread_area(struct user_desc *u_info);
-int hp_lookup_dcookie(u64 cookie, char *buf, size_t len);
+int hp_lookup_dcookie(unsigned long cookie, char *buf, size_t len);
 int hp_epoll_create(int size);
 int hp_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
 int hp_epoll_wait(int epfd, struct epoll_event *events,

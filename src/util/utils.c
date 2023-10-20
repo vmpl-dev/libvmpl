@@ -10,20 +10,22 @@
 #include <unistd.h>
 
 #include "hypercall.h"
+#include "utils.h"
 
-static int vmpl_puts(const char *buf)
+int vmpl_puts(const char *buf)
 {
-    long ret = hp_write(STDOUT_FILENO, buf, strlen(buf));
+    int ret = hp_write(STDOUT_FILENO, buf, strlen(buf));
     return ret;
 }
 
-static int vmpl_printf(const char *fmt, ...)
+static char buf[1024];
+
+int vmpl_printf(const char *fmt, ...)
 {
 	va_list args;
-	char buf[1024];
 
 	va_start(args, fmt);
-	vsprintf(buf, fmt, args);
+	vsnprintf(buf, 1024, fmt, args);
 	va_end(args);
 
 	return vmpl_puts(buf);

@@ -1,3 +1,20 @@
-```
-sudo apt install libkeyutils-dev
-```
+## Plan:
+[x] trap handler
+[√] SEV-SNP related
+    [√] MSR protocol
+    [x] GHCB support
+[√] Debug related
+    [x] Serial Output
+[√] SMP related
+    [√] PerCpu Variable
+    [√] Thread-Local Storage
+[x] Ring 3
+    [x] ELF Loader
+    [x] remap syscall
+    [x] remap vsyscall
+[x] glibc
+    [x] syscall
+    [x] pthread
+
+
+有一些dune做着蹩脚的地方，在vmpl1上很好实现，目前open, read, write, close, ioctl, mremap, munmap, exit共八个系统调用通过了测试，可以在vmpl1执行了。但syscall对应的vmpl权限管理还没做，预计很快就会支持dune的trap-handler和elf-loader

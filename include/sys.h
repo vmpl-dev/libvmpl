@@ -232,9 +232,12 @@ static inline void wrmsr(uint32_t msr, uint64_t value) {
 }
 
 // Pause instruction
-static inline void pause() {
+#ifndef __x86_64__
+static inline int pause() {
     __asm__("pause");
+    return 0;
 }
+#endif
 
 // Halt instruction
 static inline void halt() {
