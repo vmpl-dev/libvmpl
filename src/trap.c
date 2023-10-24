@@ -3,25 +3,24 @@
  */
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/types.h>
 
 #include "cpu-x86.h"
 #include "sys.h"
 #include "vmpl.h"
-#include "hypercall.h"
-#include "utils.h"
-// #include "trap.h"
 
 /**
  * @brief Page fault callback
  * @note This is called when an exception occurs. The callback should
- * 	 execute the hp_exit to exit the VMPL.
+ * 	 execute the exit to exit the VMPL.
  */
 static void vmpl_default_handler(struct dune_tf *tf)
 {
-	hp_exit(EXIT_FAILURE);
+	exit(EXIT_FAILURE);
 }
 
 /**
@@ -33,19 +32,25 @@ static void vmpl_default_handler(struct dune_tf *tf)
  */
 static void vmpl_pf_handler(struct dune_tf *tf)
 {
-	hp_exit(EXIT_FAILURE);
+	uint64_t cr2 = read_cr2();
+	printf("dune: page fault at 0x%016lx, error-code = %x\n", cr2, tf->err);
+	exit(EXIT_FAILURE);
 }
 
 /**
  * @brief VMM communication handler
  * @note This is called when an exception occurs. The callback should
- * 	 execute the hp_exit to exit the VMPL.
+ * 	 execute the exit to exit the VMPL.
  */
 static void vmpl_vc_handler(struct dune_tf *tf)
 {
-	hp_exit(EXIT_FAILURE);
+	exit(EXIT_FAILURE);
 }
 
+/**
+ * @brief  Exception messages
+ * @note   This is used to print the exception message when an exception occurs.
+ */
 static const char *exceptions[] = {
 	[0] = "Divide-by-zero Error",
 	[1] = "Debug Exception",
@@ -97,9 +102,11 @@ static dune_intr_cb intr_cbs[IDT_ENTRIES] = {
 	[T_MCHK] = vmpl_default_handler,	// 18. #MC Machine Check Exception
 	[T_SIMDERR] = vmpl_default_handler, // 19. #XM SIMD Floating-Point Exception
 	[T_CP] = vmpl_default_handler,		// 21. #CP Control Protection Exception
+	[22 ... 27] = vmpl_default_handler,	// 22-27. Reserved
 	[T_HV] = vmpl_default_handler,		// 28. #VE Hypervisor Injection Exception
 	[T_VC] = vmpl_vc_handler,			// 29. #VC VMM Communication Exception
 	[T_SEC] = vmpl_default_handler,		// 30. #SX Security Exception
+	[31 ... 255] = vmpl_default_handler,	// 31-255. Reserved
 };
 
 int dune_register_intr_handler(int vec, dune_intr_cb cb)
@@ -149,26 +156,27 @@ static void dune_dump_stack(struct dune_tf *tf)
 	int i;
 	unsigned long *sp = (unsigned long *)tf->rsp;
 
-	// we use dune_printf() because this might
+	// we use printf() because this might
 	// have to work even if libc doesn't.
-	dune_printf("dune: Dumping Stack Contents...\n");
+	printf("dune: Dumping Stack Contents...\n");
 	for (i = 0; i < STACK_DEPTH; i++) {
 		if (!addr_is_mapped(&sp[i])) {
-			dune_printf("dune: reached unmapped addr\n");
+			printf("dune: reached unmapped addr\n");
 			break;
 		}
-		dune_printf("dune: RSP%+-3d 0x%016lx\n", i * sizeof(long), sp[i]);
+		printf("dune: RSP%+-3lx 0x%016lx\n", i * sizeof(long), sp[i]);
 	}
 }
+#endif
 
 static void dune_hexdump(void *x, int len)
 {
 	unsigned char *p = x;
 
 	while (len--)
-		dune_printf("%.2x ", *p++);
+		printf("%.2x ", *p++);
 
-	dune_printf("\n");
+	printf("\n");
 }
 
 static void dump_ip(struct dune_tf *tf)
@@ -176,52 +184,56 @@ static void dump_ip(struct dune_tf *tf)
 	unsigned char *p = (void *)tf->rip;
 	int len = 20;
 
-	dune_printf("dune: code before IP\t");
+	printf("dune: code before IP\t");
 	dune_hexdump(p - len, len);
 
-	dune_printf("dune: code at IP\t");
+	printf("dune: code at IP\t");
 	dune_hexdump(p, len);
 }
 
 void dune_dump_trap_frame(struct dune_tf *tf)
 {
-	// we use dune_printf() because this might
+	// we use printf() because this might
 	// have to work even if libc doesn't.
-	dune_printf("dune: --- Begin Trap Dump ---\n");
-	dune_printf("dune: RIP 0x%016llx\n", tf->rip);
-	dune_printf("dune: CS 0x%02x SS 0x%02x\n", tf->cs, tf->ss);
-	dune_printf("dune: ERR 0x%08lx RFLAGS 0x%08lx\n", tf->err, tf->rflags);
-	dune_printf("dune: RAX 0x%016lx RCX 0x%016lx\n", tf->rax, tf->rcx);
-	dune_printf("dune: RDX 0x%016lx RBX 0x%016lx\n", tf->rdx, tf->rbx);
-	dune_printf("dune: RSP 0x%016lx RBP 0x%016lx\n", tf->rsp, tf->rbp);
-	dune_printf("dune: RSI 0x%016lx RDI 0x%016lx\n", tf->rsi, tf->rdi);
-	dune_printf("dune: R8  0x%016lx R9  0x%016lx\n", tf->r8, tf->r9);
-	dune_printf("dune: R10 0x%016lx R11 0x%016lx\n", tf->r10, tf->r11);
-	dune_printf("dune: R12 0x%016lx R13 0x%016lx\n", tf->r12, tf->r13);
-	dune_printf("dune: R14 0x%016lx R15 0x%016lx\n", tf->r14, tf->r15);
+	printf("dune: --- Begin Trap Dump ---\n");
+	printf("dune: RIP 0x%016llx\n", tf->rip);
+	printf("dune: CS 0x%02x SS 0x%02x\n", tf->cs, tf->ss);
+	printf("dune: ERR 0x%08lx RFLAGS 0x%08lx\n", tf->err, tf->rflags);
+	printf("dune: RAX 0x%016lx RCX 0x%016lx\n", tf->rax, tf->rcx);
+	printf("dune: RDX 0x%016lx RBX 0x%016lx\n", tf->rdx, tf->rbx);
+	printf("dune: RSP 0x%016lx RBP 0x%016lx\n", tf->rsp, tf->rbp);
+	printf("dune: RSI 0x%016lx RDI 0x%016lx\n", tf->rsi, tf->rdi);
+	printf("dune: R8  0x%016lx R9  0x%016lx\n", tf->r8, tf->r9);
+	printf("dune: R10 0x%016lx R11 0x%016lx\n", tf->r10, tf->r11);
+	printf("dune: R12 0x%016lx R13 0x%016lx\n", tf->r12, tf->r13);
+	printf("dune: R14 0x%016lx R15 0x%016lx\n", tf->r14, tf->r15);
+#ifdef VMPL_PGTABLE
 	dune_dump_stack(tf);
-	dump_ip(tf);
-	dune_printf("dune: --- End Trap Dump ---\n");
-}
-
-
 #endif
+	dump_ip(tf);
+	printf("dune: --- End Trap Dump ---\n");
+}
 
 void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {
 		syscall_cb(tf);
 	} else {
-		hp_exit(EXIT_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 }
 
 void dune_trap_handler(int num, struct dune_tf *tf)
 {
 	if (intr_cbs[num]) {
+		printf("dune: handling exception %d (%s)\n", num,
+			    exceptions[num]);
 		intr_cbs[num](tf);
 		return;
 	} else {
-		hp_exit(EXIT_FAILURE);
+		printf("dune: unhandled exception %d (%s)\n", num,
+			    exceptions[num]);
+		dune_dump_trap_frame(tf);
+		exit(EXIT_FAILURE);
 	}
 }

@@ -1,8 +1,12 @@
+#define _GNU_SOURCE
+#include <stdio.h>
 #include <unistd.h>
+#ifdef __GLIBC__
 #include <asm/msr.h>
-
+#else
+#include <bits/syscall.h>
+#endif
 #include "sys.h"
-#include "hypercall.h"
 #include "vc.h"
 
 static uint64_t HV_FEATURES;
@@ -540,12 +544,8 @@ Ghcb *get_early_ghcb() {
     return this_ghcb;
 }
 
-void vc_init_early() {
-    wrmsr(MSR_AMD64_SEV_ES_GHCB, GHCB_MSR_VMPL_REQ_LEVEL(RUN_VMPL));
-}
-
 void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va) {
+    printf("setup VC communication\n");
     vc_establish_protocol();
     vc_register_ghcb(ghcb_pa);
-    vc_init_early();
 }

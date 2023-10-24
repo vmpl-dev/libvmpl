@@ -4,7 +4,7 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 # Enable static linking
 AC_ENABLE_STATIC
 
-AC_PROG_CC
+AC_PROG_CC([musl-gcc])
 
 # Specify the desired archiver program with options
 AR=ar

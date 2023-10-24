@@ -10,6 +10,7 @@
  * 
  * @see https://github.com/mbs0221/my-toy/blob/master/libvmpl/src/vmpl.c
  */
+#define _GNU_SOURCE
 #include <unistd.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -21,20 +22,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
-#include <asm/prctl.h>
+#include <sched.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef __GLIBC__
+#include <sys/mman.h>
+#include <sys/resource.h>
+#endif
 
 #include "cpu-x86.h"
 #include "mmu.h"
-#include "svsm-vmpl.h"
-#include "procmap.h"
+#include "vmpl-dev.h"
 #include "vmpl.h"
 #include "vc.h"
-#include "serial.h"
-#include "hypercall.h"
-#include "utils.h"
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 
@@ -50,43 +51,10 @@ struct dune_percpu {
 	uint64_t gdt[NR_GDT_ENTRIES];
     uint64_t ghcb_gpa;
     struct Ghcb *ghcb;
+    void *lstar;
+    void *vsyscall;
 } __attribute__((packed));
 
-struct gdtr_entry {
-    uint64_t limit_lo : 16;     // 段界限低16位
-    uint64_t base : 24;         // 
-    uint64_t type : 4;
-    uint64_t s : 1;
-    uint64_t dpl : 2;
-    uint64_t p : 1;
-    uint64_t limit_hi : 4;
-    uint64_t avl : 1;
-    uint64_t l : 1;
-    uint64_t db : 1;
-    uint64_t g : 1;
-} __attribute__((packed));
-
-#ifdef __DUNE__
-static uint64_t gdt_template[NR_GDT_ENTRIES] = {
-	0,
-	0,
-	SEG64(SEG_X | SEG_R, 0),
-	SEG64(SEG_W, 0),
-	0,
-	SEG64(SEG_W, 3),
-	SEG64(SEG_X | SEG_R, 3),
-	0,
-	0,
-};
-#else
-#define KERNEL_CODE32   0x00cf9b000000ffff // [G], [D], L, AVL, [P], DPL=0, [1], [1], C, [R], [A]
-#define KERNEL_CODE64   0x00af9b000000ffff // [G], D, [L], AVL, [P], DPL=0, [1], [1], C, [R], [A]
-#define KERNEL_DATA     0x00cf93000000ffff // [G], [B], L, AVL, [P], DPL=0, [1], [0], E, [W], [A]
-#define USER_CODE32     0x00cffb000000ffff // [G], [D], L, AVL, [P], DPL=3, [1], [1], C, [R], [A]
-#define USER_DATA       0x00cff3000000ffff // [G], [D], L, AVL, [P], DPL=3, [1], [0], E, [W], [A]
-#define USER_CODE64     0x00affb000000ffff // [G], D, [L], AVL, [P], DPL=3, [1], [1], C, [R], [A]
-#define TSS             0x0080890000000000 // [G], B, L, AVL, [P], DPL=0, [0], [0], [0], [0], [0]
-#define TSS2            0x0000000000000000 // [G], B, L, AVL, [P], DPL=0, [0], [0], [0], [0], [0]
 static uint64_t gdt_template[NR_GDT_ENTRIES] = {
     0,
     KERNEL_CODE32,
@@ -98,7 +66,6 @@ static uint64_t gdt_template[NR_GDT_ENTRIES] = {
     TSS,
     TSS2,
 };
-#endif
 
 #define ISR_LEN 16
 
@@ -110,102 +77,13 @@ typedef uintptr_t phys_addr_t;
 static struct idtd idt[IDT_ENTRIES];
 static __thread struct dune_percpu *percpu;
 
-#ifdef SETUP_VMPL
-/**
- * @brief Set the pages vmpl permission.
- * 
- * @param vaddr The virtual address of the memory mapping.
- * @param rmp_psize The page size of the memory mapping.
- * @param attrs The access permission of the memory mapping.
- * @param nr_pages The number of pages of the memory mapping.
- * 
- * @return void
- */
-void set_pages_vmpl(uint64_t vaddr, bool rmp_psize, uint64_t attrs, uint32_t nr_pages)
-{
-    int fd = open("/dev/svsm-vmpl", O_RDWR);
-    if (fd == -1)
-    {
-        perror("Failed to open /dev/svsm-vmpl");
-        return;
-    }
-
-    // 设置要传递的数据
-    struct vmpl_data data;
-    data.gva = vaddr;
-    data.page_size = rmp_psize; // RMP_4K;
-    data.attrs = attrs;
-    data.nr_pages = nr_pages;
-
-    // 调用ioctl向内核传递数据
-    if (ioctl(fd, VMPL_IOCTL_SET_DATA, &data) == -1)
-    {
-        perror("ioctl failed");
-        close(fd);
-        return;
-    }
-
-    // 关闭设备文件
-    printf("关闭设备文件\n");
-    close(fd);
-}
-
-/**
- * Prints a memory mapping on one line.
- * 
- * @param mapping Pointer to the memory mapping to be printed.
- * @return void
- */
-void grant_vmpl2_access(MemoryMapping *mapping) {
-    uint32_t nr_pages;
-
-    switch (get_mapping_type(mapping->pathname)) {
-    // case PROCMAP_TYPE_UNKNOWN:
-    // case PROCMAP_TYPE_ANONYMOUS:
-    case PROCMAP_TYPE_VSYSCALL: // TOTO: page_vmpl_set: 页面获取失败
-    case PROCMAP_TYPE_VVAR: // page_vmpl_set: 页面获取失败
-        return;
-    default:
-        break;
-    }
-
-    nr_pages = (mapping->end - mapping->start) >> 12;
-
-    print_mapping_oneline(mapping);
-
-    uint64_t attrs = Vmpl1;
-    if (mapping->perms[0] == 'r')
-        attrs |= VMPL_R;
-    if (mapping->perms[1] == 'w')
-        attrs |= VMPL_W;
-    if (mapping->perms[2] == 'x')
-        attrs |= (VMPL_X_USER | VMPL_X_SUPER);
-
-    set_pages_vmpl(mapping->start, RMP_4K, attrs, nr_pages);
-}
-
-/**
- * Sets up VMPL2 access permission.
- * 
- * @return void
- */
-static inline void setup_vmpl(void) {
-    // 设置vmpl
-    printf("setup vmpl\n");
-    // 1. 获取当前进程的内存映射
-    parse_proc_maps(print_mapping_oneline);
-    // 2. 设置vmpl access permission
-    parse_proc_maps(grant_vmpl2_access);
-}
-#endif
-
 /**
  * Gets the segment registers.
  * 
  * @param regs Pointer to the vmsa_seg struct to be initialized.
  * @return void
  */
-static void get_segment_registers(struct vmsa_seg *regs) {
+static void get_segment_registers(struct vmsa_config *regs) {
     __asm__ volatile(
         "movw %%cs, %c[cs](%0)\n"
         "movw %%ds, %c[ds](%0)\n"
@@ -213,12 +91,12 @@ static void get_segment_registers(struct vmsa_seg *regs) {
         "movw %%fs, %c[fs](%0)\n"
         "movw %%gs, %c[gs](%0)\n"
         "movw %%ss, %c[ss](%0)\n" ::"r"(regs),
-        [cs] "i"(offsetof(struct vmsa_seg, cs)),
-        [ds] "i"(offsetof(struct vmsa_seg, ds)),
-        [es] "i"(offsetof(struct vmsa_seg, es)),
-        [fs] "i"(offsetof(struct vmsa_seg, fs)),
-        [gs] "i"(offsetof(struct vmsa_seg, gs)),
-        [ss] "i"(offsetof(struct vmsa_seg, ss)));
+        [cs] "i"(offsetof(struct vmsa_config, cs)),
+        [ds] "i"(offsetof(struct vmsa_config, ds)),
+        [es] "i"(offsetof(struct vmsa_config, es)),
+        [fs] "i"(offsetof(struct vmsa_config, fs)),
+        [gs] "i"(offsetof(struct vmsa_config, gs)),
+        [ss] "i"(offsetof(struct vmsa_config, ss)));
 }
 
 /**
@@ -293,6 +171,7 @@ static void dump_percpu(struct dune_percpu *percpu)
     printf("in_usermode: %lx\n", percpu->in_usermode);
     printf("tss: %p gdt: %p\n", &percpu->tss, percpu->gdt);
     printf("ghcb_gpa: %lx ghcb: %p\n", percpu->ghcb_gpa, percpu->ghcb);
+    printf("lstar: %p vsyscall: %p\n", percpu->lstar, percpu->vsyscall);
 }
 
 /**
@@ -457,55 +336,91 @@ static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
     return 0;
 }
 
+/**
+ * Sets up the CPU set.
+ * 
+ * @return 0 on success, otherwise an error code.
+ */
+static int setup_cpuset()
+{
+    int cpu;
+    cpu_set_t cpuset;
+
+    printf("setup cpuset\n");
+
+    cpu = sched_getcpu();
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu, &cpuset);
+
+    if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
+        perror("sched_setaffinity");
+        return 1;
+    }
+
+    printf("dune: running on CPU %d\n", cpu);
+
+    return 0;
+}
+
 #define VSYSCALL_ADDR 0xffffffffff600000UL
 
 /**
  * Sets up the system call handler.
  * @note 用ioctl，将MSR_LSATR指向的虚拟地址空间，重新映射到dune_syscall所在的物理页
+ * @param percpu Pointer to the percpu struct.
  * 
  * @return void
  */
-static void setup_syscall(void)
+static void setup_syscall(struct dune_percpu *percpu)
 {
     uint64_t *lstar;
 	assert((uint64_t) __dune_syscall_end  -
 	       (uint64_t) __dune_syscall < PAGE_SIZE);
 
-    hp_write(STDOUT_FILENO, "setup syscall\n", 14);
+    printf("setup syscall\n");
     lstar = (void *)native_read_msr(MSR_LSTAR);
 
 #ifdef RESTORE_VMPL0
     // remap syscall page to another page
-    hp_mremap(lstar, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
+    percpu->lstar = mremap(lstar, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
+    if (percpu->lstar == MAP_FAILED) {
+        perror("dune: failed to remap syscall page");
+        exit(EXIT_FAILURE);
+    }
 #else
     // unmap syscall page
-    hp_munmap(lstar, PAGE_SIZE);
+    munmap(lstar, PAGE_SIZE);
 #endif
     // remap dune syscall page to syscall page
-    hp_mremap(__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, lstar);
+    mremap(__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, lstar);
 }
 
 /**
  * Sets up the vsyscall handler.
  * @note 用ioctl，将vsyscall指向的虚拟地址空间，重新映射到dune_vsyscall所在的物理页
+ * @param percpu Pointer to the percpu struct.
  * 
  * @return void
  */
-static void setup_vsyscall(void)
+static void setup_vsyscall(struct dune_percpu *percpu)
 {
     // 1. 设置vsyscall
     void *vsyscall_addr = (void *)VSYSCALL_ADDR;
-    hp_write(STDOUT_FILENO, "setup vsyscall\n", 15);
+    printf("setup vsyscall\n");
 
 #ifdef RESTORE_VMPL0
     // remap vsyscall page to another page
-    hp_mremap(vsyscall_addr, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
+    percpu->vsyscall = mremap(vsyscall_addr, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
+    if (percpu->vsyscall == MAP_FAILED) {
+        perror("dune: failed to remap vsyscall page");
+        exit(EXIT_FAILURE);
+    }
 #else
     // unmap vsyscall page
-    hp_munmap(vsyscall_addr, PAGE_SIZE);
+    munmap(vsyscall_addr, PAGE_SIZE);
 #endif
     // remap dune vsyscall page to vsyscall page
-    hp_mremap(__dune_vsyscall_page, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
+    mremap(__dune_vsyscall_page, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
 }
 
 /**
@@ -579,6 +494,18 @@ failed:
     return rc;
 }
 
+sighandler_t dune_signal(int sig, sighandler_t cb)
+{
+	dune_intr_cb x = (dune_intr_cb)cb; /* XXX */
+
+	if (signal(sig, cb) == SIG_ERR)
+		return SIG_ERR;
+
+	dune_register_intr_handler(DUNE_SIGNAL_INTR_BASE + sig, x);
+
+	return NULL;
+}
+
 /**
  * @brief Asserts the offsets of various fields in the vmsa_config struct.
  * 
@@ -589,7 +516,6 @@ failed:
  * @return void
  */
 void vmpl_build_assert() {
-    printf("IOCTL_DUNE_ENTER = %x, DUNE_ENTER = %lx\n", IOCTL_DUNE_ENTER, DUNE_ENTER);
     BUILD_ASSERT(IOCTL_DUNE_ENTER == DUNE_ENTER);
 	BUILD_ASSERT(DUNE_CFG_RET == offsetof(struct vmsa_config, ret));
 	BUILD_ASSERT(DUNE_CFG_RAX == offsetof(struct vmsa_config, rax));
@@ -698,25 +624,54 @@ static void vmpl_free_percpu()
 }
 
 /**
+ * @brief  Initializes the VMPL library.
+ * @note   Common initialization for both pre and post
+ * @retval 0 on success, otherwise an error code.
+ */
+static int vmpl_init()
+{
+    int rc;
+    printf("vmpl_init\n");
+
+    // Open dune_fd
+    dune_fd = open("/dev/" RUN_VMPL_DEV_NAME, O_RDWR);
+    if (dune_fd == -1) {
+        perror("Failed to open /dev/" RUN_VMPL_DEV_NAME);
+        rc = -errno;
+        goto failed;
+    }
+
+    // Setup signal
+    setup_signal();
+
+    // Setup IDT
+    setup_idt();
+
+    return 0;
+failed:
+    return rc;
+}
+
+/**
  * Initializes the VMPL library before the main program starts.
  * This function sets up VMPL2 access permission, builds assert, sets up signal, and sets up IDT.
  */
 static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 {
     int rc;
+    printf("vmpl_init_pre\n");
+
+    // Setup CPU set
+    rc = setup_cpuset();
+    if (rc != 0) {
+        perror("dune: failed to setup CPU set");
+        goto failed;
+    }
 
     // Setup Stack
     rc = setup_stack();
     if (rc != 0) {
         perror("dune: failed to setup stack");
-        goto failed;
-    }
-
-    printf("vmpl_init_pre\n");
-    dune_fd = open("/dev/svsm-vmpl", O_RDWR);
-    if (dune_fd == -1) {
-        perror("Failed to open /dev/svsm-vmpl");
-        rc = -errno;
         goto failed;
     }
 
@@ -727,22 +682,11 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
         goto failed;
     }
 
-    // Setup signal
-    setup_signal();
-
     // Setup segments registers
     setup_vmsa(percpu, config);
 
     // Setup GDT for hypercall
     setup_gdt(percpu);
-
-    // Setup IDT
-    setup_idt();
-
-#ifdef SETUP_VMPL
-    // Grant VMPL2 access permission
-    setup_vmpl();
-#endif
 
     return 0;    
 failed:
@@ -801,29 +745,25 @@ static int dune_boot(struct dune_percpu *percpu)
  *
  * @return 0 on success, -1 on failure.
  */
-static int vmpl_init_post(struct dune_percpu *percpu, struct vmsa_config *config)
+static int vmpl_init_post(struct dune_percpu *percpu)
 {
     // Enable interrupts
+    printf("vmpl_init_post\n");
     asm volatile("sti\n");
 
     // Setup FS and GS
+    printf("setup FS and GS\n");
     wrmsrl(MSR_FS_BASE, percpu->kfs_base);
     wrmsrl(MSR_GS_BASE, (uint64_t)percpu);
 
     // Setup VC communication
     vc_init(percpu->ghcb_gpa, percpu->ghcb);
 
-    // Setup serial port
-    // serial_init();
-
-    // Test serial port
-    // serial_out("vmpl_init_post\n");
-
     // Setup syscall handler
-    setup_syscall();
+    setup_syscall(percpu);
 
     // Setup vsyscall handler
-    setup_vsyscall();
+    setup_vsyscall(percpu);
 
     return 0;
 }
@@ -835,9 +775,8 @@ static int vmpl_init_post(struct dune_percpu *percpu, struct vmsa_config *config
  * @return 0 on success.
  */
 static int vmpl_init_test() {
-    const char *buf = "Hello, World\n";
-    hp_write(STDOUT_FILENO, buf, strlen(buf));
-    hp_ioctl(dune_fd, DUNE_GET_SYSCALL);
+    printf("Hello, World\n");
+    ioctl(dune_fd, DUNE_GET_SYSCALL);
     return 0;
 }
 
@@ -848,7 +787,7 @@ static int vmpl_init_test() {
  */
 int vmpl_enter(int argc, char *argv[]) {
     int rc;
-    struct vmsa_config *conf;
+    struct vmsa_config *__conf;
     struct dune_percpu *__percpu;
 
     printf("vmpl_enter\n");
@@ -856,61 +795,58 @@ int vmpl_enter(int argc, char *argv[]) {
     // Build assert
     vmpl_build_assert();
 
-    // Allocate config struct for VMPL library
-    conf = vmsa_alloc_config();
-    if (!conf) {
-        rc = -ENOMEM;
-        goto failed;
-    }
-
     // Check if percpu is already allocated
     if (!percpu) {
+        // boot case (first time)
+        rc = vmpl_init();
+        if (rc) {
+            goto failed;
+        }
+
+        // Allocate percpu struct for VMPL library
         __percpu = vmpl_alloc_percpu();
         if (!__percpu) {
             rc = -ENOMEM;
             goto failed;
         }
-        // Initialize VMPL library before the main program starts
-        rc = vmpl_init_pre(__percpu, conf);
-        if (rc) {
-            goto failed;
-        }
-
-        // Dump configs
-        dump_configs(__percpu);
+    } else {
+        // fork case (second time)
+        __percpu = percpu;
     }
 
-    // Initialize VMPL library
-    rc = __dune_enter(dune_fd, conf);
+    // Allocate config struct for VMPL library
+    __conf = vmsa_alloc_config();
+    if (!__conf) {
+        rc = -ENOMEM;
+        goto failed;
+    }
+
+    // Initialize VMPL library before the main program starts
+    rc = vmpl_init_pre(__percpu, __conf);
     if (rc) {
-        printf("dune: entry to Dune mode failed, ret is %d\n", rc);
+        goto failed;
+    }
+
+    // Dump configs
+    dump_configs(__percpu);
+
+    // Initialize VMPL library
+    rc = __dune_enter(dune_fd, __conf);
+    if (rc) {
         perror("dune: entry to Dune mode failed");
         goto failed;
     }
 
     dune_boot(__percpu);
-    vmpl_init_post(__percpu, conf);
+    vmpl_init_post(__percpu);
     vmpl_init_test();
 
     percpu = __percpu;
     return 0;
 
 failed:
-    vmpl_free_percpu();
+    vmpl_free_percpu(__percpu);
     return -EIO;
-}
-
-/**
- * This function is used to exit the VMPL program.
- * It prints "vmpl_exit" to the console and returns 0.
- *
- * @return 0
- */
-int vmpl_exit() {
-    vmpl_puts("vmpl_exit\n");
-    hp_exit(EXIT_SUCCESS);
-
-    return 0;
 }
 
 /**
@@ -923,24 +859,18 @@ void on_dune_exit(struct vmsa_config *conf) {
     switch (conf->ret) {
     case DUNE_RET_EXIT:
         syscall(SYS_exit, conf->status);
-    case DUNE_RET_EPT_VIOLATION:
-        printf("dune: exit due to EPT violation\n");
-        break;
     case DUNE_RET_INTERRUPT:
         // dune_debug_handle_int(conf);
-        printf("dune: exit due to interrupt %lld\n", conf->status);
+        printf("dune: exit due to interrupt %ld\n", conf->status);
         break;
     case DUNE_RET_SIGNAL:
         __dune_go_dune(dune_fd, conf);
         break;
-    case DUNE_RET_UNHANDLED_VMEXIT:
-        printf("dune: exit due to unhandled VM exit\n");
-        break;
     case DUNE_RET_NOENTER:
-        printf("dune: re-entry to Dune mode failed, status is %lld\n", conf->status);
+        printf("dune: re-entry to Dune mode failed, status is %ld\n", conf->status);
         break;
     default:
-        printf("dune: unknown exit from Dune, ret=%lld, status=%lld\n", conf->ret, conf->status);
+        printf("dune: unknown exit from Dune, ret=%ld, status=%ld\n", conf->ret, conf->status);
         break;
     }
 

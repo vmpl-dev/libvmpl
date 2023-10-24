@@ -4,8 +4,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "svsm-vmpl.h"
-#include "procmap.h"
+#ifdef __GLIBC__
+#include <asm/prctl.h>
+#else
+#include <sys/prctl.h>
+#define ARCH_GET_FS			0x1003
+#define ARCH_GET_GS			0x1004
+#endif
 
 #define MAX_LINE_LENGTH 256
 
@@ -37,6 +42,29 @@ extern char __dune_vsyscall_page;
 #define GD_TSS		0x38
 #define GD_TSS2		0x40
 #define NR_GDT_ENTRIES	9
+
+#define KERNEL_CODE32   0x00cf9b000000ffff // [G], [D], L, AVL, [P], DPL=0, [1], [1], C, [R], [A]
+#define KERNEL_CODE64   0x00af9b000000ffff // [G], D, [L], AVL, [P], DPL=0, [1], [1], C, [R], [A]
+#define KERNEL_DATA     0x00cf93000000ffff // [G], [B], L, AVL, [P], DPL=0, [1], [0], E, [W], [A]
+#define USER_CODE32     0x00cffb000000ffff // [G], [D], L, AVL, [P], DPL=3, [1], [1], C, [R], [A]
+#define USER_DATA       0x00cff3000000ffff // [G], [D], L, AVL, [P], DPL=3, [1], [0], E, [W], [A]
+#define USER_CODE64     0x00affb000000ffff // [G], D, [L], AVL, [P], DPL=3, [1], [1], C, [R], [A]
+#define TSS             0x0080890000000000 // [G], B, L, AVL, [P], DPL=0, [0], [0], [0], [0], [0]
+#define TSS2            0x0000000000000000 // [G], B, L, AVL, [P], DPL=0, [0], [0], [0], [0], [0]
+
+struct gdtr_entry {
+    uint64_t limit_lo : 16;     // 段界限低16位
+    uint64_t base : 24;         // 
+    uint64_t type : 4;
+    uint64_t s : 1;
+    uint64_t dpl : 2;
+    uint64_t p : 1;
+    uint64_t limit_hi : 4;
+    uint64_t avl : 1;
+    uint64_t l : 1;
+    uint64_t db : 1;
+    uint64_t g : 1;
+} __attribute__((packed));
 
 struct dune_tf {
 	/* manually saved, arguments */
@@ -72,19 +100,10 @@ struct dune_tf {
 	uint16_t pad3[3];
 } __attribute__((packed));
 
-#define ARG0(tf)        ((tf)->rdi)
-#define ARG1(tf)        ((tf)->rsi)
-#define ARG2(tf)        ((tf)->rdx)
-#define ARG3(tf)        ((tf)->rcx)
-#define ARG4(tf)        ((tf)->r8)
-#define ARG5(tf)        ((tf)->r9)
-
 typedef void (*dune_intr_cb) (struct dune_tf *tf);
-typedef void (*dune_pgflt_cb) (uintptr_t addr, uint64_t fec,
-			      struct dune_tf *tf);
+typedef void (*dune_pgflt_cb) (uintptr_t addr, uint64_t fec, struct dune_tf *tf);
 typedef void (*dune_syscall_cb) (struct dune_tf *tf);
 
-// XXX: Must match kern/dune.h
 #define DUNE_SIGNAL_INTR_BASE 200
 
 extern int dune_register_intr_handler(int vec, dune_intr_cb cb);
@@ -92,13 +111,24 @@ extern int dune_register_signal_handler(int signum, dune_intr_cb cb);
 extern void dune_register_pgflt_handler(dune_pgflt_cb cb);
 extern void dune_register_syscall_handler(dune_syscall_cb cb);
 
+typedef void (*sighandler_t)(int);
+extern sighandler_t dune_signal(int sig, sighandler_t cb);
 extern void dune_syscall_handler(struct dune_tf *tf);
 extern void dune_trap_handler(int num, struct dune_tf *tf);
 
-void grant_vmpl2_access(MemoryMapping *mapping);
-
 // vmpl initialization
 int vmpl_enter(int argc, char *argv[]);
-int vmpl_exit();
+
+#define dune_enter() vmpl_enter(NULL, NULL)
+#define dune_init_and_enter() vmpl_enter(NULL, NULL)
+
+#define VMPL_ENTER                  \
+	do                              \
+	{                               \
+		if (vmpl_enter(NULL, NULL)) \
+		{                           \
+			return 1;               \
+		}                           \
+	} while (0)
 
 #endif /* __VMPL_H_ */

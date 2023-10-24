@@ -1,4 +1,8 @@
+#ifdef USE_GLIBC
 #include <asm/unistd_64.h>
+#else
+#include <bits/syscall.h>
+#endif
 
 .data
 .globl __dune_vsyscall_page

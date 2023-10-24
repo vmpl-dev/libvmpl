@@ -184,6 +184,135 @@ static inline bool cpu_supports_xsaves(void)
 
 // 3.2.10 Hardware Configuration Register (HWCR)
 
+// A.1 MSR Cross-Reference by MSR Address
+#ifndef CROSS_REFERENCE_TABLE
+// Table A-1. MSRs of the AMD64 Architecture
+#define MSR_SYSENTER_CS   0x0174
+#define MSR_SYSENTER_ESP  0x0175
+#define MSR_SYSENTER_EIP  0x0176
+
+#define MSR_U_CET   0x06A0
+#define MSR_S_CET   0x06A2
+#define MSR_PL0_SSP 0x06A4
+#define MSR_PL1_SSP 0x06A5
+#define MSR_PL2_SSP 0x06A6
+#define MSR_PL3_SSP 0x06A7
+#define MSR_ISST_ADDR 0x06A8
+#define MSR_XSS     0x0DA0
+#define MSR_EFER     0xC0000080
+#define MSR_STAR     0xC0000081
+#define MSR_LSTAR    0xC0000082
+#define MSR_CSTAR    0xC0000083
+#define MSR_SF_MASK  0xC0000084
+
+#define MSR_FS_BASE        0xC0000100
+#define MSR_GS_BASE        0xC0000101
+#define MSR_KERNEL_GS_BASE 0xC0000102
+#define MSR_TSC_AUX        0xC0000103
+
+#define MSR_GHCB           0xC0010130
+#define MSR_SEV_STATUS     0xC0010131
+#define MSR_RMP_BASE       0xC0010132
+#define MSR_RMP_END        0xC0010133
+#define MSR_GUEST_TSC_FREQ 0xC0010134
+#define MSR_VIRTUAL_TOM    0xC0010135
+
+#define MSR_DR1_ADDR_MASK           0xC0011019
+#define MSR_DR2_ADDR_MASK           0xC001101A
+#define MSR_DR3_ADDR_MASK           0xC001101B
+#define MSR_DR0_ADDR_MASK           0xC0011027
+#define MSR_L3_RANGE_RESERVE_BASE   0xC0011095
+#define MSR_L3_RANGE_RESERVE_MAX    0xC0011096
+#define MSR_L3_RANGE_RESERVE_WAY    0xC001109A
+#else
+// Table A-2. System-Software MSR Cross-Reference
+#define MSR_APIC_BASE       0x1B
+#define MSR_EFER            0xC0000080
+#define MSR_STAR            0xC0000081
+#define MSR_LSTAR           0xC0000082
+#define MSR_CSTAR           0xC0000083
+#define MSR_SF_MASK         0xC0000084
+#define MSR_FS_BASE         0xC0000100
+#define MSR_GS_BASE         0xC0000101
+#define MSR_KERNEL_GS_BASE  0xC0000102
+#define MSR_TSC_AUX         0xC0000103
+#define MSR_TSC_RATIO       0xC0000104
+#define MSR_SYSENTER_CS     0x174
+#define MSR_SYSENTER_ESP    0x175
+#define MSR_SYSENTER_EIP    0x176
+
+// Table A-5. Software-Debug MSR Cross-Reference
+#define MSR_DEBUG_CTL           0x01D9
+#define MSR_LAST_BRANCH_FROM_IP 0x01DB
+#define MSR_LAST_BRANCH_TO_IP   0x01DC
+#define MSR_LAST_INT_FROM_IP    0x01DD
+#define MSR_LAST_INT_TO_IP      0x01DE
+#define MSR_DR0_ADDR_MASK   0xC0001027
+#define MSR_DR1_ADDR_MASK   0xC0001019
+#define MSR_DR2_ADDR_MASK   0xC000101A
+#define MSR_DR3_ADDR_MASK   0xC000101B
+
+// Table A-7. Secure Virtual Machine MSR Cross-Reference
+#define MSR_TSC_RATIO       0xC0000104
+#define MSR_VM_CR           0xC0010114
+#define MSR_IGNNE           0xC0010115
+#define MSR_SMM_CTL         0xC0010116
+#define MSR_VM_HSAVE_PA     0xC0010117
+#define MSR_SVM_KEY         0xC0010118
+#define MSR_DOORBELL        0xC001011B
+#define MSR_VMPAGE_FLUSH    0xC001011E
+#define MSR_GHCB            0xC0010130
+#define MSR_SEV_STATUS      0xC0010131
+#define MSR_RMP_BASE        0xC0010132
+#define MSR_RMP_END         0xC0010133
+#define MSR_GUEST_TSC_FREQ  0xC0010134
+
+// Table A-8. System Management Mode MSR Cross-Reference
+#define MSR_SMI_TRIGGER_IO_CYCLE    0xC0010056
+#define MSR_PSTATE_CURRENT_LIMIT    0xC0010061
+#define MSR_PSTATE_CONTROL          0xC0010062
+#define MSR_PSTATE_STATUS           0xC0010063
+#define MSR_SMBASE                  0xC0010111
+#define MSR_SMM_ADDR                0xC0010112
+#define MSR_SMM_MASK                0xC0010113
+#define MSR_SMM_KEY_MSR             0xC0010119
+#define MSR_LOCAL_SMI_STATUS        0xC001011A
+
+// Table A-10. Shadow Stack MSR Cross Reference 
+#define MSR_U_CET           0x06A0
+#define MSR_S_CET           0x06A2
+#define MSR_PL0_SSP         0x06A4
+#define MSR_PL1_SSP         0x06A5
+#define MSR_PL2_SSP         0x06A6
+#define MSR_PL3_SSP         0x06A7
+#define MSR_ISST_ADDR       0x06A8
+#endif
+
+// 8.2 Vectors
+// Table 8-1. Interrupt Vector Source and Cause
+#define T_DE 0 /* Divide Error Fault */
+#define T_DB 1 /* Debug Trap or Fault */
+#define T_NMI 2 /* Nonmaskable Interrupt */
+#define T_BP 3 /* Breakpoint Trap */
+#define T_OF 4 /* Overflow Trap */
+#define T_BR 5 /* BOUND Range Exceeded Fault */
+#define T_UD 6 /* Invalid Opcode Fault */
+#define T_NM 7 /* Device Not Available Fault */
+#define T_DF 8 /* Double Fault Abort */
+#define T_TS 10 /* Invalid TSS Fault */
+#define T_NP 11 /* Segment Not Present Fault */
+#define T_SS 12 /* Stack Fault */
+#define T_GP 13 /* General Protection Fault */
+#define T_PF 14 /* Page Fault */
+#define T_MF 16 /* x87 FPU Floating-Point Error Fault */
+#define T_AC 17 /* Alignment Check Fault */
+#define T_MC 18 /* Machine Check Abort */
+#define T_XF 19 /* SIMD Floating-Point Exception Fault */
+#define T_CE 21 /* Control Protection Exception Fault */
+#define T_HV 28 /* Hypervisor Injection Exception Fault */
+#define T_VC 29 /* VMM Communication Exception Fault */
+#define T_SX 30 /* Security Exception Fault */
+
 #define read_cr(reg) ({ \
     uint64_t value; \
     asm volatile("mov %%" #reg ", %0" : "=r"(value) : : "memory"); \
@@ -206,6 +335,18 @@ static inline bool cpu_supports_xsaves(void)
 #define write_xfer(value) write_cr(xfer, value)
 #define read_xcr0() read_cr(xcr0)
 #define write_xcr0(value) write_cr(xcr0, value)
+
+#define read_rflags() ({ \
+    uint64_t value; \
+    asm volatile("pushfq; popq %0" : "=r"(value) : : "memory"); \
+    value; \
+})
+
+#define test_rflags(mask) ({ \
+    uint64_t value; \
+    asm volatile("pushfq; popq %0" : "=r"(value) : : "memory"); \
+    (value & (mask)) == (mask); \
+})
 
 // Read MSR
 static inline uint64_t rdmsr(uint32_t msr) {
@@ -313,6 +454,20 @@ static inline void tlbsync(void) {
                          :
                          :
                          : "memory");
+}
+
+// Flush a single TLB entry
+static inline void flush_tlb_one(unsigned long addr)
+{
+	asm("invlpg (%0)" ::"r"(addr) : "memory");
+}
+
+// Flush the entire TLB
+static inline void flush_tlb(void)
+{
+	asm("mov %%cr3, %%rax\n"
+		"mov %%rax, %%cr3\n" ::
+			: "rax");
 }
 
 // Compare and exchange

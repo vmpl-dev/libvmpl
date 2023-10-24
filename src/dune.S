@@ -3,7 +3,7 @@
  */
 
 #define __ASSEMBLY__
-#include "svsm-vmpl.h"
+#include "vmpl-core.h"
 
 #define USE_RDWRGSFS 0
 
