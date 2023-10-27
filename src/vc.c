@@ -7,6 +7,7 @@
 #include <bits/syscall.h>
 #endif
 #include "sys.h"
+#include "log.h"
 #include "vc.h"
 
 static uint64_t HV_FEATURES;
@@ -54,9 +55,11 @@ static inline void vc_terminate_svsm_enomem() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_ENOMEM);
 }
 
+#ifdef SVSM_REASON_CODE
 static inline void vc_terminate_svsm_fwcfg() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_FW_CFG_ERROR);
 }
+#endif
 
 static inline void vc_terminate_svsm_resp_invalid() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_GHCB_RESP_INVALID);
@@ -70,9 +73,11 @@ static inline void vc_terminate_svsm_psc() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_PSC_ERROR);
 }
 
+#if SVSM_REASON_CODE
 static inline void vc_terminate_svsm_bios() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_BIOS_FORMAT);
 }
+#endif
 
 static inline void vc_terminate_unhandled_vc() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_UNHANDLED_VC);
@@ -98,9 +103,11 @@ static inline void vc_terminate_vmpl0_sev_features() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_VMPL0_SEV_FEATURES);
 }
 
+#ifdef SVSM_REASON_CODE
 static inline void vc_terminate_svsm_incorrect_vmpl() {
     vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_INCORRECT_VMPL);
 }
+#endif
 
 #ifdef __VC_HANDLER__
 void vc_handler(uint64_t rip, uint64_t error_code, uint64_t cr2, uint64_t stack[5]) {
@@ -545,7 +552,7 @@ Ghcb *get_early_ghcb() {
 }
 
 void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va) {
-    printf("setup VC communication\n");
+    log_info("setup VC communication");
     vc_establish_protocol();
     vc_register_ghcb(ghcb_pa);
 }

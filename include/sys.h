@@ -184,6 +184,30 @@ static inline bool cpu_supports_xsaves(void)
 
 // 3.2.10 Hardware Configuration Register (HWCR)
 
+// Figure 8-13. Long-Mode Interrupt Control Transfer
+struct tptr {
+	uint16_t	limit;         // segment limit
+	uint64_t	base;          // base address
+} __attribute__((packed));
+
+#define IDTD_P                  (1 << 7)
+#define IDTD_CPL3		        (3 << 5)
+#define IDTD_TRAP_GATE          0xF
+#define IDTD_INTERRUPT_GATE     0xE
+
+#define IDT_ENTRIES     256
+
+// Figure 4-24. Interrupt-Gate and Trap-Gate Descriptors—Long Mode
+struct idtd {
+        uint16_t        low;           // low 16 bits of handler address
+        uint16_t        selector;      // kernel segment selector
+        uint8_t         ist;           // bits 0..2 holds Interrupt Stack Table offset, rest of bits zero.
+        uint8_t         type;          // type and attributes
+        uint16_t        middle;        // middle 16 bits of handler address
+        uint32_t        high;          // high 32 bits of handler address
+        uint32_t        zero;          // reserved
+} __attribute__((packed)) __attribute__ ((aligned));
+
 // A.1 MSR Cross-Reference by MSR Address
 #ifndef CROSS_REFERENCE_TABLE
 // Table A-1. MSRs of the AMD64 Architecture
@@ -308,10 +332,14 @@ static inline bool cpu_supports_xsaves(void)
 #define T_AC 17 /* Alignment Check Fault */
 #define T_MC 18 /* Machine Check Abort */
 #define T_XF 19 /* SIMD Floating-Point Exception Fault */
-#define T_CE 21 /* Control Protection Exception Fault */
+#define T_CP 21 /* Control Protection Exception Fault */
 #define T_HV 28 /* Hypervisor Injection Exception Fault */
 #define T_VC 29 /* VMM Communication Exception Fault */
 #define T_SX 30 /* Security Exception Fault */
+
+// These are arbitrarily chosen, but with care not to overlap
+// processor defined exceptions or interrupt vectors.
+#define T_SYSCALL   48		// system call
 
 #define read_cr(reg) ({ \
     uint64_t value; \
@@ -361,6 +389,8 @@ static inline uint64_t rdmsr(uint32_t msr) {
     return ((uint64_t)hi << 32) | lo;
 }
 
+#define rdmsrl(msr, val) ((val) = rdmsr(msr))
+
 // Write to MSR a given value
 static inline void wrmsr(uint32_t msr, uint64_t value) {
     uint32_t lo = (uint32_t)value;
@@ -370,6 +400,14 @@ static inline void wrmsr(uint32_t msr, uint64_t value) {
                          :
                          : "c"(msr), "a"(lo), "d"(hi)
                          : "memory");
+}
+
+#define wrmsrl(msr, val) wrmsr(msr, val)
+
+static inline unsigned long rdtsc(void) {
+    unsigned long lo, hi;
+    __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+    return (hi << 32) | lo;
 }
 
 // Pause instruction

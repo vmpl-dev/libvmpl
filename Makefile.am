@@ -12,8 +12,12 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/mm.c \
                     src/ghcb.c src/vmsa.c src/vc.c \
                     src/dune.S src/vsyscall.S \
-                    src/trap.c
+                    src/trap.c \
+                    src/log.c
+libvmpl_la_LDFLAGS = -version-info 1:0:0
 
 # Specify headers to be installed
 pkgincludedir = $(includedir)/vmpl
-pkginclude_HEADERS = include/vmpl.h include/sys.h include/cpu-x86.h
+pkginclude_HEADERS = include/vmpl.h \
+                    include/sys.h include/syscall.h \
+                    include/log.h

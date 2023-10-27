@@ -14,21 +14,6 @@
 
 #define MAX_LINE_LENGTH 256
 
-extern int arch_prctl(int code, unsigned long *addr);
-// assembly routines from dune.S
-extern int __dune_enter(int fd, struct dune_config *config);
-extern int __dune_ret(void);
-extern void __dune_syscall(void);
-extern void __dune_syscall_end(void);
-extern void __dune_intr(void);
-extern void __dune_go_linux(struct dune_config *config);
-extern void __dune_go_dune(int fd, struct dune_config *config);
-
-// assembly routine for handling vsyscalls
-extern char __dune_vsyscall_page;
-
-// fault handling
-
 /*
  * We use the same general GDT layout as Linux so that can we use
  * the same syscall MSR values. In practice only code segments
@@ -51,6 +36,8 @@ extern char __dune_vsyscall_page;
 #define USER_CODE64     0x00affb000000ffff // [G], D, [L], AVL, [P], DPL=3, [1], [1], C, [R], [A]
 #define TSS             0x0080890000000000 // [G], B, L, AVL, [P], DPL=0, [0], [0], [0], [0], [0]
 #define TSS2            0x0000000000000000 // [G], B, L, AVL, [P], DPL=0, [0], [0], [0], [0], [0]
+
+#define VSYSCALL_ADDR 0xffffffffff600000UL
 
 struct gdtr_entry {
     uint64_t limit_lo : 16;     // 段界限低16位
@@ -103,21 +90,42 @@ struct dune_tf {
 typedef void (*dune_intr_cb) (struct dune_tf *tf);
 typedef void (*dune_pgflt_cb) (uintptr_t addr, uint64_t fec, struct dune_tf *tf);
 typedef void (*dune_syscall_cb) (struct dune_tf *tf);
+typedef void (*sighandler_t)(int);
 
 #define DUNE_SIGNAL_INTR_BASE 200
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern int arch_prctl(int code, unsigned long *addr);
+// assembly routines from dune.S
+extern int __dune_enter(int fd, struct dune_config *config);
+extern int __dune_ret(void);
+extern void __dune_syscall(void);
+extern void __dune_syscall_end(void);
+extern void __dune_intr(void);
+extern void __dune_go_linux(struct dune_config *config);
+extern void __dune_go_dune(int fd, struct dune_config *config);
+
+// assembly routine for handling vsyscalls
+extern char __dune_vsyscall_page;
+
+// dune routines for registering handlers
 extern int dune_register_intr_handler(int vec, dune_intr_cb cb);
 extern int dune_register_signal_handler(int signum, dune_intr_cb cb);
 extern void dune_register_pgflt_handler(dune_pgflt_cb cb);
 extern void dune_register_syscall_handler(dune_syscall_cb cb);
 
-typedef void (*sighandler_t)(int);
+// fault handling
 extern sighandler_t dune_signal(int sig, sighandler_t cb);
 extern void dune_syscall_handler(struct dune_tf *tf);
 extern void dune_trap_handler(int num, struct dune_tf *tf);
 
 // vmpl initialization
-int vmpl_enter(int argc, char *argv[]);
+extern int vmpl_enter(int argc, char *argv[]);
+#ifdef __cplusplus
+}
+#endif
 
 #define dune_enter() vmpl_enter(NULL, NULL)
 #define dune_init_and_enter() vmpl_enter(NULL, NULL)

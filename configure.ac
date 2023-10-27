@@ -13,7 +13,7 @@ AR=ar
 AM_PROG_AR
 AM_PROG_AS
 
-LT_INIT([static])
+LT_INIT([static, shared])
 
 AC_CONFIG_HEADERS([include/config.h])
 AC_CONFIG_SRCDIR([src])

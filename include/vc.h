@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "cpu-x86.h"
+#include "sys.h"
 #include "globals.h"
 #include "ghcb.h"
 
@@ -142,17 +142,12 @@
 
 static inline uint64_t sev_es_rd_ghcb_msr(void)
 {
-	return native_read_msr(MSR_AMD64_SEV_ES_GHCB);
+	return rdmsr(MSR_AMD64_SEV_ES_GHCB);
 }
 
 static inline void sev_es_wr_ghcb_msr(uint64_t val)
 {
-	uint32_t low, high;
-
-	low  = (uint32_t)(val);
-	high = (uint32_t)(val >> 32);
-
-	native_write_msr(MSR_AMD64_SEV_ES_GHCB, low, high);
+	wrmsrl(MSR_AMD64_SEV_ES_GHCB, val);
 }
 
 static inline void vc_vmgexit(void)

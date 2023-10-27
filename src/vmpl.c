@@ -31,11 +31,12 @@
 #include <sys/resource.h>
 #endif
 
-#include "cpu-x86.h"
+#include "sys.h"
 #include "mmu.h"
 #include "vmpl-dev.h"
 #include "vmpl.h"
 #include "vc.h"
+#include "log.h"
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 
@@ -107,14 +108,14 @@ static void get_segment_registers(struct vmsa_config *regs) {
  */
 static void dump_gdt(uint64_t *gdt)
 {
-    printf("GDT Entries:\n");
+    log_debug("GDT Entries:");
     for (int i = 0; i < NR_GDT_ENTRIES; i++)
     {
         struct gdtr_entry *e = (struct gdtr_entry *)&gdt[i];
-        printf("GDT Entry[%d]: %016lx", i, gdt[i]);
-        printf("  Limit: 0x%04lx%04lx  Base:  0x%08lx",
+        log_debug("GDT Entry[%d]: %016lx", i, gdt[i]);
+        log_debug("  Limit: 0x%04lx%04lx  Base:  0x%08lx",
                e->limit_hi, e->limit_lo, e->base);
-        printf("  [G-DB-L-AVL P-DPL-S Type]: %lx-%lx-%lx-%lx %lx-%02lx-%lx %lx\n",
+        log_debug("  [G-DB-L-AVL P-DPL-S Type]: %lx-%lx-%lx-%lx %lx-%02lx-%lx %lx",
                e->g, e->db, e->l, e->avl, e->p, e->dpl, e->s, e->type);
     }
 }
@@ -127,12 +128,12 @@ static void dump_gdt(uint64_t *gdt)
  */
 static void dump_idt(struct idtd *idt)
 {
-    printf("IDT Entries:\n");
+    log_debug("IDT Entries:");
     for (int i = 0; i < IDT_ENTRIES; i++)
     {
         struct idtd *id = &idt[i];
-        printf("IDT Entry[%d]: %016lx", i, idt[i]);
-        printf(" IST: %02x Type: %02x Addr: %08x%04x%04x\n", id->ist, id->type, id->high, id->middle, id->low);
+        log_debug("IDT Entry[%d]: %016lx", i, idt[i]);
+        log_debug(" IST: %02x Type: %02x Addr: %08x%04x%04x", id->ist, id->type, id->high, id->middle, id->low);
     }
 }
 
@@ -144,17 +145,17 @@ static void dump_idt(struct idtd *idt)
  */
 static void dump_tss(struct Tss *tss)
 {
-    printf("TSS RSP Entries:\n");
+    log_debug("TSS RSP Entries:");
     for (int i = 0; i < 3; i++)
     {
-        printf("RSP[%d]: %lx\n", i, tss->tss_rsp[i]);
+        log_debug("RSP[%d]: %lx", i, tss->tss_rsp[i]);
     }
-    printf("TSS IST Entries:\n");
+    log_debug("TSS IST Entries:");
     for (int i = 0; i < 7; i++)
     {
-        printf("IST[%d]: %lx\n", i, tss->tss_ist[i]);
+        log_debug("IST[%d]: %lx", i, tss->tss_ist[i]);
     }
-    printf("IOMB: %x, IOPB: %x\n", tss->tss_iomb, tss->tss_iopb);
+    log_debug("IOMB: %x, IOPB: %x", tss->tss_iomb, tss->tss_iopb);
 }
 
 /**
@@ -165,13 +166,13 @@ static void dump_tss(struct Tss *tss)
  */
 static void dump_percpu(struct dune_percpu *percpu)
 {
-    printf("PerCpu Entry:\n");
-    printf("percpu_ptr: %lx\n", percpu->percpu_ptr);
-    printf("kfs_base: %lx ufs_base: %lx\n", percpu->kfs_base, percpu->ufs_base);
-    printf("in_usermode: %lx\n", percpu->in_usermode);
-    printf("tss: %p gdt: %p\n", &percpu->tss, percpu->gdt);
-    printf("ghcb_gpa: %lx ghcb: %p\n", percpu->ghcb_gpa, percpu->ghcb);
-    printf("lstar: %p vsyscall: %p\n", percpu->lstar, percpu->vsyscall);
+    log_debug("PerCpu Entry:");
+    log_debug("percpu_ptr: %lx", percpu->percpu_ptr);
+    log_debug("kfs_base: %lx ufs_base: %lx", percpu->kfs_base, percpu->ufs_base);
+    log_debug("in_usermode: %lx", percpu->in_usermode);
+    log_debug("tss: %p gdt: %p", &percpu->tss, percpu->gdt);
+    log_debug("ghcb_gpa: %lx ghcb: %p", percpu->ghcb_gpa, percpu->ghcb);
+    log_debug("lstar: %p vsyscall: %p", percpu->lstar, percpu->vsyscall);
 }
 
 /**
@@ -182,6 +183,7 @@ static void dump_percpu(struct dune_percpu *percpu)
  */
 static void dump_configs(struct dune_percpu *percpu)
 {
+    log_debug("VMPL Configs:");
     dump_idt(idt);
     dump_gdt(percpu->gdt);
     dump_tss(&percpu->tss);
@@ -196,6 +198,7 @@ static void dump_configs(struct dune_percpu *percpu)
  */
 static void setup_gdt(struct dune_percpu *percpu)
 {
+    log_info("setup gdt");
 	memcpy(percpu->gdt, gdt_template, sizeof(uint64_t) * NR_GDT_ENTRIES);
 	percpu->gdt[GD_TSS >> 3] =
 		(SEG_TSSA | SEG_P | SEG_A | SEG_BASELO(&percpu->tss) |
@@ -231,12 +234,12 @@ static inline void __init_idtd(struct idtd *id, int i, uintptr_t isr)
     id->selector = GD_KT;
     id->type     = IDTD_P | IDTD_TRAP_GATE;
     switch (i) {
-    case T_BRKPT:
+    case T_BP:
         id->type |= IDTD_CPL3;
         /* fallthrough */
-    case T_DBLFLT:
+    case T_DF:
     case T_NMI:
-    case T_MCHK:
+    case T_MC:
         id->ist = 1;
         break;
     }
@@ -251,7 +254,7 @@ static inline void __init_idtd(struct idtd *id, int i, uintptr_t isr)
 static void setup_idt(void)
 {
     uintptr_t isr = (uintptr_t) &__dune_intr;
-    printf("setup idt\n");
+    log_info("setup idt");
 
 	for (size_t i = 0; i < IDT_ENTRIES; i++) {
         __init_idtd(&idt[i], i, isr + ISR_LEN * i);
@@ -268,10 +271,10 @@ static void setup_idt(void)
 static void setup_signal(void)
 {
     size_t i;
-    printf("setup signal\n");
+    log_info("setup signal");
 
     // disable signals for now until we have better support
-    printf("disable signals for now until we have better support\n");
+    log_trace("disable signals for now until we have better support");
     for (i = 1; i < 32; i++) {
         struct sigaction sa;
 
@@ -302,7 +305,7 @@ static void setup_signal(void)
  */
 static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
 {
-    printf("setup segs\n");
+    log_info("setup vmsa");
 
     /* NOTE: We don't setup the general purpose registers because __dune_ret
      * will restore them as they were before the __dune_enter call */
@@ -346,7 +349,7 @@ static int setup_cpuset()
     int cpu;
     cpu_set_t cpuset;
 
-    printf("setup cpuset\n");
+    log_info("setup cpuset");
 
     cpu = sched_getcpu();
     CPU_ZERO(&cpuset);
@@ -357,12 +360,10 @@ static int setup_cpuset()
         return 1;
     }
 
-    printf("dune: running on CPU %d\n", cpu);
+    log_debug("dune: running on CPU %d", cpu);
 
     return 0;
 }
-
-#define VSYSCALL_ADDR 0xffffffffff600000UL
 
 /**
  * Sets up the system call handler.
@@ -377,8 +378,8 @@ static void setup_syscall(struct dune_percpu *percpu)
 	assert((uint64_t) __dune_syscall_end  -
 	       (uint64_t) __dune_syscall < PAGE_SIZE);
 
-    printf("setup syscall\n");
-    lstar = (void *)native_read_msr(MSR_LSTAR);
+    log_info("setup syscall");
+    lstar = (void *)rdmsr(MSR_LSTAR);
 
 #ifdef RESTORE_VMPL0
     // remap syscall page to another page
@@ -406,7 +407,7 @@ static void setup_vsyscall(struct dune_percpu *percpu)
 {
     // 1. 设置vsyscall
     void *vsyscall_addr = (void *)VSYSCALL_ADDR;
-    printf("setup vsyscall\n");
+    log_info("setup vsyscall");
 
 #ifdef RESTORE_VMPL0
     // remap vsyscall page to another page
@@ -432,7 +433,7 @@ static int setup_ghcb(struct dune_percpu *percpu)
 {
     int rc;
     Ghcb *ghcb;
-    printf("setup ghcb\n");
+    log_info("setup ghcb");
 
     // 获取ghcb, 用于hypercall
     rc = ioctl(dune_fd, VMPL_IOCTL_GET_GHCB, &percpu->ghcb_gpa);
@@ -441,7 +442,7 @@ static int setup_ghcb(struct dune_percpu *percpu)
         goto failed;
     }
 
-    printf("dune: GHCB_GPA at 0x%lx\n", percpu->ghcb_gpa);
+    log_debug("dune: GHCB_GPA at 0x%lx", percpu->ghcb_gpa);
     // 映射ghcb, 用于hypercall
     ghcb = mmap((void *)GHCB_MMAP_BASE, PAGE_SIZE, PROT_READ | PROT_WRITE,
                              MAP_SHARED | MAP_FIXED, dune_fd, 0);
@@ -451,7 +452,7 @@ static int setup_ghcb(struct dune_percpu *percpu)
     }
 
     // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
-    printf("dune: GHCB at %p, GHCB_GPA at %lx\n", ghcb, percpu->ghcb_gpa);
+    log_debug("dune: GHCB at %p", ghcb);
     ghcb->sw_exit_code = GHCB_NAE_RUN_VMPL;
     ghcb->sw_exit_info_1 = RUN_VMPL;
     ghcb->sw_exit_info_2 = 0;
@@ -472,7 +473,7 @@ static int setup_stack()
     int rc;
     const rlim_t kStackSize = BIT(26); // min stack size = 64 MB
     struct rlimit rl;
-    printf("setup stack\n");
+    log_info("setup stack");
 
     rc = getrlimit(RLIMIT_STACK, &rl);
     if (rc != 0) {
@@ -494,8 +495,14 @@ failed:
     return rc;
 }
 
+/** 
+ * @brief  Dune signal handler registration
+ * @note   
+ * @retval 0 on success, otherwise an error code.
+ */
 sighandler_t dune_signal(int sig, sighandler_t cb)
 {
+    log_info("dune_signal: register signal %d", sig);
 	dune_intr_cb x = (dune_intr_cb)cb; /* XXX */
 
 	if (signal(sig, cb) == SIG_ERR)
@@ -515,7 +522,9 @@ sighandler_t dune_signal(int sig, sighandler_t cb)
  * 
  * @return void
  */
-void vmpl_build_assert() {
+void vmpl_build_assert()
+{
+    log_debug("vmpl_build_assert");
     BUILD_ASSERT(IOCTL_DUNE_ENTER == DUNE_ENTER);
 	BUILD_ASSERT(DUNE_CFG_RET == offsetof(struct vmsa_config, ret));
 	BUILD_ASSERT(DUNE_CFG_RAX == offsetof(struct vmsa_config, rax));
@@ -546,7 +555,9 @@ void vmpl_build_assert() {
  * 
  * @param conf Pointer to the vmsa_config struct to be initialized.
  */
-static struct vmsa_config *vmsa_alloc_config() {
+static struct vmsa_config *vmsa_alloc_config()
+{
+    log_debug("vmsa_alloc_config");
     struct vmsa_config *conf = malloc(sizeof(struct vmsa_config));
     memset(conf, 0, sizeof(struct vmsa_config));
     return conf;
@@ -563,6 +574,7 @@ static int setup_safe_stack(struct dune_percpu *percpu)
 	int i;
 	char *safe_stack;
 
+    log_info("setup safe stack");
 	safe_stack = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
 					  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
@@ -591,8 +603,9 @@ static struct dune_percpu *vmpl_alloc_percpu()
     struct dune_percpu *percpu;
 	unsigned long fs_base;
 
+    log_debug("vmpl_alloc_percpu");
 	if (arch_prctl(ARCH_GET_FS, &fs_base) == -1) {
-		printf("dune: failed to get FS register\n");
+		log_err("dune: failed to get FS register");
 		return NULL;
 	}
 
@@ -606,6 +619,7 @@ static struct dune_percpu *vmpl_alloc_percpu()
 	percpu->in_usermode = 0;
 
 	if (setup_safe_stack(percpu)) {
+        log_err("dune: failed to setup safe stack");
 		munmap(percpu, PGSIZE);
         return NULL;
     }
@@ -620,6 +634,7 @@ static struct dune_percpu *vmpl_alloc_percpu()
  */
 static void vmpl_free_percpu()
 {
+    log_debug("vmpl_free_percpu");
     munmap(percpu, PGSIZE);
 }
 
@@ -631,7 +646,7 @@ static void vmpl_free_percpu()
 static int vmpl_init()
 {
     int rc;
-    printf("vmpl_init\n");
+    log_info("vmpl_init");
 
     // Open dune_fd
     dune_fd = open("/dev/" RUN_VMPL_DEV_NAME, O_RDWR);
@@ -659,7 +674,7 @@ failed:
 static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 {
     int rc;
-    printf("vmpl_init_pre\n");
+    log_info("vmpl_init_pre");
 
     // Setup CPU set
     rc = setup_cpuset();
@@ -701,6 +716,7 @@ static int dune_boot(struct dune_percpu *percpu)
 {
 	struct tptr _idtr, _gdtr;
 
+    log_info("dune_boot");
 	_gdtr.base = (uint64_t)&percpu->gdt;
 	_gdtr.limit = sizeof(percpu->gdt) - 1;
 
@@ -748,11 +764,11 @@ static int dune_boot(struct dune_percpu *percpu)
 static int vmpl_init_post(struct dune_percpu *percpu)
 {
     // Enable interrupts
-    printf("vmpl_init_post\n");
+    log_info("vmpl_init_post");
     asm volatile("sti\n");
 
     // Setup FS and GS
-    printf("setup FS and GS\n");
+    log_info("setup FS and GS");
     wrmsrl(MSR_FS_BASE, percpu->kfs_base);
     wrmsrl(MSR_GS_BASE, (uint64_t)percpu);
 
@@ -770,13 +786,17 @@ static int vmpl_init_post(struct dune_percpu *percpu)
 
 /**
  * Initializes a test for the VMPL library.
- * This function writes "Hello, World" to the standard output and exits.
+ * This function writes a banner to the standard output and exits.
  *
  * @return 0 on success.
  */
-static int vmpl_init_test() {
-    printf("Hello, World\n");
-    ioctl(dune_fd, DUNE_GET_SYSCALL);
+static int vmpl_init_test()
+{
+    log_success("**********************************************");
+    log_success("*                                            *");
+    log_success("*              Welcome to VMPL!              *");
+    log_success("*                                            *");
+    log_success("**********************************************");
     return 0;
 }
 
@@ -785,21 +805,24 @@ static int vmpl_init_test() {
  * 
  * @return 0 if successful, otherwise an error code.
  */
-int vmpl_enter(int argc, char *argv[]) {
+int vmpl_enter(int argc, char *argv[])
+{
     int rc;
     struct vmsa_config *__conf;
     struct dune_percpu *__percpu;
 
-    printf("vmpl_enter\n");
+	log_info("vmpl_enter");
 
-    // Build assert
+	// Build assert
     vmpl_build_assert();
 
     // Check if percpu is already allocated
     if (!percpu) {
         // boot case (first time)
+        log_debug("dune: boot case");
         rc = vmpl_init();
         if (rc) {
+            log_err("dune: failed to initialize VMPL library");
             goto failed;
         }
 
@@ -807,16 +830,19 @@ int vmpl_enter(int argc, char *argv[]) {
         __percpu = vmpl_alloc_percpu();
         if (!__percpu) {
             rc = -ENOMEM;
+            log_err("dune: failed to allocate percpu struct");
             goto failed;
         }
     } else {
         // fork case (second time)
         __percpu = percpu;
+        log_debug("dune: fork case");
     }
 
     // Allocate config struct for VMPL library
     __conf = vmsa_alloc_config();
     if (!__conf) {
+        log_err("dune: failed to allocate config struct");
         rc = -ENOMEM;
         goto failed;
     }
@@ -824,6 +850,7 @@ int vmpl_enter(int argc, char *argv[]) {
     // Initialize VMPL library before the main program starts
     rc = vmpl_init_pre(__percpu, __conf);
     if (rc) {
+        log_err("dune: failed to initialize VMPL library");
         goto failed;
     }
 
@@ -845,6 +872,7 @@ int vmpl_enter(int argc, char *argv[]) {
     return 0;
 
 failed:
+    log_err("dune: failed to enter Dune mode");
     vmpl_free_percpu(__percpu);
     return -EIO;
 }
@@ -855,22 +883,24 @@ failed:
  * This function must not return. It can either exit(), __dune_go_dune() or
  * __dune_go_linux().
  */
-void on_dune_exit(struct vmsa_config *conf) {
+void on_dune_exit(struct vmsa_config *conf)
+{
     switch (conf->ret) {
     case DUNE_RET_EXIT:
-        syscall(SYS_exit, conf->status);
-    case DUNE_RET_INTERRUPT:
+		log_warn("dune: exit due to exit(%ld)", conf->status);
+        exit(conf->status);
+	case DUNE_RET_INTERRUPT:
         // dune_debug_handle_int(conf);
-        printf("dune: exit due to interrupt %ld\n", conf->status);
+        log_warn("dune: exit due to interrupt %ld", conf->status);
         break;
     case DUNE_RET_SIGNAL:
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:
-        printf("dune: re-entry to Dune mode failed, status is %ld\n", conf->status);
+        log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
         break;
     default:
-        printf("dune: unknown exit from Dune, ret=%ld, status=%ld\n", conf->ret, conf->status);
+        log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
         break;
     }
 

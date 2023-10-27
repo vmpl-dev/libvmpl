@@ -1,20 +1,65 @@
 ## Plan:
-[x] trap handler
+[√] trap handler
 [√] SEV-SNP related
     [√] MSR protocol
+        [√] 0x000 - GHCB Guest Physical Address
+        [√] 0x001 - SEV Information
+        [√] 0x002 - SEV Information Request
+        [x] CPUID Request
+        [x] Preferred GHCB GPA Request
+        [x] Register GHCB GPA Request
+        [x] Page State Change Request
+        [√] SNP Run VMPL Request
+        [√] Hypervisor Feature Support Request
+        [x] Termination Request
     [x] GHCB support
+        [x] Page State Change             - 0x8000_0010
+        [x] SNP Guest Request             - 0x8000_0011
+        [x] SNP Extended Guest Request    - 0x8000_0012
+        [x] SNP AP Creation               - 0x8000_0013
+        [x] #HV Doorbell Page             - 0x8000_0014
+        [x] #HV IPI                       - 0x8000_0015
+        [x] #HV Timer                     - 0x8000_0016
+        [x] APIC ID List                  - 0x8000_0017
+        [x] SNP Run VMPL                  - 0x8000_0018
 [√] Debug related
-    [x] Serial Output
 [√] SMP related
     [√] PerCpu Variable
     [√] Thread-Local Storage
 [x] Ring 3
+    [√] Remap syscall page
+    [√] Remap vsyscall page
+    [x] Syscall passthrough
     [x] ELF Loader
-    [x] remap syscall
-    [x] remap vsyscall
 [x] glibc
     [x] syscall
     [x] pthread
+[√] musl-libc
+    [√] syscall
+    [x] posix
+        [x] process management
+            [x] fork
+            [x] vfork
+            [x] exec
+            [x] exit
+        [x] pthread management
+            [x] pthread_create
+            [x] pthread_exit
+            [x] pthread_join
+            [x] pthread_detach
+            [x] pthread_self
+        [x] signal handler
+            [x] sigaction
+            [x] sigemptyset
+            [x] sigfillset
+            [x] sigaddset
+        [x] memory management
+            [x] mmap
+            [x] munmap
+            [x] mremap
+            [x] mprotect
+            [x] brk
+            [x] sbrk
 
 
 有一些dune做着蹩脚的地方，在vmpl1上很好实现，目前open, read, write, close, ioctl, mremap, munmap, exit共八个系统调用通过了测试，可以在vmpl1执行了。但syscall对应的vmpl权限管理还没做，预计很快就会支持dune的trap-handler和elf-loader

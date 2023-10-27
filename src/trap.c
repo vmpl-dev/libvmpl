@@ -9,9 +9,9 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
-#include "cpu-x86.h"
 #include "sys.h"
 #include "vmpl.h"
+#include "log.h"
 
 /**
  * @brief Page fault callback
@@ -33,7 +33,7 @@ static void vmpl_default_handler(struct dune_tf *tf)
 static void vmpl_pf_handler(struct dune_tf *tf)
 {
 	uint64_t cr2 = read_cr2();
-	printf("dune: page fault at 0x%016lx, error-code = %x\n", cr2, tf->err);
+	log_warn("dune: page fault at 0x%016lx, error-code = %x", cr2, tf->err);
 	exit(EXIT_FAILURE);
 }
 
@@ -83,29 +83,29 @@ static const char *exceptions[] = {
 
 static dune_syscall_cb syscall_cb;
 static dune_intr_cb intr_cbs[IDT_ENTRIES] = {
-	[T_DIVIDE] = vmpl_default_handler,	// 0. Divide-by-zero Error
-	[T_DEBUG] = vmpl_default_handler,	// 1. Debug Exception
-	[T_NMI] = vmpl_default_handler,		// 2. Non-Maskable Interrupt
-	[T_BRKPT] = vmpl_default_handler,	// 3. #BP Breakpoint Exception
-	[T_OFLOW] = vmpl_default_handler,	// 4. #OF Overflow Exception
-	[T_BOUND] = vmpl_default_handler,	// 5. #BR BOUND Range Exceeded Exception
-	[T_ILLOP] = vmpl_default_handler,	// 6. #UD Invalid Opcode Exception
-	[T_DEVICE] = vmpl_default_handler,	// 7. #NM Device Not Available Exception
-	[T_DBLFLT] = vmpl_default_handler,	// 8. #DF Double Fault Exception
-	[T_TSS] = vmpl_default_handler,		// 10. #TS Invalid TSS Exception
-	[T_SEGNP] = vmpl_default_handler,	// 11. #NP Segment Not Present Exception
-	[T_STACK] = vmpl_default_handler,	// 12. #SS Stack Fault Exception
-	[T_GPFLT] = vmpl_default_handler,	// 13. #GP General Protection Exception
-	[T_PGFLT] = vmpl_pf_handler,		// 14. #PF Page Fault Exception
-	[T_FPERR] = vmpl_default_handler,	// 16. #MF x87 FPU Floating-Point Error
-	[T_ALIGN] = vmpl_default_handler,	// 17. #AC Alignment Check Exception
-	[T_MCHK] = vmpl_default_handler,	// 18. #MC Machine Check Exception
-	[T_SIMDERR] = vmpl_default_handler, // 19. #XM SIMD Floating-Point Exception
-	[T_CP] = vmpl_default_handler,		// 21. #CP Control Protection Exception
-	[22 ... 27] = vmpl_default_handler,	// 22-27. Reserved
-	[T_HV] = vmpl_default_handler,		// 28. #VE Hypervisor Injection Exception
-	[T_VC] = vmpl_vc_handler,			// 29. #VC VMM Communication Exception
-	[T_SEC] = vmpl_default_handler,		// 30. #SX Security Exception
+	[T_DE] = vmpl_default_handler,			// 0. Divide-by-zero Error
+	[T_DB] = vmpl_default_handler,			// 1. Debug Exception
+	[T_NMI] = vmpl_default_handler,			// 2. Non-Maskable Interrupt
+	[T_BP] = vmpl_default_handler,			// 3. #BP Breakpoint Exception
+	[T_OF] = vmpl_default_handler,			// 4. #OF Overflow Exception
+	[T_BR] = vmpl_default_handler,			// 5. #BR BOUND Range Exceeded Exception
+	[T_UD] = vmpl_default_handler,			// 6. #UD Invalid Opcode Exception
+	[T_NM] = vmpl_default_handler,			// 7. #NM Device Not Available Exception
+	[T_DF] = vmpl_default_handler,			// 8. #DF Double Fault Exception
+	[T_TS] = vmpl_default_handler,			// 10. #TS Invalid TSS Exception
+	[T_NP] = vmpl_default_handler,			// 11. #NP Segment Not Present Exception
+	[T_SS] = vmpl_default_handler,			// 12. #SS Stack Fault Exception
+	[T_GP] = vmpl_default_handler,			// 13. #GP General Protection Exception
+	[T_PF] = vmpl_pf_handler,				// 14. #PF Page Fault Exception
+	[T_MF] = vmpl_default_handler,			// 16. #MF x87 FPU Floating-Point Error
+	[T_AC] = vmpl_default_handler,			// 17. #AC Alignment Check Exception
+	[T_MC] = vmpl_default_handler,			// 18. #MC Machine Check Exception
+	[T_XF] = vmpl_default_handler, 			// 19. #XF SIMD Floating-Point Exception
+	[T_CP] = vmpl_default_handler,			// 21. #CP Control Protection Exception
+	[22 ... 27] = vmpl_default_handler,		// 22-27. Reserved
+	[T_HV] = vmpl_default_handler,			// 28. #HV Hypervisor Injection Exception
+	[T_VC] = vmpl_vc_handler,				// 29. #VC VMM Communication Exception
+	[T_SX] = vmpl_default_handler,			// 30. #SX Security Exception
 	[31 ... 255] = vmpl_default_handler,	// 31-255. Reserved
 };
 
@@ -130,7 +130,7 @@ void dune_register_syscall_handler(dune_syscall_cb cb)
 
 void dune_register_pgflt_handler(dune_pgflt_cb cb)
 {
-	return dune_register_intr_handler(T_PGFLT, cb);
+	return dune_register_intr_handler(T_PF, cb);
 }
 
 #ifdef VMPL_PGTABLE
@@ -217,8 +217,10 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {
+		log_info("dune: handling syscall %ld", tf->rax);
 		syscall_cb(tf);
 	} else {
+		log_err("dune: missing handler for syscall %ld", tf->rax);
 		exit(EXIT_FAILURE);
 	}
 }
@@ -226,13 +228,11 @@ void dune_syscall_handler(struct dune_tf *tf)
 void dune_trap_handler(int num, struct dune_tf *tf)
 {
 	if (intr_cbs[num]) {
-		printf("dune: handling exception %d (%s)\n", num,
-			    exceptions[num]);
+		log_warn("dune: handling exception %d (%s)", num, exceptions[num]);
 		intr_cbs[num](tf);
 		return;
 	} else {
-		printf("dune: unhandled exception %d (%s)\n", num,
-			    exceptions[num]);
+		log_err("dune: unhandled exception %d (%s)", num, exceptions[num]);
 		dune_dump_trap_frame(tf);
 		exit(EXIT_FAILURE);
 	}

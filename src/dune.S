@@ -288,8 +288,11 @@ __dune_go_dune:
  *
  * XXX: don't do relative jumps - watch out code is memcpy
  */
+.align 4096
 .globl __dune_syscall
 __dune_syscall:
+    // Padding to align function to 0x40 offset
+    .space 0x40 - (. - __dune_syscall)
 	/* handle system calls from G0 */
 	testq $1, %gs:IN_USERMODE
 	jnz 1f
