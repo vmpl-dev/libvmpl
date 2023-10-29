@@ -12,6 +12,7 @@
 #include "sys.h"
 #include "vmpl.h"
 #include "log.h"
+#include "syscall.h"
 
 /**
  * @brief Page fault callback
@@ -20,7 +21,14 @@
  */
 static void vmpl_default_handler(struct dune_tf *tf)
 {
+#ifdef EXCEPTION_PASSTHROUGH
+	// We should pass the trap frame to the guest OS, which should be able to
+	// handle the exception.
+	__syscall2(NR_syscalls, (long)tf);
+#else
+	// Exit the VMPL and return to the guest OS.
 	exit(EXIT_FAILURE);
+#endif
 }
 
 /**

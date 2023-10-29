@@ -1,4 +1,5 @@
 ## Plan:
+[√] APIC
 [√] trap handler
 [√] SEV-SNP related
     [√] MSR protocol

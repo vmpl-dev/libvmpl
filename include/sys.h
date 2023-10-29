@@ -222,6 +222,9 @@ struct idtd {
 #define MSR_PL2_SSP 0x06A6
 #define MSR_PL3_SSP 0x06A7
 #define MSR_ISST_ADDR 0x06A8
+#define MSR_APIC_ID  0x802
+#define MSR_APIC_EOI 0x80B
+#define MSR_APIC_ICR 0x830
 #define MSR_XSS     0x0DA0
 #define MSR_EFER     0xC0000080
 #define MSR_STAR     0xC0000081
@@ -407,6 +410,12 @@ static inline void wrmsr(uint32_t msr, uint64_t value) {
 static inline unsigned long rdtsc(void) {
     unsigned long lo, hi;
     __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+    return (hi << 32) | lo;
+}
+
+static inline unsigned long rdtscp(void) {
+    unsigned long lo, hi;
+    __asm__ __volatile__("rdtscp" : "=a"(lo), "=d"(hi));
     return (hi << 32) | lo;
 }
 

@@ -33,6 +33,7 @@
 
 #include "sys.h"
 #include "mmu.h"
+#include "apic.h"
 #include "vmpl-dev.h"
 #include "vmpl.h"
 #include "vc.h"
@@ -52,6 +53,7 @@ struct dune_percpu {
 	uint64_t gdt[NR_GDT_ENTRIES];
     uint64_t ghcb_gpa;
     struct Ghcb *ghcb;
+    uint64_t *pgd;
     void *lstar;
     void *vsyscall;
 } __attribute__((packed));
@@ -464,6 +466,37 @@ failed:
 }
 
 /**
+ * Sets up the page table.
+ * 
+ * @return void
+ */
+static int setup_pgtable(struct dune_percpu *percpu)
+{
+    int rc;
+    uint64_t cr3;
+    log_info("setup pgtable");
+
+    // 获取cr3, 用于hypercall
+    rc = ioctl(dune_fd, VMPL_IOCTL_GET_CR3, &cr3);
+    if (rc != 0) {
+        perror("dune: failed to get CR3");
+        goto failed;
+    }
+
+    log_debug("dune: CR3 at 0x%lx", cr3);
+
+    rc = pgtable_init(&percpu->pgd, cr3, dune_fd);
+    if (rc != 0) {
+        perror("dune: failed to setup PGD");
+        goto failed;
+    }
+
+    return 0;
+failed:
+    return rc;
+}
+
+/**
  * @brief  Setup stack for VMPL library
  * @note   
  * @retval None
@@ -662,6 +695,13 @@ static int vmpl_init()
     // Setup IDT
     setup_idt();
 
+    // Setup APIC
+    rc = apic_setup();
+    if (rc != 0) {
+        perror("dune: failed to setup APIC");
+        goto failed;
+    }
+
     return 0;
 failed:
     return rc;
@@ -702,6 +742,13 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 
     // Setup GDT for hypercall
     setup_gdt(percpu);
+
+    // Setup pgtable mapping
+	rc = setup_pgtable(percpu);
+    if (rc != 0) {
+        perror("dune: failed to setup pgtable");
+        goto failed;
+    }
 
     return 0;    
 failed:
