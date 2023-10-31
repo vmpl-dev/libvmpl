@@ -6,29 +6,16 @@
 #else
 #include <bits/syscall.h>
 #endif
+#include "config.h"
 #include "sys.h"
+#include "syscall.h"
+#include "mm.h"
 #include "log.h"
 #include "vc.h"
 
 static uint64_t HV_FEATURES;
-static Ghcb* this_ghcb;
+static __thread Ghcb* this_ghcb = NULL;
 
-#ifdef SVSM
-void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
-    uint64_t value;
-
-    value = GHCB_MSR_TERMINATE_REQ;
-    value |= reason_set << 12;
-    value |= reason_code << 16;
-
-    wrmsrl(MSR_AMD64_SEV_ES_GHCB, value);
-    vc_vmgexit();
-
-    while (1) {
-        halt();
-    }
-}
-#else
 void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
     uint64_t value;
 
@@ -38,49 +25,31 @@ void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
     value |= reason_set << 12;
     value |= reason_code << 16;
 
-    asm volatile("movq %0, %%rax\n\t"
-                 "movq %1, %%rdi\n\t"
-                 "vmgexit\n\t"
-                 :
-                 : "i"(__NR_exit), "r"(value)
-                 : "rax", "rdi");
-}
-#endif
-
-static inline void vc_terminate_svsm_general() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_GENERAL);
+	__syscall1(__NR_exit, value);
 }
 
-static inline void vc_terminate_svsm_enomem() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_ENOMEM);
+static inline void vc_terminate_vmpl_general() {
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_GENERAL);
 }
 
-#ifdef SVSM_REASON_CODE
-static inline void vc_terminate_svsm_fwcfg() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_FW_CFG_ERROR);
-}
-#endif
-
-static inline void vc_terminate_svsm_resp_invalid() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_GHCB_RESP_INVALID);
+static inline void vc_terminate_vmpl_enomem() {
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_ENOMEM);
 }
 
-static inline void vc_terminate_svsm_page_err() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_SET_PAGE_ERROR);
+static inline void vc_terminate_vmpl_resp_invalid() {
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_GHCB_RESP_INVALID);
 }
 
-static inline void vc_terminate_svsm_psc() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_PSC_ERROR);
+static inline void vc_terminate_vmpl_page_err() {
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_SET_PAGE_ERROR);
 }
 
-#if SVSM_REASON_CODE
-static inline void vc_terminate_svsm_bios() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_BIOS_FORMAT);
+static inline void vc_terminate_vmpl_psc() {
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_PSC_ERROR);
 }
-#endif
 
 static inline void vc_terminate_unhandled_vc() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_UNHANDLED_VC);
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_UNHANDLED_VC);
 }
 
 static inline void vc_terminate_ghcb_general() {
@@ -96,33 +65,21 @@ static inline void vc_terminate_ghcb_feature() {
 }
 
 static inline void vc_terminate_vmpl1_sev_features() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_VMPL1_SEV_FEATURES);
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_VMPL1_SEV_FEATURES);
 }
 
 static inline void vc_terminate_vmpl0_sev_features() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_VMPL0_SEV_FEATURES);
+    vc_terminate(VMPL_REASON_CODE_SET, VMPL_TERM_VMPL0_SEV_FEATURES);
 }
 
-#ifdef SVSM_REASON_CODE
-static inline void vc_terminate_svsm_incorrect_vmpl() {
-    vc_terminate(SVSM_REASON_CODE_SET, SVSM_TERM_INCORRECT_VMPL);
-}
-#endif
-
-#ifdef __VC_HANDLER__
 void vc_handler(uint64_t rip, uint64_t error_code, uint64_t cr2, uint64_t stack[5]) {
-    prints("Unhandled #VC exception: %x\n");
-    print_hex(error_code);
-    prints("\n");
+    printf("Unhandled #VC exception: %lx\n", error_code);
+#ifdef CONFIG_STACK_TRACE
     print_stack(stack);
-    prints("RIP=");
-    print_hex(rip);
-    prints(", CR2=");
-    print_hex(cr2);
-    prints("\n");
+#endif
+    printf("RIP=%lx, CR2=%lx\n", rip, cr2);
     vc_terminate_unhandled_vc();
 }
-#endif
 
 static inline uint64_t vc_msr_protocol(uint64_t request)
 {
@@ -175,24 +132,24 @@ uint64_t vc_establish_protocol() {
     return response;
 }
 
-#ifdef __PERCPU__
-Ghcb* vc_get_ghcb()
-{
-    Ghcb* ghcb = (Ghcb*)PERCPU.ghcb();
-    // 1. check if the GHCB is already saved in a percpu variable
-    // 2. if not, perform run-vmpl to get the GHCB
-    // 3. save the GHCB to a percpu variable
-    // 4. return the GHCB
-    return ghcb;
-}
-#else
-Ghcb* vc_get_ghcb() {
-    // 1. perform run-vmpl to get the GHCB
-    // 2. save the GHCB to a global variable
-    // 3. return the GHCB
+Ghcb *get_early_ghcb() {
     return this_ghcb;
 }
-#endif
+
+Ghcb* vc_get_ghcb()
+{
+    Ghcb* ghcb = this_ghcb;
+    if (ghcb == NULL) {
+        ghcb = (Ghcb*)pgtable_pa_to_va((PhysAddr)rdmsr(MSR_AMD64_SEV_ES_GHCB));
+        this_ghcb = ghcb;
+    }
+
+    return ghcb;
+}
+
+void vc_set_ghcb(Ghcb *ghcb) {
+    this_ghcb = ghcb;
+}
 
 void vc_perform_vmgexit(Ghcb* ghcb, uint64_t code, uint64_t info1, uint64_t info2) {
     ghcb_set_version(ghcb, GHCB_VERSION_1);
@@ -205,7 +162,7 @@ void vc_perform_vmgexit(Ghcb* ghcb, uint64_t code, uint64_t info1, uint64_t info
     vc_vmgexit();
 
     if (!ghcb_is_sw_exit_info_1_valid(ghcb)) {
-        vc_terminate_svsm_resp_invalid();
+        vc_terminate_vmpl_resp_invalid();
     }
 
     uint64_t info1_new = ghcb_get_sw_exit_info_1(ghcb);
@@ -241,7 +198,7 @@ static void vc_cpuid_vmgexit(uint32_t leaf, uint32_t subleaf, uint32_t *eax, uin
         || !ghcb_is_rbx_valid(ghcb)
         || !ghcb_is_rcx_valid(ghcb)
         || !ghcb_is_rdx_valid(ghcb)) {
-        vc_terminate_svsm_resp_invalid();
+        vc_terminate_vmpl_resp_invalid();
     }
 
     *eax = ghcb_get_rax(ghcb);
@@ -282,7 +239,7 @@ uint32_t vc_inl(uint16_t port) {
     vc_perform_vmgexit(ghcb, GHCB_NAE_IOIO, ioio, 0);
 
     if (!ghcb_is_rax_valid(ghcb)) {
-        vc_terminate_svsm_resp_invalid();
+        vc_terminate_vmpl_resp_invalid();
     }
 
     value = (uint32_t)(LOWER_32BITS(ghcb_get_rax(ghcb)));
@@ -320,7 +277,7 @@ uint16_t vc_inw(uint16_t port) {
     vc_perform_vmgexit(ghcb, GHCB_NAE_IOIO, ioio, 0);
 
     if (!ghcb_is_rax_valid(ghcb)) {
-        vc_terminate_svsm_resp_invalid();
+        vc_terminate_vmpl_resp_invalid();
     }
 
     value = (uint16_t)LOWER_16BITS(ghcb_get_rax(ghcb));
@@ -359,7 +316,7 @@ uint8_t vc_inb(uint16_t port) {
 
 
     if (!ghcb_is_rax_valid(ghcb)) {
-        vc_terminate_svsm_resp_invalid();
+        vc_terminate_vmpl_resp_invalid();
     }
 
     value = (uint8_t)LOWER_8BITS(ghcb_get_rax(ghcb));
@@ -370,47 +327,47 @@ uint8_t vc_inb(uint16_t port) {
 }
 
 // 0x012 - Register GHCB GPA Request
-void vc_register_ghcb(uint64_t pa) {
+void vc_register_ghcb(PhysAddr pa) {
     // Perform GHCB registration
     uint64_t response = vc_msr_protocol(GHCB_MSR_REGISTER_GHCB(pa));
 
     // Validate the response
     if (GHCB_MSR_INFO(response) != GHCB_MSR_REGISTER_GHCB_RES) {
-        vc_terminate_svsm_general();
+        vc_terminate_vmpl_general();
     }
 
     if (GHCB_MSR_DATA(response) != pa) {
-        vc_terminate_svsm_general();
+        vc_terminate_vmpl_general();
     }
 
     wrmsrl(MSR_AMD64_SEV_ES_GHCB, pa);
 }
 
+#ifdef CONFIG_VMPL_MSR_PROTOCOL
 // 0x014 - SNP Page State Change Request
-void vc_snp_page_state_change(uint64_t pa, uint64_t op) {
+void vc_snp_page_state_change(PhysAddr pa, uint64_t op) {
     // Perform SNP page state change
     uint64_t response = vc_msr_protocol(GHCB_MSR_SNP_PSC(pa, op));
 
     // Validate the response
     if (GHCB_MSR_INFO(response) != GHCB_MSR_SNP_PSC_RES) {
-        vc_terminate_svsm_general();
+        vc_terminate_vmpl_general();
     }
 
     if (GHCB_MSR_SNP_PSC_VAL(response) != pa) {
-        vc_terminate_svsm_general();
+        vc_terminate_vmpl_general();
     }
 }
 
-void vc_make_page_private(uint64_t pa) {
+void vc_make_page_private(PhysAddr pa) {
     vc_snp_page_state_change(pa, SNP_PSC_OP_ASSIGN_PRIVATE);
 }
 
-void vc_make_page_shared(uint64_t pa) {
+void vc_make_page_shared(PhysAddr pa) {
     vc_snp_page_state_change(pa, SNP_PSC_OP_ASSIGN_SHARED);
 }
+#endif
 
-// #define PAGE_TABLE
-#ifdef PAGE_TABLE
 #define PSC_SHARED (2ull << 52)
 #define PSC_PRIVATE (1ull << 52)
 #define PSC_ENTRIES ((SHARED_BUFFER_SIZE - sizeof(PscOpHeader)) / 8)
@@ -459,7 +416,7 @@ void pvalidate_psc_entries(PscOp* op, uint32_t pvalidate_op) {
         }
 
         if (ret != 0) {
-            vc_terminate_svsm_psc();
+            vc_terminate_vmpl_psc();
         }
     }
 }
@@ -469,7 +426,7 @@ void build_psc_entries(PscOp* op, PhysAddr begin, PhysAddr end, uint64_t page_op
     size_t i = 0;
 
     while (pa < end && i < PSC_ENTRIES) {
-        if (pa.is_aligned(PAGE_2MB_SIZE) && (end - pa) >= PAGE_2MB_SIZE) {
+        if (is_aligned(pa, PAGE_2MB_SIZE) && (end - pa) >= PAGE_2MB_SIZE) {
             op->entries[i].data = GHCB_2MB_PSC_ENTRY(pa, page_op);
             pa += PAGE_2MB_SIZE;
         } else {
@@ -485,8 +442,8 @@ void build_psc_entries(PscOp* op, PhysAddr begin, PhysAddr end, uint64_t page_op
 void perform_page_state_change(Ghcb* ghcb, PhysFrame begin, PhysFrame end, uint64_t page_op) {
     PscOp op;
 
-    PhysAddr pa = begin.start_address();
-    PhysAddr pa_end = end.start_address();
+    PhysAddr pa = begin << PAGE_SHIFT;
+    PhysAddr pa_end = end << PAGE_SHIFT;
 
     while (pa < pa_end) {
         op.header.cur_entry = 0;
@@ -508,10 +465,10 @@ void perform_page_state_change(Ghcb* ghcb, PhysFrame begin, PhysFrame end, uint6
         while (op.header.cur_entry <= last_entry) {
             vc_perform_vmgexit(ghcb, GHCB_NAE_PSC, 0, 0);
             if (!ghcb_is_sw_exit_info_2_valid(ghcb) || ghcb_get_sw_exit_info_2(ghcb) != 0) {
-                vc_terminate_svsm_psc();
+                vc_terminate_vmpl_psc();
             }
 
-            ghcb->shared_buffer(get_bytes, size);
+            ghcb_get_shared_buffer(ghcb, get_bytes, size);
         }
 
         if (page_op == PSC_PRIVATE) {
@@ -527,32 +484,31 @@ void vc_make_pages_shared(PhysFrame begin, PhysFrame end) {
     perform_page_state_change(ghcb, begin, end, PSC_SHARED);
 }
 
+#ifndef CONFIG_VMPL_MSR_PROTOCOL
 void vc_make_page_shared(PhysFrame frame) {
     vc_make_pages_shared(frame, frame + 1);
 }
+#endif
 
 void vc_make_pages_private(PhysFrame begin, PhysFrame end) {
     Ghcb* ghcb = vc_get_ghcb();
     perform_page_state_change(ghcb, begin, end, PSC_PRIVATE);
 }
 
+#ifndef CONFIG_VMPL_MSR_PROTOCOL
 void vc_make_page_private(PhysFrame frame) {
     vc_make_pages_private(frame, frame + 1);
 }
+#endif
 
 void vc_early_make_pages_private(PhysFrame begin, PhysFrame end) {
     Ghcb* ghcb = (Ghcb*)get_early_ghcb();
     perform_page_state_change(ghcb, begin, end, PSC_PRIVATE);
 }
 
-#endif
-
-Ghcb *get_early_ghcb() {
-    return this_ghcb;
-}
-
 void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va) {
     log_info("setup VC communication");
     vc_establish_protocol();
     vc_register_ghcb(ghcb_pa);
+    vc_set_ghcb(ghcb_va);
 }

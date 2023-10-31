@@ -76,6 +76,14 @@ struct pte_t {
 
 #define padding(level) ((level)*4 + 4)
 
+typedef uint64_t PhysAddr;
+typedef uint64_t VirtAddr;
+typedef uint64_t PhysFrame;
+
+static inline bool is_aligned(PhysAddr addr, size_t alignment) {
+    return (addr % alignment) == 0;
+}
+
 int pgtable_init(uint64_t **pgd, uint64_t cr3, int fd);
 int pgtable_free(uint64_t *pgd);
 
