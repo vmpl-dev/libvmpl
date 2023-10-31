@@ -103,7 +103,44 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int level, uint64_t *pa)
 {
     log_debug("lookup address in pgd");
     // TODO: lookup should be implemented in lookup_address_in_pgd
+    pml4e_t *pml4e = pml4_offset(pgd, va);
+    if (pml4e_none(*pml4e) || pml4e_bad(*pml4e)) {
+        log_err("pml4e is none");
+        return -EINVAL;
+    }
+
+    pdpe_t *pdpe = pdp_offset(pml4e, va);
+    if (pdpe_none(*pdpe) || pdpe_bad(*pdpe)) {
+        log_err("pdpe is none");
+        return -EINVAL;
+    }
+
+    pde_t *pde = pd_offset(pdpe, va);
+    if (pde_none(*pde) || pde_bad(*pde)) {
+        log_err("pde is none");
+        return -EINVAL;
+    }
+
+    pte_t *pte = pte_offset(pde, va);
+    if (pte_none(*pte) || !pte_present(*pte)) {
+        log_err("pte is none");
+        return -EINVAL;
+    }
+
+    *pa = pte_addr(*pte);
+
     return 0;
+}
+
+int lookup_address(uint64_t va, uint64_t level, uint64_t *pa)
+{
+    log_debug("lookup address");
+    if (pgd == NULL) {
+        log_err("pgd is NULL");
+        return -EINVAL;
+    }
+
+    return lookup_address_in_pgd(pgd, va, 4, pa);
 }
 
 uint64_t pgtable_pa_to_va(uint64_t pa)

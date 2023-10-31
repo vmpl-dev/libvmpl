@@ -97,6 +97,13 @@ AC_ARG_ENABLE([dump-details],
               [enable_dump_details=no])
 AM_CONDITIONAL([ENABLE_DUMP_DETAILS], [test "x$enable_dump_details" = "xyes"])
 
+AC_ARG_ENABLE([pgtbale-la57],
+              [AS_HELP_STRING([--enable-pgtbale-la57],
+                              [Enable pgtbale la57 support])],
+              [enable_pgtbale_la57=$enableval],
+              [enable_pgtbale_la57=no])
+AM_CONDITIONAL([ENABLE_PGTBALE_LA57], [test "x$enable_pgtbale_la57" = "xyes"])
+
 AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
 AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
@@ -143,6 +150,10 @@ fi
 
 if test "x$enable_dump_details" = "xyes"; then
     AC_DEFINE([CONFIG_DUMP_DETAILS], [1], [Enable dump details support])
+fi
+
+if test "x$enable_pgtbale_la57" = "xyes"; then
+    AC_DEFINE([CONFIG_PGTBALE_LA57], [1], [Enable pgtbale la57 support])
 fi
 
 # 声明一个自定义的Automake变量
