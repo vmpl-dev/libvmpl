@@ -37,6 +37,7 @@
 #include "apic.h"
 #include "vmpl-dev.h"
 #include "vmpl.h"
+#include "mm.h"
 #include "vc.h"
 #include "log.h"
 
@@ -381,26 +382,27 @@ static int setup_cpuset()
  */
 static void setup_syscall(struct dune_percpu *percpu)
 {
-    uint64_t *lstar;
+	uint64_t lstar, vaddr;
 	assert((uint64_t) __dune_syscall_end  -
 	       (uint64_t) __dune_syscall < PAGE_SIZE);
 
     log_info("setup syscall");
-    lstar = (void *)rdmsr(MSR_LSTAR);
+    lstar = rdmsr(MSR_LSTAR);
+    vaddr = PAGE_ALIGN_DOWN(lstar);
 
 #ifdef CONFIG_REMAP_SYSCALL
     // remap syscall page to another page
-    percpu->lstar = mremap(lstar, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
+    percpu->lstar = mremap((void*)vaddr, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
     if (percpu->lstar == MAP_FAILED) {
         perror("dune: failed to remap syscall page");
         exit(EXIT_FAILURE);
     }
 #else
     // unmap syscall page
-    munmap(lstar, PAGE_SIZE);
+    munmap(vaddr, PAGE_SIZE);
 #endif
     // remap dune syscall page to syscall page
-    mremap(__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, lstar);
+    mremap(__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
 }
 
 /**
