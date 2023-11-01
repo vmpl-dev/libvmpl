@@ -21,14 +21,21 @@
  */
 static void vmpl_default_handler(struct dune_tf *tf)
 {
-#ifdef EXCEPTION_PASSTHROUGH
-	// We should pass the trap frame to the guest OS, which should be able to
-	// handle the exception.
-	__syscall2(NR_syscalls, (long)tf);
-#else
 	// Exit the VMPL and return to the guest OS.
 	exit(EXIT_FAILURE);
-#endif
+}
+
+/**
+ * @brief  Delegate handler for exceptions that should be handled by the
+ *   guest OS (e.g., #NM, #TS, #NP, #GP)
+ * @param  *tf: Trap frame pointer
+ * @retval None
+ */
+static void vmpl_delegate_handler(struct dune_tf *tf)
+{
+	// We should pass the trap frame to the guest OS, which should be able to
+	// handle the exception.
+	__syscall1(NR_syscalls, (long)tf);
 }
 
 /**
@@ -98,13 +105,13 @@ static dune_intr_cb intr_cbs[IDT_ENTRIES] = {
 	[T_OF] = vmpl_default_handler,			// 4. #OF Overflow Exception
 	[T_BR] = vmpl_default_handler,			// 5. #BR BOUND Range Exceeded Exception
 	[T_UD] = vmpl_default_handler,			// 6. #UD Invalid Opcode Exception
-	[T_NM] = vmpl_default_handler,			// 7. #NM Device Not Available Exception
-	[T_DF] = vmpl_default_handler,			// 8. #DF Double Fault Exception
-	[T_TS] = vmpl_default_handler,			// 10. #TS Invalid TSS Exception
-	[T_NP] = vmpl_default_handler,			// 11. #NP Segment Not Present Exception
-	[T_SS] = vmpl_default_handler,			// 12. #SS Stack Fault Exception
-	[T_GP] = vmpl_default_handler,			// 13. #GP General Protection Exception
-	[T_PF] = vmpl_pf_handler,				// 14. #PF Page Fault Exception
+	[T_NM] = vmpl_delegate_handler,			// 7. #NM Device Not Available Exception
+	[T_DF] = vmpl_delegate_handler,			// 8. #DF Double Fault Exception
+	[T_TS] = vmpl_delegate_handler,			// 10. #TS Invalid TSS Exception
+	[T_NP] = vmpl_delegate_handler,			// 11. #NP Segment Not Present Exception
+	[T_SS] = vmpl_delegate_handler,			// 12. #SS Stack Fault Exception
+	[T_GP] = vmpl_delegate_handler,			// 13. #GP General Protection Exception
+	[T_PF] = vmpl_delegate_handler,			// 14. #PF Page Fault Exception
 	[T_MF] = vmpl_default_handler,			// 16. #MF x87 FPU Floating-Point Error
 	[T_AC] = vmpl_default_handler,			// 17. #AC Alignment Check Exception
 	[T_MC] = vmpl_default_handler,			// 18. #MC Machine Check Exception
