@@ -14,6 +14,8 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/dune.S src/vsyscall.S \
                     src/trap.c \
                     src/apic.c \
+                    src/bitmap.c \
+                    src/pmm.c \
                     src/log.c
 libvmpl_la_LDFLAGS = -version-info 1:0:0
 
@@ -23,4 +25,5 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/sys.h include/syscall.h \
                     include/mm.h \
                     include/apic.h \
+                    include/bitmap.h \
                     include/log.h
