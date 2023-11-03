@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <errno.h>
 
+#include "config.h"
 #include "sys.h"
 
 #ifdef CONFIG_PGTABLE_LA57
@@ -42,6 +43,7 @@ struct pte_t {
 #define PAGE_SIZE 4096
 #define PAGE_ALIGN(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_DOWN(x) ((x) & ~(PAGE_SIZE - 1))
+#define PAGE_MASK(x) ((x) & (PAGE_SIZE - 1))
 
 #ifdef CONFIG_PGTABLE_LA57
 #define P4D_PRESENT (1UL << 0)
@@ -94,36 +96,46 @@ struct pte_t {
 #define PDE_BAD   (1UL << 1)
 #define PTE_BAD   (1UL << 1)
 
+#define page_address(page) ((page) << 12)
+#define pte_addr(pte) ((pte) & 0x0000fffffffff000UL)
+
+#define pfn2page(pfn) ((pfn) << 12)
+#define page2pfn(page) ((page) >> 12)
+
 #define pml4_index(va) (((unsigned long)(va) >> 39) & 0x1ff)
 #define pdp_index(va)  (((unsigned long)(va) >> 30) & 0x1ff)
 #define pd_index(va)   (((unsigned long)(va) >> 21) & 0x1ff)
 #define pt_index(va)   (((unsigned long)(va) >> 12) & 0x1ff)
 
-#define pml4_offset(pml4, va) ((pml4) + pml4_index(va))
-#define pdp_offset(pdp, va)   ((pdp) + pdp_index(va))
-#define pd_offset(pd, va)     ((pd) + pd_index(va))
-#define pte_offset(pt, va)    ((pt) + pt_index(va))
+#define pdpe_deref(pdpe)   __va(pte_addr(*pdpe))
+#define pde_deref(pde)     __va(pte_addr(*pde))
+#define pte_deref(pte)     __va(pte_addr(*pte))
 
-#define pml4e_none(pml4e) (!(pml4e & PML4E_PRESENT))
-#define pdpe_none(pdpe)   (!(pdpe & PDPE_PRESENT))
-#define pde_none(pde)     (!(pde & PDE_PRESENT))
-#define pte_none(pte)     (!(pte & PTE_PRESENT))
+#define pml4_offset(pml4, va) ((pml4) + (pml4_index(va) << 3))
+#define pdp_offset(pdp, va)   (pdpe_deref(pdp) + (pdp_index(va) << 3))
+#define pd_offset(pd, va)     (pde_deref(pd) + (pd_index(va) << 3))
+#define pte_offset(pt, va)    (pte_deref(pt) + (pt_index(va) << 3))
 
-#define pml4e_bad(pml4e) (pml4e & PML4E_BAD)
-#define pdpe_bad(pdpe)   (pdpe & PDPE_BAD)
-#define pde_bad(pde)     (pde & PDE_BAD)
-#define pte_bad(pte)     (pte & PTE_BAD)
+#define pml4e_none(pml4e) (!((pml4e) & PML4E_PRESENT))
+#define pdpe_none(pdpe)   (!((pdpe) & PDPE_PRESENT))
+#define pde_none(pde)     (!((pde) & PDE_PRESENT))
+#define pte_none(pte)     (!((pte) & PTE_PRESENT))
+
+#define pml4e_val(pml4e) ((pml4e) & 0xfffUL)
+#define pdpe_val(pdpe)   ((pdpe) & 0xfffUL)
+#define pde_val(pde)     ((pde) & 0xfffUL)
+#define pte_val(pte)     ((pte) & 0xfffUL)
+
+#define pml4e_bad(pml4e) (!(pml4e_val(pml4e) & PML4E_BAD))
+#define pdpe_bad(pdpe)   (!(pdpe_val(pdpe) & PDPE_BAD))
+#define pde_bad(pde)     (!(pde_val(pde) & PDE_BAD))
+#define pte_bad(pte)     (!(pte_val(pte) & PTE_BAD))
 
 #define pml4e_present(pml4e) ((pml4e) & 0x1)
 #define pdpe_present(pdpe)   ((pdpe) & 0x1)
 #define pde_present(pde)     ((pde) & 0x1)
 #define pte_present(pte)     ((pte) & 0x1)
 #endif
-
-#define pte_addr(pte) (pte & 0x7fffffffff000UL)
-
-#define pfn2page(pfn) (pfn << 12)
-#define page2pfn(page) (page >> 12)
 
 #define bitclr(x, n) ((x) & ~(1UL << (n)))
 
