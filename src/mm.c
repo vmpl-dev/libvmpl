@@ -18,6 +18,7 @@
 #define padding(level) ((level)*4 + 4)
 static char *pt_names[] = { "PML4", "PDP", "PD", "PT", "Page" };
 static void *pgd;
+static void *free_pages;
 
 /**
  * @brief  Setup page table self-mapping
@@ -29,6 +30,7 @@ static void *pgd;
  */
 static int __pgtable_init(uint64_t paddr, int level, int fd)
 {
+	size_t max_i;
 	uint64_t *vaddr;
 
     if (level == 4)
@@ -37,14 +39,16 @@ static int __pgtable_init(uint64_t paddr, int level, int fd)
     bitclr(paddr, 63);
     bitclr(paddr, 51);
 
-    vaddr = mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE, PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, 0);
+    vaddr = mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE,
+				 PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
     if (vaddr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
         goto failed;
     }
 
-	log_debug("%*s%s [%p - %09lx]", padding(level), "", pt_names[level], vaddr, paddr);
-    for (int i = 0; i < 512; i++) {
+    log_trace("%*s%s [%p - %09lx]", padding(level), "", pt_names[level], vaddr, paddr);
+    max_i = (level != 0) ? 512 : 256;
+    for (int i = 0; i < max_i; i++) {
         if (vaddr[i] & 0x1) {
             log_trace("%*s%s Entry[%d]: %016lx", padding(level), "", pt_names[level], i, vaddr[i]);
             __pgtable_init(pte_addr(vaddr[i]), level + 1, fd);
@@ -52,6 +56,20 @@ static int __pgtable_init(uint64_t paddr, int level, int fd)
     }
 
 	return 0;
+failed:
+    return -ENOMEM;
+}
+
+static int __pgtable_init_free_pages(int fd)
+{
+    void *addr;
+    addr = mmap((void *)PGTABLE_MMAP_BASE, PAGE_SIZE, PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("dune: failed to map pgtable");
+        goto failed;
+    }
+
+    return 0;
 failed:
     return -ENOMEM;
 }
@@ -78,6 +96,37 @@ int pgtable_free(uint64_t *pgd)
     return 0;
 }
 
+int pgtable_selftest(uint64_t *pgd, uint64_t va)
+{
+    log_debug("pgtable selftest");
+
+    pml4e_t *pml4e = pml4_offset(pgd, va);
+    if (pml4e_none(*pml4e)) {
+        log_err("pml4e is none");
+        return -EINVAL;
+    }
+
+    pdpe_t *pdpe = pdp_offset(pml4e, va);
+    if (pdpe_none(*pdpe)) {
+        log_err("pdpe is none");
+        return -EINVAL;
+    }
+
+    pde_t *pde = pd_offset(pdpe, va);
+    if (pde_none(*pde)) {
+        log_err("pde is none");
+        return -EINVAL;
+    }
+
+    pte_t *pte = pte_offset(pde, va);
+    if (pte_none(*pte)) {
+        log_err("pte is none");
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 int pgtable_mmap(uint64_t *pgd, uint64_t va, size_t len, int perm)
 {
     log_debug("pgtable mmap");
@@ -99,7 +148,7 @@ int pgtable_unmap(uint64_t *pgd, uint64_t va, size_t len, int level)
     return 0;
 }
 
-int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int level, uint64_t *pa)
+int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, uint64_t *pa)
 {
     log_debug("lookup address in pgd");
     // TODO: lookup should be implemented in lookup_address_in_pgd
@@ -109,17 +158,26 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int level, uint64_t *pa)
         return -EINVAL;
     }
 
+    if (level)
+        *level = 4;
+
     pdpe_t *pdpe = pdp_offset(pml4e, va);
     if (pdpe_none(*pdpe) || pdpe_bad(*pdpe)) {
         log_err("pdpe is none");
         return -EINVAL;
     }
 
+    if (level)
+        *level = 3;
+
     pde_t *pde = pd_offset(pdpe, va);
     if (pde_none(*pde) || pde_bad(*pde)) {
         log_err("pde is none");
         return -EINVAL;
     }
+
+    if (level)
+        *level = 2;
 
     pte_t *pte = pte_offset(pde, va);
     if (pte_none(*pte) || !pte_present(*pte)) {
@@ -128,11 +186,13 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int level, uint64_t *pa)
     }
 
     *pa = pte_addr(*pte);
+    if (level)
+        *level = 1;
 
     return 0;
 }
 
-int lookup_address(uint64_t va, uint64_t level, uint64_t *pa)
+int lookup_address(uint64_t va, uint64_t *level, uint64_t *pa)
 {
     log_debug("lookup address");
     if (pgd == NULL) {
@@ -140,7 +200,7 @@ int lookup_address(uint64_t va, uint64_t level, uint64_t *pa)
         return -EINVAL;
     }
 
-    return lookup_address_in_pgd(pgd, va, 4, pa);
+    return lookup_address_in_pgd(pgd, va, level, pa);
 }
 
 uint64_t pgtable_pa_to_va(uint64_t pa)

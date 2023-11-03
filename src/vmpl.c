@@ -498,6 +498,7 @@ static int setup_pgtable(struct dune_percpu *percpu)
         goto failed;
     }
 
+    log_debug("dune: PGD at %p", percpu->pgd);
     return 0;
 failed:
     return rc;
@@ -763,6 +764,15 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
         perror("dune: failed to setup pgtable");
         goto failed;
     }
+#ifdef CONFIG_PGTBALE_SELFTEST
+	rc = pgtable_selftest(percpu->pgd, (uint64_t)config);
+	if (rc != 0) {
+		perror("dune: failed to test pgtable");
+		goto failed;
+	}
+
+    log_success("pgtable test passed");
+#endif
 #endif
 
     return 0;    

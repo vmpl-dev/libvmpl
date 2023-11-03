@@ -66,16 +66,19 @@ struct pte_t {
 #define pmd_offset(pud, va) ((pud) + pmd_index(va))
 #define pte_offset(pmd, va) ((pmd) + pte_index(va))
 
+#define pgd_none(pgd) (!(pgd & P4D_PRESENT))
 #define p4d_none(p4d) (!(p4d & P4D_PRESENT))
 #define pud_none(pud) (!(pud & PUD_PRESENT))
 #define pmd_none(pmd) (!(pmd & PMD_PRESENT))
 #define pte_none(pte) (!(pte & PTE_PRESENT))
 
+#define pgd_bad(pgd) (pgd & P4D_BAD)
 #define p4d_bad(p4d) (p4d & P4D_BAD)
 #define pud_bad(pud) (pud & PUD_BAD)
 #define pmd_bad(pmd) (pmd & PMD_BAD)
 #define pte_bad(pte) (pte & PTE_BAD)
 
+#define pgd_present(pgd) ((pgd) & 0x1)
 #define p4d_present(p4d) ((p4d) & 0x1)
 #define pud_present(pud) ((pud) & 0x1)
 #define pmd_present(pmd) ((pmd) & 0x1)
@@ -136,13 +139,14 @@ static inline bool is_aligned(PhysAddr addr, size_t alignment) {
 
 int pgtable_init(uint64_t **pgd, uint64_t cr3, int fd);
 int pgtable_free(uint64_t *pgd);
+int pgtable_selftest(uint64_t *pgd, uint64_t va);
 
 int pgtable_mmap(uint64_t *pgd, uint64_t va, size_t len, int perm);
 int pgtable_mprotect(uint64_t *pgd, uint64_t va, size_t len, int perm);
 int pgtable_unmap(uint64_t *pgd, uint64_t va, size_t len, int level);
 
-int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int level, uint64_t *pa);
-int lookup_address(uint64_t va, uint64_t level, uint64_t *pa);
+int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, uint64_t *pa);
+int lookup_address(uint64_t va, uint64_t *level, uint64_t *pa);
 
 uint64_t pgtable_pa_to_va(uint64_t pa);
 uint64_t pgtable_va_to_pa(uint64_t va);

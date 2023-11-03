@@ -104,6 +104,13 @@ AC_ARG_ENABLE([pgtbale-la57],
               [enable_pgtbale_la57=no])
 AM_CONDITIONAL([ENABLE_PGTBALE_LA57], [test "x$enable_pgtbale_la57" = "xyes"])
 
+AC_ARG_ENABLE([pgtable-selftest],
+              [AS_HELP_STRING([--enable-pgtable-selftest],
+                              [Enable pgtable selftest support])],
+              [enable_pgtable_selftest=$enableval],
+              [enable_pgtable_selftest=no])
+AM_CONDITIONAL([ENABLE_PGTBALE_SELFTEST], [test "x$enable_pgtable_selftest" = "xyes"])
+
 AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
 AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
@@ -154,6 +161,10 @@ fi
 
 if test "x$enable_pgtbale_la57" = "xyes"; then
     AC_DEFINE([CONFIG_PGTBALE_LA57], [1], [Enable pgtbale la57 support])
+fi
+
+if test "x$enable_pgtable_selftest" = "xyes"; then
+    AC_DEFINE([CONFIG_PGTBALE_SELFTEST], [1], [Enable pgtable selftest support])
 fi
 
 # 声明一个自定义的Automake变量
