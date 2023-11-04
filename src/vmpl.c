@@ -38,6 +38,7 @@
 #include "vmpl-dev.h"
 #include "vmpl.h"
 #include "mm.h"
+#include "pmm.h"
 #include "vc.h"
 #include "log.h"
 
@@ -56,6 +57,7 @@ struct dune_percpu {
     uint64_t ghcb_gpa;
     struct Ghcb *ghcb;
     uint64_t *pgd;
+    struct pmm *pmm;
     void *lstar;
     void *vsyscall;
 } __attribute__((packed));
@@ -515,6 +517,37 @@ failed:
     return rc;
 }
 
+static int setup_pmm(struct dune_percpu *percpu)
+{
+	int rc;
+	void **pages;
+	struct pmm *pmm;
+	log_info("setup pmm");
+
+    log_debug("dune: PMM at %p", pmm);
+    pages = mmap((void *)PMM_MMAP_BASE, PMM_MMPA_SIZE, PROT_READ | PROT_WRITE,
+              MAP_SHARED | MAP_FIXED, dune_fd, 0);
+
+    if (pages == MAP_FAILED) {
+        perror("dune: failed to map PMM");
+        rc = -ENOMEM;
+        goto failed;
+    }
+
+	pmm = pmm_init(pages);
+    if (!pmm) {
+        perror("dune: failed to setup PMM");
+        rc = -ENOMEM;
+        goto failed;
+    }
+
+    percpu->pmm = pmm;
+
+	return 0;
+failed:
+    return rc;
+}
+
 /**
  * @brief  Setup stack for VMPL library
  * @note   
@@ -773,6 +806,13 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 	rc = setup_pgtable(percpu);
     if (rc != 0) {
         perror("dune: failed to setup pgtable");
+        goto failed;
+    }
+
+    // Setup pmm
+    rc = setup_pmm(percpu);
+    if (rc != 0) {
+        perror("dune: failed to setup pmm");
         goto failed;
     }
 #endif
