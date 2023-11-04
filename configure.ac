@@ -111,6 +111,13 @@ AC_ARG_ENABLE([pgtable-selftest],
               [enable_pgtable_selftest=no])
 AM_CONDITIONAL([ENABLE_PGTBALE_SELFTEST], [test "x$enable_pgtable_selftest" = "xyes"])
 
+AC_ARG_ENABLE([stack-trace],
+              [AS_HELP_STRING([--enable-stack-trace],
+                              [Enable stack trace support])],
+              [enable_stack_trace=$enableval],
+              [enable_stack_trace=no])
+AM_CONDITIONAL([ENABLE_STACK_TRACE], [test "x$enable_stack_trace" = "xyes"])
+
 AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
 AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
@@ -165,6 +172,10 @@ fi
 
 if test "x$enable_pgtable_selftest" = "xyes"; then
     AC_DEFINE([CONFIG_PGTBALE_SELFTEST], [1], [Enable pgtable selftest support])
+fi
+
+if test "x$enable_stack_trace" = "xyes"; then
+    AC_DEFINE([CONFIG_STACK_TRACE], [1], [Enable stack trace support])
 fi
 
 # 声明一个自定义的Automake变量

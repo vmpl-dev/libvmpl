@@ -1,6 +1,7 @@
 /*
  * trap.c - x86 fault handling
  */
+#define _GNU_SOURCE
 
 #include <errno.h>
 #include <stdio.h>
@@ -8,8 +9,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
 
+#include "config.h"
 #include "sys.h"
+#include "mm.h"
 #include "vmpl.h"
 #include "log.h"
 #include "syscall.h"
@@ -35,7 +39,7 @@ static void vmpl_delegate_handler(struct dune_tf *tf)
 {
 	// We should pass the trap frame to the guest OS, which should be able to
 	// handle the exception.
-	__syscall1(NR_syscalls, (long)tf);
+	exit(EXIT_FAILURE);
 }
 
 /**
@@ -148,22 +152,7 @@ void dune_register_pgflt_handler(dune_pgflt_cb cb)
 	return dune_register_intr_handler(T_PF, cb);
 }
 
-#ifdef VMPL_PGTABLE
-static bool addr_is_mapped(void *va)
-{
-	int ret;
-	ptent_t *pte;
-
-	ret = dune_vm_lookup(pgroot, va, CREATE_NONE, &pte);
-	if (ret)
-		return 0;
-
-	if (!(*pte & PTE_P))
-		return 0;
-
-	return 1;
-}
-
+#ifdef CONFIG_STACK_TRACE
 #define STACK_DEPTH 12
 
 static void dune_dump_stack(struct dune_tf *tf)
@@ -175,7 +164,8 @@ static void dune_dump_stack(struct dune_tf *tf)
 	// have to work even if libc doesn't.
 	printf("dune: Dumping Stack Contents...\n");
 	for (i = 0; i < STACK_DEPTH; i++) {
-		if (!addr_is_mapped(&sp[i])) {
+		int rc = lookup_address((unsigned long)&sp[i], NULL, NULL);
+		if (rc != 0) {
 			printf("dune: reached unmapped addr\n");
 			break;
 		}
@@ -222,7 +212,7 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 	printf("dune: R10 0x%016lx R11 0x%016lx\n", tf->r10, tf->r11);
 	printf("dune: R12 0x%016lx R13 0x%016lx\n", tf->r12, tf->r13);
 	printf("dune: R14 0x%016lx R15 0x%016lx\n", tf->r14, tf->r15);
-#ifdef VMPL_PGTABLE
+#ifdef CONFIG_STACK_TRACE
 	dune_dump_stack(tf);
 #endif
 	dump_ip(tf);
