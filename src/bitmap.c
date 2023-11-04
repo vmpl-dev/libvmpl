@@ -25,6 +25,29 @@ int bitmap_test(const bitmap *b, int bit) {
     return (b->bits[bit / 64] & (1ULL << (bit % 64))) != 0;
 }
 
+int bitmap_query(const bitmap *b, int bit) {
+    if (bit < 0 || bit >= b->size) {
+        // Out of bounds
+        return -1;
+    }
+
+    return bitmap_test(b, bit);
+}
+
+int bitmap_find_first_zero(const bitmap *b) {
+    for (size_t i = 0; i < b->size / 64; i++) {
+        if (b->bits[i] != 0xFFFFFFFFFFFFFFFF) {
+            for (size_t j = 0; j < 64; j++) {
+                if ((b->bits[i] & (1ULL << j)) == 0) {
+                    return i * 64 + j;
+                }
+            }
+        }
+    }
+
+    return -1;
+}
+
 void bitmap_clear(bitmap *b, int bit) {
     b->bits[bit / 64] &= ~(1ULL << (bit % 64));
 }
@@ -38,6 +61,8 @@ bitmap_ops bitmap_simple_ops = {
     .alloc = (bitmap_alloc_func)bitmap_alloc,
     .set = (bitmap_set_func)bitmap_set,
     .test = (bitmap_test_func)bitmap_test,
+    .query = (bitmap_query_func)bitmap_query,
+    .find_first_zero = (bitmap_find_first_zero_func)bitmap_find_first_zero,
     .clear = (bitmap_clear_func)bitmap_clear,
     .free = (bitmap_free_func)bitmap_free
 };
@@ -95,6 +120,29 @@ int hbitmap_test(const hbitmap *hb, int bit) {
     }
 }
 
+int hbitmap_query(const hbitmap *hb, int bit) {
+    if (bit < 0 || bit >= hb->size * hb->size) {
+        // Out of bounds
+        return -1;
+    }
+
+    return hbitmap_test(hb, bit);
+}
+
+int hbitmap_find_first_zero(const hbitmap *hb) {
+    int top_index = bitmap_find_first_zero(hb->top);
+    if (top_index == -1) {
+        return -1;
+    }
+
+    int bottom_index = bitmap_find_first_zero(hb->bottom[top_index]);
+    if (bottom_index == -1) {
+        return -1;
+    }
+
+    return top_index * hb->size + bottom_index;
+}
+
 void hbitmap_clear(hbitmap *hb, int bit) {
     int top_index = bit / hb->size;
     int bottom_index = bit % hb->size;
@@ -126,6 +174,8 @@ bitmap_ops bitmap_hierarchical_ops = {
     .alloc = (bitmap_alloc_func)hbitmap_alloc,
     .set = (bitmap_set_func)hbitmap_set,
     .test = (bitmap_test_func)hbitmap_test,
+    .query = (bitmap_query_func)hbitmap_query,
+    .find_first_zero = (bitmap_find_first_zero_func)hbitmap_find_first_zero,
     .clear = (bitmap_clear_func)hbitmap_clear,
     .free = (bitmap_free_func)hbitmap_free
 };
@@ -155,6 +205,14 @@ void bmap_set(bmap *bm, int bit) {
 
 int bmap_test(const bmap *bm, int bit) {
     return bm->ops->test(bm->bitmap, bit);
+}
+
+int bmap_query(const bmap *bm, int bit) {
+    return bm->ops->query(bm->bitmap, bit);
+}
+
+int bmap_find_first_zero(const bmap *bm) {
+    return bm->ops->find_first_zero(bm->bitmap);
 }
 
 void bmap_clear(bmap *bm, int bit) {

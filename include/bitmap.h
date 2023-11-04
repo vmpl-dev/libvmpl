@@ -12,6 +12,8 @@ typedef enum {
 typedef void *(*bitmap_alloc_func)(size_t size);
 typedef void (*bitmap_set_func)(void *bitmap, int bit);
 typedef int (*bitmap_test_func)(const void *bitmap, int bit);
+typedef int (*bitmap_query_func)(void *bitmap, int bit);
+typedef int (*bitmap_find_first_zero_func)(const void *bitmap);
 typedef void (*bitmap_clear_func)(void *bitmap, int bit);
 typedef void (*bitmap_free_func)(void *bitmap);
 
@@ -19,6 +21,8 @@ typedef struct {
     bitmap_alloc_func alloc;
     bitmap_set_func set;
     bitmap_test_func test;
+    bitmap_query_func query;
+    bitmap_find_first_zero_func find_first_zero;
     bitmap_clear_func clear;
     bitmap_free_func free;
 } bitmap_ops;
@@ -31,6 +35,8 @@ typedef struct {
 bitmap *bitmap_alloc(size_t size);
 void bitmap_set(bitmap *b, int bit);
 int bitmap_test(const bitmap *b, int bit);
+int bitmap_query(const bitmap *b, int bit);
+int bitmap_find_first_zero(const bitmap *b);
 void bitmap_clear(bitmap *b, int bit);
 void bitmap_free(bitmap *b);
 
@@ -43,6 +49,8 @@ typedef struct {
 hbitmap *hbitmap_alloc(size_t size);
 void hbitmap_set(hbitmap *hb, int bit);
 int hbitmap_test(const hbitmap *hb, int bit);
+int hbitmap_query(const hbitmap *hb, int bit);
+int hbitmap_find_first_zero(const hbitmap *hb);
 void hbitmap_clear(hbitmap *hb, int bit);
 void hbitmap_free(hbitmap *hb);
 
@@ -54,6 +62,8 @@ typedef struct {
 bmap *bmap_alloc(size_t size, bitmap_type type);
 void bmap_set(bmap *bm, int bit);
 int bmap_test(const bmap *bm, int bit);
+int bmap_query(const bmap *bm, int bit);
+int bmap_find_first_zero(const bmap *bm);
 void bmap_clear(bmap *bm, int bit);
 void bmap_free(bmap *bm);
 
