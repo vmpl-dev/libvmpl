@@ -155,6 +155,12 @@
 
 #define read_dr(reg) __read_dr(DR##reg)
 #define write_dr(reg, value) __write_dr(DR##reg, value)
+#define write_dr0(value) write_dr(0, value)
+#define write_dr1(value) write_dr(1, value)
+#define write_dr2(value) write_dr(2, value)
+#define write_dr3(value) write_dr(3, value)
+#define write_dr6(value) write_dr(6, value)
+#define write_dr7(value) write_dr(7, value)
 
 // 3.2.5 Performance-Monitoring Registers
 
@@ -344,6 +350,199 @@ struct idtd {
 // processor defined exceptions or interrupt vectors.
 #define T_SYSCALL   48		// system call
 
+// Table 6-1. System Management Instructions
+
+
+
+static inline void sgdt(void *addr) {
+    __asm__ __volatile__("sgdt %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void lgdt(void *addr) {
+    __asm__ __volatile__("lgdt %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void sidt(void *addr) {
+    __asm__ __volatile__("sidt %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void lidt(void *addr) {
+    __asm__ __volatile__("lidt %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void sldt(void *addr) {
+    __asm__ __volatile__("sldt %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void lldt(void *addr) {
+    __asm__ __volatile__("lldt %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void str(void *addr) {
+    __asm__ __volatile__("str %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void ltr(void *addr) {
+    __asm__ __volatile__("ltr %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void smsw(void *addr) {
+    __asm__ __volatile__("smsw %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void lmsw(void *addr) {
+    __asm__ __volatile__("lmsw %0"
+                         :
+                         : "m"(*(struct tptr *)addr)
+                         : "memory");
+}
+
+static inline void swapgs(void) {
+    __asm__ __volatile__("swapgs"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void wbinvd(void) {
+    __asm__ __volatile__("wbinvd"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void wbnoinvd(void) {
+    __asm__ __volatile__("wbnoinvd"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline uint64_t rdfsbase(void) {
+    uint64_t value;
+    __asm__ __volatile__("rdfsbase %0"
+                         : "=r"(value)
+                         :
+                         : "memory");
+    return value;
+}
+
+static inline void wrfsbase(void *addr) {
+    __asm__ __volatile__("wrfsbase %0"
+                         :
+                         : "r"(addr)
+                         : "memory");
+}
+
+static inline uint64_t rdgsbase(void) {
+    uint64_t value;
+    __asm__ __volatile__("rdgsbase %0"
+                         : "=r"(value)
+                         :
+                         : "memory");
+    return value;
+}
+
+static inline void wrgsbase(void *addr) {
+    __asm__ __volatile__("wrgsbase %0"
+                         :
+                         : "r"(addr)
+                         : "memory");
+}
+
+// Memory Protection Keys
+
+static inline uint32_t rdpkru(void) {
+    uint32_t value;
+    __asm__ __volatile__("rdpkru %0"
+                         : "=r"(value)
+                         :
+                         : "memory");
+    return value;
+}
+
+static inline void wrpkru(uint32_t pkru) {
+    __asm__ __volatile__("wrpkru %0"
+                         :
+                         : "r"(pkru)
+                         : "memory");
+}
+
+// Shadow Stack Instructions
+
+static inline void clrssbsy(void) {
+    __asm__ __volatile__("clrssbsy"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void incssp(void) {
+    __asm__ __volatile__("incssp"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline uint64_t rdssp(void) {
+    uint64_t value;
+    __asm__ __volatile__("rdssp %0"
+                         : "=r"(value)
+                         :
+                         : "memory");
+    return value;
+}
+
+static inline void setssbsy(void) {
+    __asm__ __volatile__("setssbsy"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void wrss(void *addr) {
+    __asm__ __volatile__("wrss %0"
+                         :
+                         : "r"(addr)
+                         : "memory");
+}
+
+static inline void wruss(void *addr) {
+    __asm__ __volatile__("wruss %0"
+                         :
+                         : "r"(addr)
+                         : "memory");
+}
+
+// Control Registers
+
 #define read_cr(reg) ({ \
     uint64_t value; \
     asm volatile("mov %%" #reg ", %0" : "=r"(value) : : "memory"); \
@@ -427,9 +626,55 @@ static inline int pause() {
 }
 #endif
 
+static inline void clac(void) {
+    __asm__ __volatile__("clac"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void stac(void) {
+    __asm__ __volatile__("stac"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void clgi(void) {
+    __asm__ __volatile__("clgi"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void stgi(void) {
+    __asm__ __volatile__("stgi"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void cli(void) {
+    __asm__ __volatile__("cli"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void sti(void) {
+    __asm__ __volatile__("sti"
+                         :
+                         :
+                         : "memory");
+}
+
 // Halt instruction
 static inline void halt() {
     __asm__("hlt");
+}
+
+static inline void int3() {
+    __asm__("int3");
 }
 
 // 1
@@ -486,11 +731,48 @@ static inline uint32_t rmpadjust(uint64_t va, uint32_t page_size, uint64_t attrs
     return ret;
 }
 
+static inline void invd(void) {
+    __asm__ __volatile__("invd"
+                         :
+                         :
+                         : "memory");
+}
+
+static inline void invlpg(void *addr) {
+    __asm__ __volatile__("invlpg (%0)"
+                         :
+                         : "r"(addr)
+                         : "memory");
+}
+
+static inline void invlpga(void *addr, uint64_t asid) {
+    __asm__ __volatile__("invlpga %0, %1"
+                         :
+                         : "r"(addr), "r"(asid)
+                         : "memory");
+}
+
 // Flush everything for the ASID, including Global entries
 static inline void invlpgb_all(void) {
     uint32_t rax = BIT(3);
 
     __asm__ __volatile__(".byte 0x0f,0x01,0xfe"
+                         :
+                         : "a"(rax), "c"(0), "d"(0)
+                         : "memory");
+}
+
+static inline void invlpgb(void *addr, uint64_t asid) {
+    __asm__ __volatile__("invlpgb %0, %1"
+                         :
+                         : "r"(addr), "r"(asid)
+                         : "memory");
+}
+
+static inline void invpcid(void) {
+    uint32_t rax = BIT(3);
+
+    __asm__ __volatile__(".byte 0x66,0x0f,0x38,0x82"
                          :
                          : "a"(rax), "c"(0), "d"(0)
                          : "memory");
