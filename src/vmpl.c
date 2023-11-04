@@ -517,10 +517,26 @@ failed:
     return rc;
 }
 
+static void vmpl_pf_handler(struct dune_tf *tf)
+{
+	int rc, level;
+	uint64_t cr2 = read_cr2();
+	uint64_t pa;
+	log_warn("dune: page fault at 0x%016lx, error-code = %x", cr2, tf->err);
+	rc = lookup_address(cr2, &level, &pa);
+	if (rc != 0) {
+		log_err("dune: page fault at unmapped addr 0x%016lx", cr2);
+	} else {
+		log_warn("dune: page fault at mapped addr 0x%016lx", cr2);
+	}
+
+	exit(EXIT_FAILURE);
+}
+
 static int setup_pmm(struct dune_percpu *percpu)
 {
 	int rc;
-	void **pages;
+	uint64_t *pages;
 	struct pmm *pmm;
 	log_info("setup pmm");
 
@@ -534,6 +550,13 @@ static int setup_pmm(struct dune_percpu *percpu)
         goto failed;
     }
 
+    int order = 9;
+    rc = ioctl(dune_fd, VMPL_IOCTL_GET_PAGES, &order);
+    if (rc != 0) {
+        perror("dune: failed to get pages");
+        return rc;
+    }
+
 	pmm = pmm_init(pages);
     if (!pmm) {
         perror("dune: failed to setup PMM");
@@ -541,7 +564,15 @@ static int setup_pmm(struct dune_percpu *percpu)
         goto failed;
     }
 
+    if (pmm_self_test() == 0) {
+        perror("dune: failed to test PMM");
+        rc = -ENOMEM;
+        goto failed;
+    }
+
     percpu->pmm = pmm;
+    log_debug("register page fault handler");
+    dune_register_pgflt_handler(vmpl_pf_handler);
 
 	return 0;
 failed:
