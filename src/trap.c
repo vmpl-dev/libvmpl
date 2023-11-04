@@ -17,6 +17,7 @@
 #include "vmpl.h"
 #include "log.h"
 #include "syscall.h"
+#include "trap.h"
 
 /**
  * @brief Page fault callback
