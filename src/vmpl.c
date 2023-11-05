@@ -464,9 +464,11 @@ static int setup_ghcb(struct dune_percpu *percpu)
 
     // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
     log_debug("dune: GHCB at %p", ghcb);
+#ifdef CONFIG_GHCB_SELFTEST
     ghcb->sw_exit_code = GHCB_NAE_RUN_VMPL;
     ghcb->sw_exit_info_1 = RUN_VMPL;
     ghcb->sw_exit_info_2 = 0;
+#endif
 
     percpu->ghcb = ghcb;
     return 0;
