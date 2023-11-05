@@ -40,6 +40,7 @@
 #include "mm.h"
 #include "pmm.h"
 #include "vc.h"
+#include "serial.h"
 #include "log.h"
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
@@ -922,6 +923,11 @@ static int vmpl_init_post(struct dune_percpu *percpu)
 #ifdef CONFIG_VMPL_GHCB
     // Setup VC communication
     vc_init(percpu->ghcb_gpa, percpu->ghcb);
+#endif
+
+#ifdef CONFIG_SERIAL_PORT
+    // Setup serial port
+    serial_init();
 #endif
 
 #ifdef CONFIG_VMPL_SYSCALL

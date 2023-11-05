@@ -125,6 +125,13 @@ AC_ARG_ENABLE([ghcb-selftest],
               [enable_ghcb_selftest=no])
 AM_CONDITIONAL([ENABLE_GHCB_SELFTEST], [test "x$enable_ghcb_selftest" = "xyes"])
 
+AC_ARG_ENABLE([serial-port],
+              [AS_HELP_STRING([--enable-serial-port],
+                              [Enable serial port support])],
+              [enable_serial_port=$enableval],
+              [enable_serial_port=no])
+AM_CONDITIONAL([ENABLE_SERIAL_PORT], [test "x$enable_serial_port" = "xyes"])
+
 AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
 AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
@@ -187,6 +194,10 @@ fi
 
 if test "x$enable_ghcb_selftest" = "xyes"; then
     AC_DEFINE([CONFIG_GHCB_SELFTEST], [1], [Enable ghcb selftest support])
+fi
+
+if test "x$enable_vmpl_ghcb" = "xyes" -a "x$enable_serial_port" = "xyes"; then
+    AC_DEFINE([CONFIG_SERIAL_PORT], [1], [Enable serial port support])
 fi
 
 # 声明一个自定义的Automake变量
