@@ -48,6 +48,13 @@ AC_ARG_ENABLE([vmpl-pgtable],
               [enable_vmpl_pgtable=no])
 AM_CONDITIONAL([ENABLE_VMPL_PGTABLE], [test "x$enable_vmpl_pgtable" = "xyes"])
 
+AC_ARG_ENABLE([vmpl-seimi],
+              [AS_HELP_STRING([--enable-vmpl-seimi],
+                              [Enable seimi support])],
+              [enable_vmpl_seimi=$enableval],
+              [enable_vmpl_seimi=no])
+AM_CONDITIONAL([ENABLE_VMPL_SEIMI], [test "x$enable_vmpl_seimi" = "xyes"])
+
 AC_ARG_ENABLE([vmpl-syscall],
               [AS_HELP_STRING([--enable-vmpl-syscall],
                               [Enable syscall support])],
@@ -132,6 +139,9 @@ AC_ARG_ENABLE([serial-port],
               [enable_serial_port=no])
 AM_CONDITIONAL([ENABLE_SERIAL_PORT], [test "x$enable_serial_port" = "xyes"])
 
+AS_IF([test "x$enable_vmpl_syscall" = "xyes" -a "$x$enable_vmpl_seimi" = "xyes"],
+      [AC_MSG_ERROR([syscall and seimi can not be enabled at the same time])])
+
 AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
 AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
@@ -150,6 +160,10 @@ fi
 
 if test "x$enable_vmpl_pgtable" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_PGTABLE], [1], [Enable pgtable support])
+fi
+
+if test "x$enable_vmpl_seimi" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_SEIMI], [1], [Enable seimi support])
 fi
 
 if test "x$enable_vmpl_syscall" = "xyes"; then

@@ -10,6 +10,7 @@ lib_LTLIBRARIES = libvmpl.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
                     src/mm.c \
+                    src/seimi.c \
                     src/ghcb.c src/vmsa.c src/vc.c \
                     src/dune.S src/vsyscall.S \
                     src/serial.c \
@@ -26,6 +27,7 @@ pkgincludedir = $(includedir)/vmpl
 pkginclude_HEADERS = include/vmpl.h \
                     include/sys.h include/syscall.h \
                     include/mm.h \
+                    include/seimi.h \
                     include/apic.h \
                     include/bitmap.h \
                     include/log.h

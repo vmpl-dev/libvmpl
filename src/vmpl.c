@@ -554,7 +554,7 @@ static int setup_pmm(struct dune_percpu *percpu)
         goto failed;
     }
 
-    int order = 9;
+    uint64_t order = 9;
     rc = ioctl(dune_fd, VMPL_IOCTL_GET_PAGES, &order);
     if (rc != 0) {
         perror("dune: failed to get pages");
@@ -863,6 +863,15 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     }
 #endif
 
+#ifdef CONFIG_VMPL_SEIMI
+    // Setup SEIMI for Intra-Process Isolation
+    rc = setup_seimi(dune_fd);
+    if (rc != 0) {
+        perror("dune: failed to set SEIMI");
+        goto failed;
+    }
+#endif
+
     return 0;    
 failed:
     return rc;
@@ -982,7 +991,7 @@ int vmpl_enter(int argc, char *argv[])
     struct vmsa_config *__conf;
     struct dune_percpu *__percpu;
 
-	vmpl_init_log();
+	// vmpl_init_log();
 	log_info("vmpl_enter");
 
 	// Build assert
