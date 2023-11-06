@@ -32,6 +32,7 @@
 #endif
 
 #include "config.h"
+#include "env.h"
 #include "sys.h"
 #include "mmu.h"
 #include "apic.h"
@@ -757,6 +758,17 @@ static void vmpl_free_percpu()
     munmap(percpu, PGSIZE);
 }
 
+void vmpl_init_log() {
+	const char *log_level_str;
+	const char *show_time_str;
+
+    log_level_str = get_env_or_default("VMPL_LOG_LEVEL", "info");
+    set_log_level_str(log_level_str);
+
+    show_time_str = get_env_or_default("VMPL_LOG_SHOW_TIME", "false");
+    set_show_time(strcmp(show_time_str, "true") == 0);
+}
+
 /**
  * @brief  Initializes the VMPL library.
  * @note   Common initialization for both pre and post
@@ -970,6 +982,7 @@ int vmpl_enter(int argc, char *argv[])
     struct vmsa_config *__conf;
     struct dune_percpu *__percpu;
 
+	vmpl_init_log();
 	log_info("vmpl_enter");
 
 	// Build assert
