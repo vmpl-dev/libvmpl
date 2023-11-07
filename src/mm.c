@@ -101,26 +101,26 @@ int pgtable_free(uint64_t *pgd)
 int pgtable_selftest(uint64_t *pgd, uint64_t va)
 {
     int rc;
-    uint64_t pa;
+    pte_t *ptep;
     int level;
 
     log_debug("pgtable selftest");
 
-    rc = lookup_address_in_pgd(pgd, va, &level, &pa);
+    rc = lookup_address_in_pgd(pgd, va, &level, &ptep);
     if (rc) {
         log_err("lookup address in pgd failed");
         return rc;
     }
 
-    log_debug("level: %d, pa: %lx", level, pa);
+    log_debug("level: %d, pa: %lx", level, pte_addr(*ptep));
 
-    rc = lookup_address(va, &level, &pa);
+    rc = lookup_address(va, &level, &ptep);
     if (rc) {
         log_err("lookup address failed");
         return rc;
     }
 
-    log_debug("level: %d, pa: %lx", level, pa);
+    log_debug("level: %d, pa: %lx", level, pte_addr(*ptep));
 
     return 0;
 }
@@ -146,7 +146,7 @@ int pgtable_unmap(uint64_t *pgd, uint64_t va, size_t len, int level)
     return 0;
 }
 
-int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, uint64_t *pa)
+int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
     log_debug("lookup address in pgd");
     log_trace("pgd: %p, va: %lx", pgd, va);
@@ -188,8 +188,8 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, uint64_t *pa)
         return -EINVAL;
     }
 
-    if (pa)
-        *pa = pte_addr(*pte);
+    if (ptep)
+        *ptep = pte;
 
     if (level)
         *level = 1;
@@ -197,7 +197,7 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, uint64_t *pa)
     return 0;
 }
 
-int lookup_address(uint64_t va, uint64_t *level, uint64_t *pa)
+int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep)
 {
     log_debug("lookup address");
     if (this_pgd == NULL) {
@@ -205,7 +205,7 @@ int lookup_address(uint64_t va, uint64_t *level, uint64_t *pa)
         return -EINVAL;
     }
 
-    return lookup_address_in_pgd(this_pgd, va, level, pa);
+    return lookup_address_in_pgd(this_pgd, va, level, ptep);
 }
 
 uint64_t pgtable_pa_to_va(uint64_t pa)

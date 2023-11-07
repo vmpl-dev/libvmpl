@@ -2,6 +2,7 @@
 #define _LIBVMPL_MM_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <errno.h>
@@ -90,6 +91,10 @@ struct pte_t {
 #define PDPE_PRESENT  (1UL << 0)
 #define PDE_PRESENT   (1UL << 0)
 #define PTE_PRESENT   (1UL << 0)
+#define PTE_WRITE   (1UL << 1)
+#define PTE_USER    (1UL << 2)
+#define PTE_ACCESSED (1UL << 5)
+#define PTE_DIRTY    (1UL << 6)
 
 #define PML4E_BAD (1UL << 1)
 #define PDPE_BAD  (1UL << 1)
@@ -157,8 +162,8 @@ int pgtable_mmap(uint64_t *pgd, uint64_t va, size_t len, int perm);
 int pgtable_mprotect(uint64_t *pgd, uint64_t va, size_t len, int perm);
 int pgtable_unmap(uint64_t *pgd, uint64_t va, size_t len, int level);
 
-int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, uint64_t *pa);
-int lookup_address(uint64_t va, uint64_t *level, uint64_t *pa);
+int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep);
+int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep);
 
 uint64_t pgtable_pa_to_va(uint64_t pa);
 uint64_t pgtable_va_to_pa(uint64_t va);
