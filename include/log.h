@@ -23,6 +23,7 @@
 void set_log_level(int level);
 void set_log_level_str(const char *level_str);
 void set_show_time(bool show);
+void log_init();
 void log_message(int level, const char *format, ...);
 
 #define log_trace(fmt, ...) log_message(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)

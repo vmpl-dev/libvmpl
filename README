@@ -1,3 +1,8 @@
+## Build:
+```
+./configure --enable-dune-boot --enable-pgtable-selftest --enable-vmpl-pgtable --enable-vmpl-pgtable
+```
+
 ## Plan:
 [√] APIC
 [√] trap handler

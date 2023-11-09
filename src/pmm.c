@@ -7,7 +7,7 @@ pmm *pmm_init(uint64_t *pages) {
     pmm *manager = malloc(sizeof(pmm));
     if (!manager) return NULL;
 
-    manager->bitmap = bmap_alloc(BITMAP_SIZE, BITMAP_TYPE_SIMPLE);
+    manager->bitmap = bitmap_alloc(BITMAP_SIZE);
     if (!manager->bitmap) {
         free(manager);
         return NULL;
@@ -20,8 +20,8 @@ pmm *pmm_init(uint64_t *pages) {
 
 uint64_t pmm_alloc(pmm *manager) {
     for (size_t i = 0; i < BITMAP_SIZE; i++) {
-        if (!bmap_test(manager->bitmap, i)) {
-            bmap_set(manager->bitmap, i);
+        if (!bitmap_test(manager->bitmap, i)) {
+            bitmap_set(manager->bitmap, i);
             return manager->pages[i];
         }
     }
@@ -32,7 +32,7 @@ uint64_t pmm_alloc(pmm *manager) {
 void pmm_free(pmm *manager, const uint64_t page) {
     for (size_t i = 0; i < BITMAP_SIZE; i++) {
         if (manager->pages[i] == page) {
-            bmap_clear(manager->bitmap, i);
+            bitmap_clear(manager->bitmap, i);
             return;
         }
     }
@@ -41,7 +41,7 @@ void pmm_free(pmm *manager, const uint64_t page) {
 int pmm_is_allocated(pmm *manager, const uint64_t page) {
     for (size_t i = 0; i < BITMAP_SIZE; i++) {
         if (manager->pages[i] == page) {
-            return bmap_test(manager->bitmap, i);
+            return bitmap_test(manager->bitmap, i);
         }
     }
 
@@ -49,7 +49,7 @@ int pmm_is_allocated(pmm *manager, const uint64_t page) {
 }
 
 void pmm_destroy(pmm *manager) {
-    bmap_free(manager->bitmap);
+    bitmap_free(manager->bitmap);
     free(manager);
 }
 

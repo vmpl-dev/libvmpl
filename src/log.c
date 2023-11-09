@@ -1,3 +1,4 @@
+#include "env.h"
 #include "log.h"
 
 #include <stdio.h>
@@ -60,6 +61,17 @@ void set_log_level_str(const char *level_str) {
 
 void set_show_time(bool show) {
     show_time = show;
+}
+
+void log_init() {
+	const char *log_level_str;
+	const char *show_time_str;
+
+    log_level_str = get_env_or_default("VMPL_LOG_LEVEL", "info");
+    set_log_level_str(log_level_str);
+
+    show_time_str = get_env_or_default("VMPL_LOG_SHOW_TIME", "false");
+    set_show_time(strcmp(show_time_str, "true") == 0);
 }
 
 int padding_str(char text[10]) {

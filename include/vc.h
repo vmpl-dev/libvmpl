@@ -152,7 +152,7 @@ static inline void sev_es_wr_ghcb_msr(uint64_t val)
 
 static inline void vc_vmgexit(void)
 {
-    __asm__ volatile("rep; vmmcall");
+    __asm__ volatile("vmgexit");
 }
 
 void vc_run_vmpl(VMPL vmpl);

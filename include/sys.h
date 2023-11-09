@@ -690,7 +690,7 @@ static inline void int3() {
 #define PVALIDATE_RET_ERR 17
 
 // Pvalidate a given memory region
-static inline pvalidate(uint64_t va, uint32_t page_size, uint32_t validation) {
+static inline uint32_t pvalidate(uint64_t va, uint32_t page_size, uint32_t validation) {
     uint32_t ret;
     uint32_t carry;
 

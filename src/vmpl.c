@@ -62,6 +62,8 @@ struct dune_percpu {
     struct pmm *pmm;
     void *lstar;
     void *vsyscall;
+	void *dune_syscall;
+	void *dune_vsyscall;
 } __attribute__((packed));
 
 static uint64_t gdt_template[NR_GDT_ENTRIES] = {
@@ -401,13 +403,31 @@ static void setup_syscall(struct dune_percpu *percpu)
         perror("dune: failed to remap syscall page");
         exit(EXIT_FAILURE);
     }
+
+    // remap dune syscall page to syscall page
+    percpu->dune_syscall = mremap((void*)__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
 #else
     // unmap syscall page
     munmap(vaddr, PAGE_SIZE);
-#endif
+
     // remap dune syscall page to syscall page
     mremap(__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
+#endif
 }
+
+#ifdef CONFIG_REMAP_SYSCALL
+static void restore_syscall(struct dune_percpu *percpu)
+{
+    uint64_t lstar, vaddr;
+    lstar = rdmsr(MSR_LSTAR);
+    vaddr = PAGE_ALIGN_DOWN(lstar);
+
+    mremap(percpu->lstar, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
+    mremap(percpu->dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, __dune_syscall);
+}
+#else
+static void restore_syscall(struct dune_percpu *percpu) { }
+#endif
 
 /**
  * Sets up the vsyscall handler.
@@ -429,13 +449,29 @@ static void setup_vsyscall(struct dune_percpu *percpu)
         perror("dune: failed to remap vsyscall page");
         exit(EXIT_FAILURE);
     }
+
+    // remap dune vsyscall page to vsyscall page
+    percpu->dune_vsyscall = mremap((void*)__dune_vsyscall_page, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
 #else
     // unmap vsyscall page
     munmap(vsyscall_addr, PAGE_SIZE);
-#endif
+
     // remap dune vsyscall page to vsyscall page
     mremap(__dune_vsyscall_page, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
+#endif
 }
+
+#ifdef CONFIG_REMAP_VSYSCALL
+static void restore_vsyscall(struct dune_percpu *percpu)
+{
+    void *vsyscall_addr = (void *)VSYSCALL_ADDR;
+
+    mremap(percpu->vsyscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
+    mremap(percpu->dune_vsyscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, __dune_vsyscall_page);
+}
+#else
+static void restore_vsyscall(struct dune_percpu *percpu) { }
+#endif
 
 /**
  * Sets up the GHCB.
@@ -525,13 +561,19 @@ static void vmpl_pf_handler(struct dune_tf *tf)
 {
 	int rc, level;
 	uint64_t cr2 = read_cr2();
-	uint64_t pa;
+	pte_t *ptep;
 	log_warn("dune: page fault at 0x%016lx, error-code = %x", cr2, tf->err);
-	rc = lookup_address(cr2, &level, &pa);
+	rc = lookup_address(cr2, &level, &ptep);
 	if (rc != 0) {
-		log_err("dune: page fault at unmapped addr 0x%016lx", cr2);
+        // Page fault due to unmapped address, pdp
+        log_err("dune: page fault at unmapped addr 0x%016lx", cr2);
+        // TODO: forward trap frame to guest OS
+        // uint64_t page = pmm_alloc(percpu->pmm);
+        // *ptep = page | PTE_P | PTE_W | BIT(51);
+        // syscall(__NR_exit, 0xFFFF0000 | T_PF);
 	} else {
-		log_warn("dune: page fault at mapped addr 0x%016lx", cr2);
+        // Page fault due to access right violation, or non-present page.
+        *ptep |= PTE_W;
 	}
 
 	exit(EXIT_FAILURE);
@@ -758,16 +800,7 @@ static void vmpl_free_percpu()
     munmap(percpu, PGSIZE);
 }
 
-void vmpl_init_log() {
-	const char *log_level_str;
-	const char *show_time_str;
-
-    log_level_str = get_env_or_default("VMPL_LOG_LEVEL", "info");
-    set_log_level_str(log_level_str);
-
-    show_time_str = get_env_or_default("VMPL_LOG_SHOW_TIME", "false");
-    set_show_time(strcmp(show_time_str, "true") == 0);
-}
+static bool vmpl_initialized = false;
 
 /**
  * @brief  Initializes the VMPL library.
@@ -777,6 +810,11 @@ void vmpl_init_log() {
 static int vmpl_init()
 {
     int rc;
+    if (vmpl_initialized) {
+        log_debug("dune: already initialized");
+        return 0;
+    }
+
     log_info("vmpl_init");
 
     // Open dune_fd
@@ -802,8 +840,10 @@ static int vmpl_init()
     }
 #endif
 
+    vmpl_initialized = true;
     return 0;
 failed:
+	apic_cleanup();
     return rc;
 }
 
@@ -905,7 +945,8 @@ static int dune_boot(struct dune_percpu *percpu)
         // STEP 3: long jump into the new code segment
         "mov %2, %%rax\n"
         "pushq %%rax\n"
-        "pushq $1f\n"
+        "leaq 1f(%%rip),%%rax\n"
+        "pushq %%rax\n"
         "lretq\n"
         "1:\n"
         "nop\n"

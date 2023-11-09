@@ -6,7 +6,7 @@
 #define BITMAP_SIZE 512     // For 4KB pages
 
 typedef struct {
-    bmap *bitmap;
+    bitmap *bitmap;
     uint64_t *pages;
 } pmm;
 

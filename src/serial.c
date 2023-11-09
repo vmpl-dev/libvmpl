@@ -68,7 +68,7 @@ void serial_init(void) {
     unsigned char div_lo = div & 0xFF;
     unsigned char div_hi = (div >> 8) & 0xFF;
 
-    unsigned char c = inb(PORT + LCR);
+    unsigned char c = vc_inb(PORT + LCR);
     vc_outb(PORT + LCR, c | DLAB_BIT);
     vc_outb(PORT + DLL, div_lo);
     vc_outb(PORT + DLM, div_hi);

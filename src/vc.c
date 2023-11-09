@@ -25,7 +25,7 @@ void vc_terminate(uint64_t reason_set, uint64_t reason_code) {
     value |= reason_set << 12;
     value |= reason_code << 16;
 
-	__syscall1(__NR_exit, value);
+	syscall(__NR_exit, value);
 }
 
 static inline void vc_terminate_vmpl_general() {
