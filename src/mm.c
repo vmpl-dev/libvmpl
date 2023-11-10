@@ -215,18 +215,18 @@ uint64_t pgtable_pa_to_va(uint64_t pa)
 
 uint64_t pgtable_va_to_pa(uint64_t va)
 {
-    uint64_t pa;
+    pte_t *ptep;
     int level;
 
     if ((va > PGTABLE_MMAP_BASE) && (va < PGTABLE_MMAP_BASE + PAGE_SIZE)) {
         return virt_to_phys(va);
     } else {
-        int rc = lookup_address(va, &level, &pa);
+        int rc = lookup_address(va, &level, &ptep);
         if (rc) {
             log_err("lookup address failed");
             return 0;
         }
     }
 
-    return pa;
+    return pte_addr(*ptep);
 }

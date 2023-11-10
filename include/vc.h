@@ -164,6 +164,6 @@ uint16_t vc_inw(uint16_t port);
 void vc_outb(uint16_t port, uint8_t value);
 uint8_t vc_inb(uint16_t port);
 
-void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va);
+void vc_init(Ghcb *ghcb_va);
 
 #endif

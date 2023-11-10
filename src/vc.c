@@ -506,8 +506,13 @@ void vc_early_make_pages_private(PhysFrame begin, PhysFrame end) {
     perform_page_state_change(ghcb, begin, end, PSC_PRIVATE);
 }
 
-void vc_init(uint64_t ghcb_pa, Ghcb *ghcb_va) {
-    log_info("setup VC communication");
+void vc_init(Ghcb *ghcb_va) {
+	PhysAddr ghcb_pa;
+	log_info("setup VC");
+
+	ghcb_pa = (PhysAddr)pgtable_va_to_pa((VirtAddr)ghcb_va);
+    log_debug("ghcb_pa: %lx", ghcb_pa);
+
     vc_establish_protocol();
     vc_register_ghcb(ghcb_pa);
     vc_set_ghcb(ghcb_va);

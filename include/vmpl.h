@@ -133,7 +133,7 @@ extern int vmpl_enter(int argc, char *argv[]);
 #define VMPL_ENTER                  \
 	do                              \
 	{                               \
-		if (vmpl_enter(NULL, NULL)) \
+		if (vmpl_enter(1, NULL)) 	\
 		{                           \
 			return 1;               \
 		}                           \

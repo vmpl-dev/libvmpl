@@ -56,7 +56,6 @@ struct dune_percpu {
 	uint64_t in_usermode;
 	struct Tss tss;
 	uint64_t gdt[NR_GDT_ENTRIES];
-    uint64_t ghcb_gpa;
     struct Ghcb *ghcb;
     uint64_t *pgd;
     struct pmm *pmm;
@@ -181,7 +180,7 @@ static void dump_percpu(struct dune_percpu *percpu)
     log_debug("kfs_base: %lx ufs_base: %lx", percpu->kfs_base, percpu->ufs_base);
     log_debug("in_usermode: %lx", percpu->in_usermode);
     log_debug("tss: %p gdt: %p", &percpu->tss, percpu->gdt);
-    log_debug("ghcb_gpa: %lx ghcb: %p", percpu->ghcb_gpa, percpu->ghcb);
+    log_debug("ghcb: %p", percpu->ghcb);
     log_debug("lstar: %p vsyscall: %p", percpu->lstar, percpu->vsyscall);
 }
 
@@ -484,19 +483,12 @@ static int setup_ghcb(struct dune_percpu *percpu)
     Ghcb *ghcb;
     log_info("setup ghcb");
 
-    // 获取ghcb, 用于hypercall
-    rc = ioctl(dune_fd, VMPL_IOCTL_GET_GHCB, &percpu->ghcb_gpa);
-    if (rc != 0) {
-        perror("dune: failed to get GHCB");
-        goto failed;
-    }
-
-    log_debug("dune: GHCB_GPA at 0x%lx", percpu->ghcb_gpa);
     // 映射ghcb, 用于hypercall
     ghcb = mmap((void *)GHCB_MMAP_BASE, PAGE_SIZE, PROT_READ | PROT_WRITE,
                              MAP_SHARED | MAP_FIXED, dune_fd, 0);
     if (ghcb == MAP_FAILED) {
         perror("dune: failed to map GHCB");
+        rc = -ENOMEM;
         goto failed;
     }
 
@@ -984,7 +976,7 @@ static int vmpl_init_post(struct dune_percpu *percpu)
 
 #ifdef CONFIG_VMPL_GHCB
     // Setup VC communication
-    vc_init(percpu->ghcb_gpa, percpu->ghcb);
+    vc_init(percpu->ghcb);
 #endif
 
 #ifdef CONFIG_SERIAL_PORT
