@@ -6,7 +6,7 @@ AM_CFLAGS = -Wall -g -O3 -MD
 AM_LDFLAGS = -L. -lvmpl
 
 # Specify shared libraries to be built
-lib_LTLIBRARIES = libvmpl.la
+lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
                     src/mm.c \
@@ -21,6 +21,9 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/env.c \
                     src/log.c
 libvmpl_la_LDFLAGS = -version-info 1:0:0
+
+libdunify_la_SOURCES = src/dunify.c
+libdunify_la_LDFLAGS = -fPIC -shared -lvmpl -ldl -version-info 1:0:0
 
 # Specify headers to be installed
 pkgincludedir = $(includedir)/vmpl
