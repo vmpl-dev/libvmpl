@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "config.h"
 #include "sys.h"
 #include "globals.h"
 #include "ghcb.h"
@@ -164,6 +165,10 @@ uint16_t vc_inw(uint16_t port);
 void vc_outb(uint16_t port, uint8_t value);
 uint8_t vc_inb(uint16_t port);
 
+#ifdef CONFIG_VMPL_GHCB
 void vc_init(Ghcb *ghcb_va);
+#else
+static inline void vc_init(Ghcb *ghcb_va) {}
+#endif
 
 #endif

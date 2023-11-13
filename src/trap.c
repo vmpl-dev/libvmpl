@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <limits.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
 
@@ -19,54 +20,6 @@
 #include "log.h"
 #include "syscall.h"
 // #include "trap.h"
-
-/**
- * @brief Page fault callback
- * @note This is called when an exception occurs. The callback should
- * 	 execute the exit to exit the VMPL.
- */
-static void vmpl_default_handler(struct dune_tf *tf)
-{
-	// Exit the VMPL and return to the guest OS.
-	exit(EXIT_FAILURE);
-}
-
-/**
- * @brief  Delegate handler for exceptions that should be handled by the
- *   guest OS (e.g., #NM, #TS, #NP, #GP)
- * @param  *tf: Trap frame pointer
- * @retval None
- */
-static void vmpl_delegate_handler(struct dune_tf *tf)
-{
-	// We should pass the trap frame to the guest OS, which should be able to
-	// handle the exception.
-	syscall(__NR_exit, 0xFFFF0000, (long)tf);
-}
-
-/**
- * @brief Page fault handler
- * @note We should wrap cr2, tf->err, and tf pointer in a struct and pass
- * 	 that to the status code. The status code should be handled by the
- *   guest OS, which should be able to handle the page fault.
- * @param tf Trap frame
- */
-static void vmpl_pf_handler(struct dune_tf *tf)
-{
-	uint64_t cr2 = read_cr2();
-	log_warn("dune: page fault at 0x%016lx, error-code = %x", cr2, tf->err);
-	exit(EXIT_FAILURE);
-}
-
-/**
- * @brief VMM communication handler
- * @note This is called when an exception occurs. The callback should
- * 	 execute the exit to exit the VMPL.
- */
-static void vmpl_vc_handler(struct dune_tf *tf)
-{
-	exit(EXIT_FAILURE);
-}
 
 /**
  * @brief  Exception messages
@@ -103,32 +56,7 @@ static const char *exceptions[] = {
 };
 
 static dune_syscall_cb syscall_cb;
-static dune_intr_cb intr_cbs[IDT_ENTRIES] = {
-	[T_DE] = vmpl_default_handler,			// 0. Divide-by-zero Error
-	[T_DB] = vmpl_default_handler,			// 1. Debug Exception
-	[T_NMI] = vmpl_default_handler,			// 2. Non-Maskable Interrupt
-	[T_BP] = vmpl_default_handler,			// 3. #BP Breakpoint Exception
-	[T_OF] = vmpl_default_handler,			// 4. #OF Overflow Exception
-	[T_BR] = vmpl_default_handler,			// 5. #BR BOUND Range Exceeded Exception
-	[T_UD] = vmpl_default_handler,			// 6. #UD Invalid Opcode Exception
-	[T_NM] = vmpl_delegate_handler,			// 7. #NM Device Not Available Exception
-	[T_DF] = vmpl_delegate_handler,			// 8. #DF Double Fault Exception
-	[T_TS] = vmpl_delegate_handler,			// 10. #TS Invalid TSS Exception
-	[T_NP] = vmpl_delegate_handler,			// 11. #NP Segment Not Present Exception
-	[T_SS] = vmpl_delegate_handler,			// 12. #SS Stack Fault Exception
-	[T_GP] = vmpl_delegate_handler,			// 13. #GP General Protection Exception
-	[T_PF] = vmpl_pf_handler,				// 14. #PF Page Fault Exception
-	[T_MF] = vmpl_default_handler,			// 16. #MF x87 FPU Floating-Point Error
-	[T_AC] = vmpl_default_handler,			// 17. #AC Alignment Check Exception
-	[T_MC] = vmpl_default_handler,			// 18. #MC Machine Check Exception
-	[T_XF] = vmpl_default_handler, 			// 19. #XF SIMD Floating-Point Exception
-	[T_CP] = vmpl_default_handler,			// 21. #CP Control Protection Exception
-	[22 ... 27] = vmpl_default_handler,		// 22-27. Reserved
-	[T_HV] = vmpl_default_handler,			// 28. #HV Hypervisor Injection Exception
-	[T_VC] = vmpl_vc_handler,				// 29. #VC VMM Communication Exception
-	[T_SX] = vmpl_default_handler,			// 30. #SX Security Exception
-	[31 ... 255] = vmpl_default_handler,	// 31-255. Reserved
-};
+static dune_intr_cb intr_cbs[IDT_ENTRIES];
 
 int dune_register_intr_handler(int vec, dune_intr_cb cb)
 {
@@ -235,12 +163,16 @@ void dune_syscall_handler(struct dune_tf *tf)
 void dune_trap_handler(int num, struct dune_tf *tf)
 {
 	if (intr_cbs[num]) {
-		log_warn("dune: handling exception %d (%s)", num, exceptions[num]);
 		intr_cbs[num](tf);
 		return;
 	} else {
-		log_err("dune: unhandled exception %d (%s)", num, exceptions[num]);
+#ifdef CONFIG_VMPL_DEBUG
 		dune_dump_trap_frame(tf);
-		exit(EXIT_FAILURE);
+#endif
+		long ret = syscall(ULONG_MAX, num, (unsigned long)tf);
+		if (ret != 0) {
+			log_err("Unable to handle trap %d, error code %d", num, ret);
+			exit(EXIT_FAILURE);
+		}
 	}
 }

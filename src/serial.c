@@ -58,6 +58,7 @@ void serial_in(char *string) {
     }
 }
 
+#ifdef CONFIG_SERIAL_PORT
 void serial_init(void) {
     vc_outb(PORT + IER, 0); /* Disable all interrupts */
     vc_outb(PORT + FCR, 0); /* Disable all FIFOs */
@@ -76,3 +77,4 @@ void serial_init(void) {
 
     SERIAL_READY = true;
 }
+#endif

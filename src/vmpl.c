@@ -23,6 +23,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <sched.h>
+#include <limits.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -357,6 +358,7 @@ static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
  * 
  * @return 0 on success, otherwise an error code.
  */
+#ifdef CONFIG_VMPL_CPUSET
 static int setup_cpuset()
 {
     int cpu;
@@ -377,6 +379,13 @@ static int setup_cpuset()
 
     return 0;
 }
+#else
+static int setup_cpuset()
+{
+    return 0;
+}
+#endif
+
 
 /**
  * Sets up the system call handler.
@@ -385,6 +394,7 @@ static int setup_cpuset()
  * 
  * @return void
  */
+#ifdef CONFIG_VMPL_SYSCALL
 static void setup_syscall(struct dune_percpu *percpu)
 {
 	uint64_t lstar, vaddr;
@@ -413,6 +423,9 @@ static void setup_syscall(struct dune_percpu *percpu)
     mremap(__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
 #endif
 }
+#else
+static void setup_syscall(struct dune_percpu *percpu) { }
+#endif
 
 #ifdef CONFIG_REMAP_SYSCALL
 static void restore_syscall(struct dune_percpu *percpu)
@@ -435,6 +448,7 @@ static void restore_syscall(struct dune_percpu *percpu) { }
  * 
  * @return void
  */
+#ifdef CONFIG_VMPL_VSYSCALL
 static void setup_vsyscall(struct dune_percpu *percpu)
 {
     // 1. 设置vsyscall
@@ -459,6 +473,9 @@ static void setup_vsyscall(struct dune_percpu *percpu)
     mremap(__dune_vsyscall_page, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
 #endif
 }
+#else
+static void setup_vsyscall(struct dune_percpu *percpu) { }
+#endif
 
 #ifdef CONFIG_REMAP_VSYSCALL
 static void restore_vsyscall(struct dune_percpu *percpu)
@@ -477,6 +494,7 @@ static void restore_vsyscall(struct dune_percpu *percpu) { }
  * 
  * @return void
  */
+#ifdef CONFIG_VMPL_GHCB
 static int setup_ghcb(struct dune_percpu *percpu)
 {
     int rc;
@@ -505,12 +523,16 @@ static int setup_ghcb(struct dune_percpu *percpu)
 failed:
     return rc;
 }
+#else
+static int setup_ghcb(struct dune_percpu *percpu) { return 0; }
+#endif
 
 /**
  * Sets up the page table.
  * 
  * @return void
  */
+#ifdef CONFIG_VMPL_PGTABLE
 static int setup_pgtable(struct dune_percpu *percpu)
 {
     int rc;
@@ -548,27 +570,14 @@ static int setup_pgtable(struct dune_percpu *percpu)
 failed:
     return rc;
 }
+#else
+static int setup_pgtable(struct dune_percpu *percpu) { return 0; }
+#endif
 
+#ifdef CONFIG_VMPL_PGTABLE
 static void vmpl_pf_handler(struct dune_tf *tf)
 {
-	int rc, level;
-	uint64_t cr2 = read_cr2();
-	pte_t *ptep;
-	log_warn("dune: page fault at 0x%016lx, error-code = %x", cr2, tf->err);
-	rc = lookup_address(cr2, &level, &ptep);
-	if (rc != 0) {
-        // Page fault due to unmapped address, pdp
-        log_err("dune: page fault at unmapped addr 0x%016lx", cr2);
-        // TODO: forward trap frame to guest OS
-        // uint64_t page = pmm_alloc(percpu->pmm);
-        // *ptep = page | PTE_P | PTE_W | BIT(51);
-        // syscall(__NR_exit, 0xFFFF0000 | T_PF);
-	} else {
-        // Page fault due to access right violation, or non-present page.
-        *ptep |= PTE_W;
-	}
-
-	exit(EXIT_FAILURE);
+	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
 static int setup_pmm(struct dune_percpu *percpu)
@@ -616,6 +625,9 @@ static int setup_pmm(struct dune_percpu *percpu)
 failed:
     return rc;
 }
+#else
+static int setup_pmm(struct dune_percpu *percpu) { return 0; }
+#endif
 
 /**
  * @brief  Setup stack for VMPL library
@@ -823,19 +835,18 @@ static int vmpl_init()
     // Setup IDT
     setup_idt();
 
-#ifdef CONFIG_VMPL_APIC
     // Setup APIC
     rc = apic_setup();
     if (rc != 0) {
         perror("dune: failed to setup APIC");
-        goto failed;
+        goto failed_apic;
     }
-#endif
 
     vmpl_initialized = true;
     return 0;
-failed:
+failed_apic:
 	apic_cleanup();
+failed:
     return rc;
 }
 
@@ -848,14 +859,12 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     int rc;
     log_info("vmpl_init_pre");
 
-#ifdef CONFIG_VMPL_CPUSET
     // Setup CPU set
     rc = setup_cpuset();
     if (rc != 0) {
         perror("dune: failed to setup CPU set");
         goto failed;
     }
-#endif
 
     // Setup Stack
     rc = setup_stack();
@@ -864,14 +873,12 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
         goto failed;
     }
 
-#ifdef CONFIG_VMPL_GHCB
     // Setup GHCB for hypercall
     rc = setup_ghcb(percpu);
     if (rc != 0) {
         perror("dune: failed to setup GHCB");
         goto failed;
     }
-#endif
 
     // Setup segments registers
     setup_vmsa(percpu, config);
@@ -879,7 +886,6 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     // Setup GDT for hypercall
     setup_gdt(percpu);
 
-#ifdef CONFIG_VMPL_PGTABLE
     // Setup pgtable mapping
 	rc = setup_pgtable(percpu);
     if (rc != 0) {
@@ -893,16 +899,13 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
         perror("dune: failed to setup pmm");
         goto failed;
     }
-#endif
 
-#ifdef CONFIG_VMPL_SEIMI
     // Setup SEIMI for Intra-Process Isolation
     rc = setup_seimi(dune_fd);
     if (rc != 0) {
         perror("dune: failed to set SEIMI");
         goto failed;
     }
-#endif
 
     return 0;    
 failed:
@@ -913,6 +916,7 @@ failed:
  * dune_boot - Brings the user-level OS online
  * @percpu: the thread-local data
  */
+#ifdef CONFIG_DUNE_BOOT
 static int dune_boot(struct dune_percpu *percpu)
 {
 	struct tptr _idtr, _gdtr;
@@ -956,6 +960,12 @@ static int dune_boot(struct dune_percpu *percpu)
 
 	return 0;
 }
+#else
+static int dune_boot(struct dune_percpu *percpu)
+{
+    return 0;
+}
+#endif
 
 /**
  * Initializes the VMPL library after the main program has started.
@@ -974,25 +984,17 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     wrmsrl(MSR_FS_BASE, percpu->kfs_base);
     wrmsrl(MSR_GS_BASE, (uint64_t)percpu);
 
-#ifdef CONFIG_VMPL_GHCB
     // Setup VC communication
     vc_init(percpu->ghcb);
-#endif
 
-#ifdef CONFIG_SERIAL_PORT
     // Setup serial port
     serial_init();
-#endif
 
-#ifdef CONFIG_VMPL_SYSCALL
     // Setup syscall handler
     setup_syscall(percpu);
-#endif
 
-#ifdef CONFIG_VMPL_VSYSCALL
     // Setup vsyscall handler
     setup_vsyscall(percpu);
-#endif
 
     return 0;
 }
@@ -1024,7 +1026,7 @@ int vmpl_enter(int argc, char *argv[])
     struct vmsa_config *__conf;
     struct dune_percpu *__percpu;
 
-	// vmpl_init_log();
+    log_init();
 	log_info("vmpl_enter");
 
 	// Build assert
@@ -1078,9 +1080,7 @@ int vmpl_enter(int argc, char *argv[])
         goto failed;
     }
 
-#ifdef CONFIG_DUNE_BOOT
     dune_boot(__percpu);
-#endif
     vmpl_init_post(__percpu);
     vmpl_init_test();
 

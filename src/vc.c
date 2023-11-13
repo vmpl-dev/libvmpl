@@ -506,6 +506,7 @@ void vc_early_make_pages_private(PhysFrame begin, PhysFrame end) {
     perform_page_state_change(ghcb, begin, end, PSC_PRIVATE);
 }
 
+#ifdef CONFIG_VMPL_GHCB
 void vc_init(Ghcb *ghcb_va) {
 	PhysAddr ghcb_pa;
 	log_info("setup VC");
@@ -517,3 +518,4 @@ void vc_init(Ghcb *ghcb_va) {
     vc_register_ghcb(ghcb_pa);
     vc_set_ghcb(ghcb_va);
 }
+#endif

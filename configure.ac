@@ -34,6 +34,12 @@ AC_ARG_ENABLE([vmpl-apic],
               [enable_vmpl_apic=no])
 AM_CONDITIONAL([ENABLE_VMPL_APIC], [test "x$enable_vmpl_apic" = "xyes"])
 
+AC_ARG_ENABLE([vmpl-msr-protocol], [AS_HELP_STRING([--enable-vmpl-msr-protocol],
+                                                    [Enable msr protocol support])],
+              [enable_vmpl_msr_protocol=$enableval],
+              [enable_vmpl_msr_protocol=no])
+AM_CONDITIONAL([ENABLE_VMPL_MSR_PROTOCOL], [test "x$enable_vmpl_msr_protocol" = "xyes"])
+
 AC_ARG_ENABLE([vmpl-ghcb],
               [AS_HELP_STRING([--enable-vmpl-ghcb],
                               [Enable ghcb support])],
@@ -152,6 +158,10 @@ fi
 
 if test "x$enable_vmpl_apic" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_APIC], [1], [Enable apic support])
+fi
+
+if test "x$enable_vmpl_msr_protocol" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_MSR_PROTOCOL], [1], [Enable msr protocol support])
 fi
 
 if test "x$enable_vmpl_ghcb" = "xyes"; then

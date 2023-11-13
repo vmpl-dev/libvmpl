@@ -26,6 +26,7 @@ libvmpl_la_LDFLAGS = -version-info 1:0:0
 pkgincludedir = $(includedir)/vmpl
 pkginclude_HEADERS = include/vmpl.h \
                     include/sys.h include/syscall.h \
+                    include/vc.h \
                     include/mm.h \
                     include/seimi.h \
                     include/apic.h \
