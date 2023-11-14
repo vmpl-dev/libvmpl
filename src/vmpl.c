@@ -282,6 +282,7 @@ static void setup_idt(void)
  * 
  * @return void
  */
+#ifdef CONFIG_VMPL_SIGNAL
 static void setup_signal(void)
 {
     size_t i;
@@ -310,6 +311,9 @@ static void setup_signal(void)
             err(1, "sigaction() %d", i);
     }
 }
+#else
+static void setup_signal(void) { }
+#endif
 
 /**
  * Sets up the segment registers.

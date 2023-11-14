@@ -27,6 +27,13 @@ AC_ARG_ENABLE([vmpl-cpuset],
               [enable_vmpl_cpuset=no])
 AM_CONDITIONAL([ENABLE_VMPL_CPUSET], [test "x$enable_vmpl_cpuset" = "xyes"])
 
+AC_ARG_ENABLE([vmpl-signal],
+              [AS_HELP_STRING([--enable-vmpl-signal],
+                              [Enable signal support])],
+              [enable_vmpl_signal=$enableval],
+              [enable_vmpl_signal=no])
+AM_CONDITIONAL([ENABLE_VMPL_SIGNAL], [test "x$enable_vmpl_signal" = "xyes"])
+
 AC_ARG_ENABLE([vmpl-apic],
               [AS_HELP_STRING([--enable-vmpl-apic],
                               [Enable apic support])],
@@ -158,6 +165,10 @@ fi
 
 if test "x$enable_vmpl_apic" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_APIC], [1], [Enable apic support])
+fi
+
+if test "x$enable_vmpl_signal" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_SIGNAL], [1], [Enable signal support])
 fi
 
 if test "x$enable_vmpl_msr_protocol" = "xyes"; then
