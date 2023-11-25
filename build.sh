@@ -2,6 +2,8 @@
 
 # Install dependencies
 export CC=musl-gcc
+export CC='clang --sysroot=/usr/local/musl -stdlib=libc'
+export CC='clang --target=x86_64-linux-musl --sysroot=/usr/local/musl -nodefaultlibs -std=c11 -lgcc -ldl -lc'
 
 # Create build directory
 mkdir -p build

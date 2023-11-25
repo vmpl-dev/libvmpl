@@ -8,7 +8,7 @@ project('vmpl', ['c'],
         'debug=true',
         'strip=true',
         'b_lto=true',
-        'cpp_std=c11',
+        'cpp_std=c++17',
         'c_std=c11',
         'c_args=-O3',
         'c_link_args=-O3',
@@ -113,6 +113,9 @@ add_project_arguments('-include', 'config.h', language : 'c')
 # Specify the compiler flags
 add_project_arguments('-MD', '-fasm', language : 'c')
 
+# Import the pkgconfig module
+pkgconfig = import('pkgconfig')
+
 # Specify shared libraries to be built
 libvmpl_sources = files(
     'src/vmpl.c',
@@ -138,6 +141,15 @@ libvmpl = library('vmpl', libvmpl_sources,
     install : true,
 )
 
+# Generate the vmpl.pc file
+pkgconfig.generate(
+    name : 'vmpl',
+    description : 'VMPL library',
+    version : meson.project_version(),
+    libraries : libvmpl,
+    install_dir : get_option('libdir') + '/pkgconfig',
+)
+
 # Specify headers to be installed
 libvmpl_headers = files(
     'include/vmpl.h',
@@ -158,6 +170,17 @@ libdunify = shared_library('dunify', libdunify_sources,
     dependencies : cc.find_library('dl'),
     version : '1.0.0',
     install : true,
+)
+
+# Generate the dunify.pc file
+pkgconfig.generate(
+    name : 'dunify',
+    description : 'Dunify library',
+    version : meson.project_version(),
+    libraries : libdunify,
+    requires : 'vmpl',
+    requires_private : 'vmpl',
+    install_dir : get_option('libdir') + '/pkgconfig',
 )
 
 # Install targets
