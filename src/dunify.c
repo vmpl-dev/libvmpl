@@ -14,9 +14,9 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-#include <vmpl/vc.h>
-#include <vmpl/vmpl.h>
-#include <vmpl/log.h>
+#include "vc.h"
+#include "vmpl.h"
+#include "log.h"
 
 // Declare original malloc and free
 static int (*main_orig)(int, char **, char **);

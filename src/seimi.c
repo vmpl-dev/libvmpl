@@ -6,6 +6,7 @@
 #include "seimi.h"
 #include "log.h"
 
+#ifdef CONFIG_VMPL_SEIMI
 int setup_seimi(int dune_fd)
 {
     int rc;
@@ -18,6 +19,7 @@ int setup_seimi(int dune_fd)
 
     return rc;
 }
+#endif
 
 void *sa_alloc(size_t length, bool need_ro, long *offset)
 {

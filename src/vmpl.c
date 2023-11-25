@@ -581,6 +581,21 @@ static int setup_pgtable(struct dune_percpu *percpu) { return 0; }
 #ifdef CONFIG_VMPL_PGTABLE
 static void vmpl_pf_handler(struct dune_tf *tf)
 {
+    void *addr;
+    uint64_t vaddr = read_cr2();
+    uint64_t vstart = PAGE_ALIGN_DOWN(vaddr);
+    uint64_t vend = vstart + PAGE_SIZE;
+    if ((vstart >= PGTABLE_MMAP_BASE) && vend < (PGTABLE_MMAP_BASE - PGTABLE_MMAP_SIZE)) {
+        log_debug("dune: page fault on PGTABLE_MMAP_BASE");
+        addr = mmap((void *)vstart, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                             MAP_SHARED | MAP_FIXED, dune_fd, 0);
+        if (addr == MAP_FAILED) {
+            perror("dune: failed to map PGTABLE_MMAP_BASE");
+            return;
+        }
+        return;
+    }
+
 	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
@@ -1108,7 +1123,7 @@ void on_dune_exit(struct vmsa_config *conf)
     switch (conf->ret) {
     case DUNE_RET_EXIT:
 		log_warn("dune: exit due to exit(%ld)", conf->status);
-        exit(conf->status);
+        syscall(SYS_exit, conf->status);
 	case DUNE_RET_INTERRUPT:
         // dune_debug_handle_int(conf);
         log_warn("dune: exit due to interrupt %ld", conf->status);
