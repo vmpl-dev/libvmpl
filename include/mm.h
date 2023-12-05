@@ -23,25 +23,8 @@ typedef uint64_t pde_t;
 typedef uint64_t pte_t;
 #endif
 
-#ifdef NEW
-struct pte_t {
-    uint64_t present:1;
-    uint64_t writable:1;
-    uint64_t user:1;
-    uint64_t write_through:1;
-    uint64_t cache_disable:1;
-    uint64_t accessed:1;
-    uint64_t dirty:1;
-    uint64_t pat:1;
-    uint64_t global:1;
-    uint64_t available:3;
-    uint64_t page_frame:40;
-    uint64_t reserved2:11;
-    uint64_t no_execute:1;
-};
-#endif
-
-#define PAGE_SIZE 4096
+#define PAGE_SHIFT 12
+#define PAGE_SIZE (1UL << PAGE_SHIFT)
 #define PAGE_ALIGN(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_DOWN(x) ((x) & ~(PAGE_SIZE - 1))
 #define PAGE_MASK(x) ((x) & (PAGE_SIZE - 1))

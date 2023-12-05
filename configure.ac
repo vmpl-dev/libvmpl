@@ -24,7 +24,7 @@ AC_ARG_ENABLE([vmpl-cpuset],
               [AS_HELP_STRING([--enable-vmpl-cpuset],
                               [Enable cpuset support])],
               [enable_vmpl_cpuset=$enableval],
-              [enable_vmpl_cpuset=no])
+              [enable_vmpl_cpuset=yes])
 AM_CONDITIONAL([ENABLE_VMPL_CPUSET], [test "x$enable_vmpl_cpuset" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-signal],
@@ -38,7 +38,7 @@ AC_ARG_ENABLE([vmpl-apic],
               [AS_HELP_STRING([--enable-vmpl-apic],
                               [Enable apic support])],
               [enable_vmpl_apic=$enableval],
-              [enable_vmpl_apic=no])
+              [enable_vmpl_apic=yes])
 AM_CONDITIONAL([ENABLE_VMPL_APIC], [test "x$enable_vmpl_apic" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-msr-protocol], [AS_HELP_STRING([--enable-vmpl-msr-protocol],
@@ -51,21 +51,21 @@ AC_ARG_ENABLE([vmpl-ghcb],
               [AS_HELP_STRING([--enable-vmpl-ghcb],
                               [Enable ghcb support])],
               [enable_vmpl_ghcb=$enableval],
-              [enable_vmpl_ghcb=no])
+              [enable_vmpl_ghcb=yes])
 AM_CONDITIONAL([ENABLE_VMPL_GHCB], [test "x$enable_vmpl_ghcb" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-pgtable],
               [AS_HELP_STRING([--enable-vmpl-pgtable],
                               [Enable pgtable support])],
               [enable_vmpl_pgtable=$enableval],
-              [enable_vmpl_pgtable=no])
+              [enable_vmpl_pgtable=yes])
 AM_CONDITIONAL([ENABLE_VMPL_PGTABLE], [test "x$enable_vmpl_pgtable" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-seimi],
               [AS_HELP_STRING([--enable-vmpl-seimi],
                               [Enable seimi support])],
               [enable_vmpl_seimi=$enableval],
-              [enable_vmpl_seimi=no])
+              [enable_vmpl_seimi=yes])
 AM_CONDITIONAL([ENABLE_VMPL_SEIMI], [test "x$enable_vmpl_seimi" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-syscall],
@@ -93,7 +93,7 @@ AC_ARG_ENABLE([dune-boot],
               [AS_HELP_STRING([--enable-dune-boot],
                               [Enable dune boot support])],
               [enable_dune_boot=$enableval],
-              [enable_dune_boot=no])
+              [enable_dune_boot=yes])
 AM_CONDITIONAL([ENABLE_DUNE_BOOT], [test "x$enable_dune_boot" = "xyes"])
 
 AC_ARG_ENABLE([remap-syscall],
@@ -128,7 +128,7 @@ AC_ARG_ENABLE([pgtable-selftest],
               [AS_HELP_STRING([--enable-pgtable-selftest],
                               [Enable pgtable selftest support])],
               [enable_pgtable_selftest=$enableval],
-              [enable_pgtable_selftest=no])
+              [enable_pgtable_selftest=yes])
 AM_CONDITIONAL([ENABLE_PGTBALE_SELFTEST], [test "x$enable_pgtable_selftest" = "xyes"])
 
 AC_ARG_ENABLE([stack-trace],

@@ -23,7 +23,11 @@ libvmpl_la_SOURCES = src/vmpl.c \
 libvmpl_la_LDFLAGS = -version-info 1:0:0
 
 libdunify_la_SOURCES = src/dunify.c
-libdunify_la_LDFLAGS = -fPIC -shared -lvmpl -ldl -version-info 1:0:0
+libdunify_la_LDFLAGS = -fPIC -shared \
+                    -ldl \
+                    -lvmpl \
+                    -lexecinfo \
+                    -version-info 1:0:0
 
 # Specify headers to be installed
 pkgincludedir = $(includedir)/vmpl

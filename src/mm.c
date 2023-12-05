@@ -11,6 +11,9 @@
 #include "bitmap.h"
 #include "pgtable.h"
 
+#define MEMORY_POOL_START 0x140000000
+#define MEMORY_POOL_END 0x170000000
+
 #define __va(x) ((void *)((unsigned long)(x) + PGTABLE_MMAP_BASE))
 #define __pa(x) ((unsigned long)(x) - PGTABLE_MMAP_BASE)
 #define phys_to_virt(x) __va(x)
@@ -229,4 +232,27 @@ uint64_t pgtable_va_to_pa(uint64_t va)
     }
 
     return pte_addr(*ptep);
+}
+
+static void update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)
+{
+	int ret;
+	pte_t *ptep;
+	int level;
+
+    ret = lookup_address_in_pgd(pgd, va, &level, &ptep);
+    if (ret) {
+        log_err("lookup address in pgd failed");
+        return;
+    }
+
+    (*ptep) |= pa >> PAGE_SHIFT;
+}
+
+static long remap_pfn_range(uint64_t vstart, uint64_t vend, uint64_t pa)
+{
+    size_t nr_pages = (vend - vstart) >> PAGE_SHIFT;
+    for (size_t i = 0; i < nr_pages; i++) {
+        update_leaf_pte(this_pgd, vstart + i * PAGE_SIZE, pa + i * PAGE_SIZE);
+    }
 }

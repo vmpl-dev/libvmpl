@@ -579,6 +579,20 @@ static int setup_pgtable(struct dune_percpu *percpu) { return 0; }
 #endif
 
 #ifdef CONFIG_VMPL_PGTABLE
+static void vmpl_do_page_fault(uint64_t va)
+{
+    // uint64_t paddr;
+    // TODO: 根据va分配物理页面，然后映射到va
+    // 1. 分配物理页面
+	// paddr = pmm_alloc(percpu->pmm);
+	// 2. 映射到va，遍历pgd，分配物理页面，调用pgtable模块，将页表页映射到虚拟内存
+    // pgtable_map(percpu->pgd, va, paddr, PGTABLE_PRESENT | PGTABLE_WRITE);
+	// 3. 通知vmpl
+	// 4. 通知vmpl，分配成功
+	// 5. 通知vmpl，分配失败
+	// 6. 通知vmpl，分配失败，且没有空闲物理页面
+}
+
 static void vmpl_pf_handler(struct dune_tf *tf)
 {
     void *addr;
@@ -596,6 +610,12 @@ static void vmpl_pf_handler(struct dune_tf *tf)
         return;
     }
 
+    // TODO: 拦截page fault, 从vmpl的pmm中分配物理页面，然后映射到va
+	// uint64_t va = read_cr2();
+    // log_debug("dune: page fault at 0x%lx", va);
+    // if (va > PMM_MMAP_BASE && va < PMM_MMAP_BASE + PMM_MMPA_SIZE)
+    // vmpl_do_page_fault(va);
+    // dune_ret_hypercall(tf, 0);
 	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
@@ -1129,6 +1149,7 @@ void on_dune_exit(struct vmsa_config *conf)
         log_warn("dune: exit due to interrupt %ld", conf->status);
         break;
     case DUNE_RET_SIGNAL:
+        log_warn("dune: exit due to interrupt %ld", conf->status);
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:
