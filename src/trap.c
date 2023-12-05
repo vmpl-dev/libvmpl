@@ -79,7 +79,7 @@ void dune_register_syscall_handler(dune_syscall_cb cb)
 
 void dune_register_pgflt_handler(dune_pgflt_cb cb)
 {
-	return dune_register_intr_handler(T_PF, cb);
+	dune_register_intr_handler(T_PF, cb);
 }
 
 #ifdef CONFIG_STACK_TRACE

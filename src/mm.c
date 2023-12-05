@@ -64,6 +64,45 @@ failed:
     return -ENOMEM;
 }
 
+#if 0
+/**
+ * @brief  Update page table entry with the given virtual address
+ * @note   在每一次缺页异常的时候调用，以更新线性映射页表，保持每一个页表页都在虚拟机地址空间有映射
+ * 1. 先得到vaddr对应的每一级页表页的物理地址paddr
+ * 2. 线性映射每一级页表的paddr到虚拟地址空间
+ * @param  vaddr: 虚拟地址
+ * @param  level: 
+ * @param  fd: 
+ * @retval 
+ */
+static int __pgtable_update(uint64_t vaddr, int level, int fd)
+{
+    pml4e_t *pml4e = pml4_offset(this_pgd, vaddr);
+    log_trace("pml4e: %p, *pml4e: %lx", pml4e, *pml4e);
+    // TODO: map the pdp page table
+
+    pdpe_t *pdpe = pdp_offset(pml4e, vaddr);
+    log_trace("pdpe: %p, *pdpe: %lx", pdpe, *pdpe);
+    // TODO: map the pd page table
+
+    pde_t *pde = pd_offset(pdpe, vaddr);
+    log_trace("pde: %p, *pde: %lx", pde, *pde);
+    // TODO: map the pt page table
+    vaddr = mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE,
+                 PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
+    if (vaddr == MAP_FAILED) {
+        perror("dune: failed to map pgtable");
+        goto failed;
+    }
+
+    log_trace("%*s%s [%p - %09lx]", padding(level), "", pt_names[level], vaddr, paddr);
+
+    pte_t *pte = pte_offset(pde, vaddr);
+failed:
+    return -ENOMEM;
+}
+#endif
+
 static int __pgtable_init_free_pages(int fd)
 {
     void *addr;

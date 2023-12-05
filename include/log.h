@@ -26,6 +26,8 @@ void set_show_time(bool show);
 void log_init();
 void log_message(int level, const char *format, ...);
 
+#if defined(__clang__)
+// Clang-specific code
 #define log_trace(fmt, ...) log_message(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 #define log_debug(fmt, ...) log_message(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
 #define log_info(fmt, ...) log_message(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
@@ -33,5 +35,15 @@ void log_message(int level, const char *format, ...);
 #define log_warn(fmt, ...) log_message(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
 #define log_err(fmt, ...) log_message(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
 #define log_fatal(fmt, ...) log_message(LOG_LEVEL_FATAL, fmt, ##__VA_ARGS__)
+#elif defined(__GNUC__) || defined(__GNUG__)
+// GCC-specific code
+#define log_trace(fmt, args...) log_message(LOG_LEVEL_TRACE, fmt, ##args)
+#define log_debug(fmt, args...) log_message(LOG_LEVEL_DEBUG, fmt, ##args)
+#define log_info(fmt, args...) log_message(LOG_LEVEL_INFO, fmt, ##args)
+#define log_success(fmt, args...) log_message(LOG_LEVEL_SUCCESS, fmt, ##args)
+#define log_warn(fmt, args...) log_message(LOG_LEVEL_WARN, fmt, ##args)
+#define log_err(fmt, args...) log_message(LOG_LEVEL_ERROR, fmt, ##args)
+#define log_fatal(fmt, args...) log_message(LOG_LEVEL_FATAL, fmt, ##args)
+#endif
 
 #endif /* LOG_H */

@@ -27,10 +27,8 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifndef __GLIBC__
 #include <sys/mman.h>
 #include <sys/resource.h>
-#endif
 
 #include "config.h"
 #include "env.h"
@@ -41,6 +39,7 @@
 #include "vmpl.h"
 #include "mm.h"
 #include "pmm.h"
+#include "seimi.h"
 #include "vc.h"
 #include "serial.h"
 #include "log.h"
@@ -64,6 +63,7 @@ struct dune_percpu {
     void *vsyscall;
 	void *dune_syscall;
 	void *dune_vsyscall;
+    int pkey;
 } __attribute__((packed));
 
 static uint64_t gdt_template[NR_GDT_ENTRIES] = {
@@ -599,14 +599,15 @@ static void vmpl_pf_handler(struct dune_tf *tf)
     uint64_t vaddr = read_cr2();
     uint64_t vstart = PAGE_ALIGN_DOWN(vaddr);
     uint64_t vend = vstart + PAGE_SIZE;
-    if ((vstart >= PGTABLE_MMAP_BASE) && vend < (PGTABLE_MMAP_BASE - PGTABLE_MMAP_SIZE)) {
-        log_debug("dune: page fault on PGTABLE_MMAP_BASE");
+    if ((vstart >= PGTABLE_MMAP_BASE) && vend < (PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)) {
+        log_warn("dune: page fault on PGTABLE_MMAP_BASE");
         addr = mmap((void *)vstart, PAGE_SIZE, PROT_READ | PROT_WRITE,
                              MAP_SHARED | MAP_FIXED, dune_fd, 0);
         if (addr == MAP_FAILED) {
             perror("dune: failed to map PGTABLE_MMAP_BASE");
             return;
         }
+        // 但所有在此映射的虚拟页，都和用户已有页面不在同一个pkey domain
         return;
     }
 
@@ -623,7 +624,7 @@ static int setup_pmm(struct dune_percpu *percpu)
 {
 	int rc;
 	uint64_t *pages;
-	struct pmm *pmm;
+	pmm *pmm;
 	log_info("setup pmm");
 
     log_debug("dune: PMM at %p", pmm);
@@ -673,7 +674,7 @@ static int setup_pmm(struct dune_percpu *percpu) { return 0; }
  * @note   
  * @retval None
  */
-static int setup_stack()
+static int setup_stack(void)
 {
     int rc;
     const rlim_t kStackSize = BIT(26); // min stack size = 64 MB
@@ -727,7 +728,7 @@ sighandler_t dune_signal(int sig, sighandler_t cb)
  * 
  * @return void
  */
-void vmpl_build_assert()
+void vmpl_build_assert(void)
 {
     log_debug("vmpl_build_assert");
     BUILD_ASSERT(IOCTL_DUNE_ENTER == DUNE_ENTER);
@@ -803,7 +804,7 @@ static int setup_safe_stack(struct dune_percpu *percpu)
  *
  * @return void
  */
-static struct dune_percpu *vmpl_alloc_percpu()
+static struct dune_percpu *vmpl_alloc_percpu(void)
 {
     struct dune_percpu *percpu;
 	unsigned long fs_base;
@@ -837,7 +838,7 @@ static struct dune_percpu *vmpl_alloc_percpu()
  *
  * @return void
  */
-static void vmpl_free_percpu()
+static void vmpl_free_percpu(struct dune_percpu *percpu)
 {
     log_debug("vmpl_free_percpu");
     munmap(percpu, PGSIZE);
@@ -850,7 +851,7 @@ static bool vmpl_initialized = false;
  * @note   Common initialization for both pre and post
  * @retval 0 on success, otherwise an error code.
  */
-static int vmpl_init()
+static int vmpl_init(void)
 {
     int rc;
     if (vmpl_initialized) {
@@ -1044,7 +1045,7 @@ static int vmpl_init_post(struct dune_percpu *percpu)
  *
  * @return 0 on success.
  */
-static int vmpl_init_test()
+static int vmpl_init_test(void)
 {
     log_success("**********************************************");
     log_success("*                                            *");

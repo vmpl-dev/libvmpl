@@ -23,9 +23,9 @@
         [x] SNP Guest Request             - 0x8000_0011
         [x] SNP Extended Guest Request    - 0x8000_0012
         [x] SNP AP Creation               - 0x8000_0013
-        [x] #HV Doorbell Page             - 0x8000_0014
-        [x] #HV IPI                       - 0x8000_0015
-        [x] #HV Timer                     - 0x8000_0016
+        [x] \#HV Doorbell Page             - 0x8000_0014
+        [x] \#HV IPI                       - 0x8000_0015
+        [x] \#HV Timer                     - 0x8000_0016
         [x] APIC ID List                  - 0x8000_0017
         [x] SNP Run VMPL                  - 0x8000_0018
 [√] Debug related
@@ -54,18 +54,18 @@
             [x] pthread_join
             [x] pthread_detach
             [x] pthread_self
-        [x] signal handler
+        [√] signal handler
             [x] sigaction
             [x] sigemptyset
             [x] sigfillset
             [x] sigaddset
-        [x] memory management
-            [x] mmap
-            [x] munmap
-            [x] mremap
-            [x] mprotect
-            [x] brk
-            [x] sbrk
+        [√] memory management
+            [√] mmap
+            [√] munmap
+            [√] mremap
+            [√] mprotect
+            [√] brk
+            [√] sbrk
 
 
 有一些dune做着蹩脚的地方，在vmpl1上很好实现，目前open, read, write, close, ioctl, mremap, munmap, exit共八个系统调用通过了测试，可以在vmpl1执行了。但syscall对应的vmpl权限管理还没做，预计很快就会支持dune的trap-handler和elf-loader

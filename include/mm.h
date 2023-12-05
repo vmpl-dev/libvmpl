@@ -95,6 +95,7 @@ typedef uint64_t pte_t;
 #define pd_index(va)   (((unsigned long)(va) >> 21) & 0x1ff)
 #define pt_index(va)   (((unsigned long)(va) >> 12) & 0x1ff)
 
+#define pml4_deref(pml4)   __va(pte_addr(*pml4))
 #define pdpe_deref(pdpe)   __va(pte_addr(*pdpe))
 #define pde_deref(pde)     __va(pte_addr(*pde))
 #define pte_deref(pte)     __va(pte_addr(*pte))
@@ -125,6 +126,7 @@ typedef uint64_t pte_t;
 #define pte_present(pte)     ((pte) & 0x1)
 #endif
 
+#define bitset(x, n) ((x) | (1UL << (n)))
 #define bitclr(x, n) ((x) & ~(1UL << (n)))
 
 #define padding(level) ((level)*4 + 4)

@@ -153,7 +153,13 @@ static inline void sev_es_wr_ghcb_msr(uint64_t val)
 
 static inline void vc_vmgexit(void)
 {
+#if defined(__clang__)
+    // Clang-specific code
+    __asm__ volatile("rep; vmmcall");
+#elif defined(__GNUC__) || defined(__GNUG__)
+    // GCC-specific code
     __asm__ volatile("vmgexit");
+#endif
 }
 
 void vc_run_vmpl(VMPL vmpl);
