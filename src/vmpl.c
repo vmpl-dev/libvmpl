@@ -1050,7 +1050,6 @@ static int dune_boot(struct dune_percpu *percpu)
 {
 	struct tptr _idtr, _gdtr;
 
-    log_info("dune_boot");
 	_gdtr.base = (uint64_t)&percpu->gdt;
 	_gdtr.limit = sizeof(percpu->gdt) - 1;
 
@@ -1082,10 +1081,15 @@ static int dune_boot(struct dune_percpu *percpu)
 
         // STEP 5: load the new IDT and enable interrupts
         "lidt %4\n"
+        "sti\n"
 
 		:
 		: "m"(_gdtr), "i"(GD_KD), "i"(GD_KT), "i"(GD_TSS), "m"(_idtr)
 		: "rax");
+
+    // STEP 6: FS and GS require special initialization on 64-bit
+    wrmsrl(MSR_FS_BASE, percpu->kfs_base);
+    wrmsrl(MSR_GS_BASE, (uint64_t)percpu);
 
 	return 0;
 }
@@ -1107,19 +1111,9 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     // Setup XSAVE for FPU
     xsave_end(percpu);
 
-#ifdef CONFIG_DUNE_BOOT
-    // Enable interrupts
-    asm volatile("sti\n");
-
-    // Setup FS and GS
-    log_info("setup FS and GS");
-    wrmsrl(MSR_FS_BASE, percpu->kfs_base);
-    wrmsrl(MSR_GS_BASE, (uint64_t)percpu);
-#else
     // wrfsbase, wrgsbase
     asm volatile("wrfsbase %0" : : "r" (percpu->kfs_base));
     asm volatile("wrgsbase %0" : : "r" (percpu));
-#endif
 
     // Setup VC communication
     vc_init(percpu->ghcb);
