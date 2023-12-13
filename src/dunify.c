@@ -22,16 +22,53 @@
 // Declare original malloc and free
 static int (*main_orig)(int, char **, char **);
 
-int main_hook(int argc, char **argv, char **envp)
+static void print_procmaps()
 {
-    printf("entering dune mode...\n");
-    int ret = vmpl_enter(argc, argv);
-    if (ret) {
-        printf("failed to initialize dune\n");
-        return ret;
+    FILE *fp = fopen("/proc/self/maps", "r");
+    if (fp == NULL) {
+        log_err("failed to open /proc/self/maps");
+        return;
     }
 
-    printf("dune mode entered: argc=%d, argv=%p, envp=%p\n", argc, argv, envp);
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    while ((read = getline(&line, &len, fp)) != -1) {
+        printf("%s", line);
+    }
+    fclose(fp);
+    fflush(stdout);
+}
+
+static void get_fs_base(char *name)
+{
+	unsigned long fs_base0, fs_base1, fs_base2;
+
+	if (arch_prctl(ARCH_GET_FS, &fs_base0) == -1) {
+        log_err("arch_prctl failed");
+	}
+
+	__asm__ volatile("mov %%fs:0, %0\n" : "=r"(fs_base1));
+	__asm__ volatile("rdfsbase %0\n" : "=r"(fs_base2));
+    if (fs_base0!= fs_base1 || fs_base0!= fs_base2) {
+		log_err("fs_base0: %lx, fs_base1: %lx, fs_base2: %lx", fs_base0, fs_base1, fs_base2);
+		log_err("fs_base0!= fs_base1 || fs_base0!= fs_base2");
+	} else {
+        log_success("%s fs_base=%lx", name, fs_base0);
+    }
+}
+
+int main_hook(int argc, char **argv, char **envp)
+{
+    print_procmaps();
+	get_fs_base("main_hook");
+	printf("entering dune mode...\n");
+	int ret = vmpl_enter(argc, argv);
+    if (ret) {
+        printf("failed to initialize dune\n");
+    } else {
+        printf("dune mode entered: argc=%d, argv=%p, envp=%p\n", argc, argv, envp);
+    }
 
     // Print environment variables
     for (char **env = envp; *env != 0; env++) {

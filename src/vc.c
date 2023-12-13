@@ -8,7 +8,7 @@
 #endif
 #include "config.h"
 #include "sys.h"
-#include "syscall.h"
+// #include "syscall.h"
 #include "mm.h"
 #include "log.h"
 #include "vc.h"

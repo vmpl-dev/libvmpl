@@ -65,7 +65,7 @@ AC_ARG_ENABLE([vmpl-seimi],
               [AS_HELP_STRING([--enable-vmpl-seimi],
                               [Enable seimi support])],
               [enable_vmpl_seimi=$enableval],
-              [enable_vmpl_seimi=yes])
+              [enable_vmpl_seimi=no])
 AM_CONDITIONAL([ENABLE_VMPL_SEIMI], [test "x$enable_vmpl_seimi" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-syscall],
@@ -89,11 +89,18 @@ AC_ARG_ENABLE([vmpl-debug],
               [enable_vmpl_debug=no])
 AM_CONDITIONAL([ENABLE_VMPL_DEBUG], [test "x$enable_vmpl_debug" = "xyes"])
 
+AC_ARG_ENABLE([vmpl-xsave],
+              [AS_HELP_STRING([--enable--vmpl-xsave],
+                              [Enable xsave support])],
+              [enable_vmpl_xsave=$enableval],
+              [enable_vmpl_xsave=yes])
+AM_CONDITIONAL([ENABLE_VMPL_XSAVE], [test "x$enable_vmpl_xsave" = "xyes"])
+
 AC_ARG_ENABLE([dune-boot],
               [AS_HELP_STRING([--enable-dune-boot],
                               [Enable dune boot support])],
               [enable_dune_boot=$enableval],
-              [enable_dune_boot=yes])
+              [enable_dune_boot=no])
 AM_CONDITIONAL([ENABLE_DUNE_BOOT], [test "x$enable_dune_boot" = "xyes"])
 
 AC_ARG_ENABLE([remap-syscall],
@@ -197,6 +204,10 @@ fi
 
 if test "x$enable_vmpl_debug" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_DEBUG], [1], [Enable debug support])
+fi
+
+if test "x$enable_vmpl_xsave" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_XSAVE], [1], [Enable xsave support])
 fi
 
 if test "x$enable_dune_boot" = "xyes"; then

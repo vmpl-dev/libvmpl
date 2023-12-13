@@ -45,6 +45,7 @@
 #include "log.h"
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
+#define XSAVE_SIZE 4096
 
 static int dune_fd;
 
@@ -63,6 +64,8 @@ struct dune_percpu {
     void *vsyscall;
 	void *dune_syscall;
 	void *dune_vsyscall;
+    char *xsave_area;
+    uint64_t xsave_mask;
     int pkey;
 } __attribute__((packed));
 
@@ -328,7 +331,7 @@ static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
     /* NOTE: We don't setup the general purpose registers because __dune_ret
      * will restore them as they were before the __dune_enter call */
     config->rsp = 0;
-    config->rflags = 0x2;
+    config->rflags = 0x202;
 
     config->cs.base = 0;
     config->cs.selector = GD_KT;
@@ -595,6 +598,7 @@ static void vmpl_do_page_fault(uint64_t va)
 
 static void vmpl_pf_handler(struct dune_tf *tf)
 {
+#if 0
     void *addr;
     uint64_t vaddr = read_cr2();
     uint64_t vstart = PAGE_ALIGN_DOWN(vaddr);
@@ -610,6 +614,7 @@ static void vmpl_pf_handler(struct dune_tf *tf)
         // 但所有在此映射的虚拟页，都和用户已有页面不在同一个pkey domain
         return;
     }
+#endif
 
     // TODO: 拦截page fault, 从vmpl的pmm中分配物理页面，然后映射到va
 	// uint64_t va = read_cr2();
@@ -667,6 +672,69 @@ failed:
 }
 #else
 static int setup_pmm(struct dune_percpu *percpu) { return 0; }
+#endif
+
+#ifdef CONFIG_VMPL_XSAVE
+#define XSAVE_SIZE 4096
+#define XCR_XFEATURE_ENABLED_MASK 0x00000000
+// The XSAVE instruction requires 64-byte alignment for state buffers
+static int xsave_begin(struct dune_percpu *percpu)
+{
+    log_info("xsave begin");
+    unsigned long long mask = 0x07;
+    asm volatile (
+        "xgetbv"
+        : "=a" (mask)
+        : "c" (XCR_XFEATURE_ENABLED_MASK)
+    );
+
+    log_debug("xsave mask: %llx", mask);
+    percpu->xsave_area = memalign(64, XSAVE_SIZE);
+    if (!percpu->xsave_area) {
+        perror("dune: failed to allocate xsave area");
+        return -ENOMEM;
+    }
+
+    memset(percpu->xsave_area, 0, XSAVE_SIZE);
+    log_debug("xsave area at %lx", percpu->xsave_area);
+    asm volatile (
+        ".byte 0x48, 0x0f, 0xae, 0x27"
+        :
+        : "D" (percpu->xsave_area), "a" (mask), "d" (0x00)
+        : "memory"
+    );
+
+    percpu->xsave_mask = mask;
+
+    return 0;
+}
+
+static int xsave_end(struct dune_percpu *percpu)
+{
+    unsigned long long mask = percpu->xsave_mask;
+    asm volatile (
+        "xsetbv" // xsetbv instruction
+        : // no output
+        : "c" (XCR_XFEATURE_ENABLED_MASK), "a" (mask), "d" (mask >> 32)
+        : "memory"
+    );
+
+    asm volatile (
+        ".byte 0x48, 0x0f, 0xae, 0x2f" // xrstor instruction
+        :
+        : "D" (percpu->xsave_area), "a" (mask), "d" (0x00)
+        : "memory"
+    );
+
+    free(percpu->xsave_area);
+    percpu->xsave_area = NULL;
+
+    log_info("xsave end");
+    return 0;
+}
+#else
+static int xsave_begin(struct dune_percpu *percpu) { return 0; }
+static int xsave_end(struct dune_percpu *percpu) { return 0; }
 #endif
 
 /**
@@ -807,13 +875,28 @@ static int setup_safe_stack(struct dune_percpu *percpu)
 static struct dune_percpu *vmpl_alloc_percpu(void)
 {
     struct dune_percpu *percpu;
-	unsigned long fs_base;
+	unsigned long fs_base, gs_base;
 
     log_debug("vmpl_alloc_percpu");
 	if (arch_prctl(ARCH_GET_FS, &fs_base) == -1) {
 		log_err("dune: failed to get FS register");
 		return NULL;
 	}
+    log_debug("dune: FS base at 0x%lx with arch_prctl", fs_base);
+
+    if (arch_prctl(ARCH_GET_GS, &gs_base) == -1) {
+        log_err("dune: failed to get GS register");
+        return NULL;
+    }
+    log_debug("dune: GS base at 0x%lx with arch_prctl", gs_base);
+
+    // rdfsbase
+    asm volatile("rdfsbase %0" : "=r"(fs_base));
+    log_debug("dune: FS base at 0x%lx with rdfsbase", fs_base);
+
+    // rdgsbase
+    asm volatile("rdgsbase %0" : "=r"(gs_base));
+    log_debug("dune: GS base at 0x%lx with rdgsbase", gs_base);
 
 	percpu = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
 				  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -897,7 +980,6 @@ failed:
 static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 {
     int rc;
-    log_info("vmpl_init_pre");
 
     // Setup CPU set
     rc = setup_cpuset();
@@ -944,6 +1026,13 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     rc = setup_seimi(dune_fd);
     if (rc != 0) {
         perror("dune: failed to set SEIMI");
+        goto failed;
+    }
+
+    // Setup XSAVE for FPU
+    rc = xsave_begin(percpu);
+    if (rc != 0) {
+        perror("dune: failed to set XSAVE");
         goto failed;
     }
 
@@ -1015,14 +1104,22 @@ static int dune_boot(struct dune_percpu *percpu)
  */
 static int vmpl_init_post(struct dune_percpu *percpu)
 {
+    // Setup XSAVE for FPU
+    xsave_end(percpu);
+
+#ifdef CONFIG_DUNE_BOOT
     // Enable interrupts
-    log_info("vmpl_init_post");
     asm volatile("sti\n");
 
     // Setup FS and GS
     log_info("setup FS and GS");
     wrmsrl(MSR_FS_BASE, percpu->kfs_base);
     wrmsrl(MSR_GS_BASE, (uint64_t)percpu);
+#else
+    // wrfsbase, wrgsbase
+    asm volatile("wrfsbase %0" : : "r" (percpu->kfs_base));
+    asm volatile("wrgsbase %0" : : "r" (percpu));
+#endif
 
     // Setup VC communication
     vc_init(percpu->ghcb);
@@ -1133,6 +1230,19 @@ failed:
     return -EIO;
 }
 
+void dump_vmsa_config(struct vmsa_config *conf)
+{
+    printf("vmsa_config:");
+    printf("ret: %16lx, rax: %16lx, rbx: %16lx, rcx: %16lx", conf->ret, conf->rax, conf->rbx, conf->rcx);
+    printf("rdx: %16lx, rsi: %16lx, rdi: %16lx, rsp: %16lx", conf->rdx, conf->rsi, conf->rdi, conf->rsp);
+    printf("rbp: %16lx, r8: %16lx, r9: %16lx, r10: %16lx", conf->rbp, conf->r8, conf->r9, conf->r10);
+    printf("r11: %16lx, r12: %16lx, r13: %16lx, r14: %16lx", conf->r11, conf->r12, conf->r13, conf->r14);
+    printf("r15: %16lx, rip: %16lx, rflags: %16lx, cr3: %16lx", conf->r15, conf->rip, conf->rflags, conf->cr3);
+    printf("status: %16lx, vcpu: %16lx, cs: %16lx, ds: %16lx", conf->status, conf->vcpu, conf->cs, conf->ds);
+    printf("es: %16lx, ss: %16lx, tr: %16lx, fs: %16lx", conf->es, conf->ss, conf->tr, conf->fs);
+    printf("gs: %16lx, gdtr: %16lx, idtr: %16lx", conf->gs, conf->gdtr, conf->idtr);
+}
+
 /**
  * on_dune_exit - handle Dune exits
  *
@@ -1141,23 +1251,25 @@ failed:
  */
 void on_dune_exit(struct vmsa_config *conf)
 {
+    printf("on_dune_exit()\n");
     switch (conf->ret) {
     case DUNE_RET_EXIT:
-		log_warn("dune: exit due to exit(%ld)", conf->status);
         syscall(SYS_exit, conf->status);
-	case DUNE_RET_INTERRUPT:
-        // dune_debug_handle_int(conf);
-        log_warn("dune: exit due to interrupt %ld", conf->status);
-        break;
+        // exit(conf->status);
+    case DUNE_RET_SYSCALL:
+        conf->rax = syscall(conf->rax, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
+		conf->ret = 0;
+		__dune_go_dune(dune_fd, conf);
+		break;
     case DUNE_RET_SIGNAL:
-        log_warn("dune: exit due to interrupt %ld", conf->status);
+        // log_warn("dune: exit due to signal %ld", conf->status);
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:
-        log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
+        // log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
         break;
     default:
-        log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
+        // log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
         break;
     }
 
