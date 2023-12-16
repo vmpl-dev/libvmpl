@@ -103,6 +103,35 @@ int __libc_start_main(int (*main)(int, char **, char **), int argc, char **argv,
 	return orig(main_hook, argc, argv, init_dummy, fini_dummy, ldso_dummy);
 }
 
+#undef fork
+pid_t fork()
+{
+	pid_t pid;
+
+	static typeof(&fork) fork_orig = NULL;
+	if (!fork_orig)
+		fork_orig = dlsym(RTLD_NEXT, "fork");
+
+	// Call original fork
+	if (!getenv("RUN_IN_VMPL_PROCESS")) {
+		return fork_orig();
+	}
+
+	pid = fork_orig();
+	if (pid == 0) {
+		log_debug("entering dune mode...\n");
+		int ret = vmpl_enter(1, NULL);
+		if (ret) {
+			log_err("failed to initialize dune\n");
+			return -1;
+		}
+
+		log_debug("dune mode entered\n");
+	}
+
+	return pid;
+}
+
 struct start_args {
 	void *(*start_routine)(void *);
 	void *arg;
