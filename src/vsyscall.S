@@ -1,7 +1,7 @@
 #ifdef USE_GLIBC
 #include <asm/unistd_64.h>
 #else
-#include <bits/syscall.h>
+#include <sys/syscall.h>
 #endif
 .include "syscall_vmpl.h"
 .data

@@ -3,8 +3,8 @@
 .macro VMPL_SYSCALL
     pushf
     push %rax
-    mov %cs, %rax
-    test $3, %rax
+    mov %cs, %ax
+    test $3, %al
     jnz 1f
     push %rcx
     push %rdx
@@ -16,7 +16,7 @@
     pop %rcx
     pop %rax
     popf
-    vmgexit
+    rep; vmmcall
     jmp 2f
 1:
     pop %rax

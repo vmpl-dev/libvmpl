@@ -3,6 +3,7 @@
 #include <unistd.h>
 #ifdef __GLIBC__
 #include <asm/msr.h>
+#include <sys/syscall.h>
 #else
 #include <bits/syscall.h>
 #endif

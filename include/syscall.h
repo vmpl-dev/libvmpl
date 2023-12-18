@@ -66,10 +66,16 @@ static inline void __wrmsr(unsigned int msr, unsigned long value) {
 	} while (0)
 #endif
 
+#if __GCC__ > 12
+#define vmgexit "vmgexit"
+#else
+#define vmgexit "rep; vmmcall"
+#endif
+
 static __inline long __syscall0(long n)
 {
 	unsigned long ret;
-	__syscall_prolog(__volatile__("vmgexit" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory"));
+	__syscall_prolog(__volatile__(vmgexit : "=a"(ret) : "a"(n) : "rcx", "r11", "memory"));
 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
 	return ret;
 }
@@ -77,7 +83,7 @@ static __inline long __syscall0(long n)
 static __inline long __syscall1(long n, long a1)
 {
     unsigned long ret;
-    __syscall_prolog(__volatile__("vmgexit" : "=a"(ret) : "a"(n), "D"(a1) : "rcx", "r11", "memory"));
+    __syscall_prolog(__volatile__(vmgexit : "=a"(ret) : "a"(n), "D"(a1) : "rcx", "r11", "memory"));
     __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1) : "rcx", "r11", "memory");
     return ret;
 }
@@ -85,7 +91,7 @@ static __inline long __syscall1(long n, long a1)
 static __inline long __syscall2(long n, long a1, long a2)
 {
     unsigned long ret;
-    __syscall_prolog(__volatile__("vmgexit" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2) : "rcx", "r11", "memory"));
+    __syscall_prolog(__volatile__(vmgexit : "=a"(ret) : "a"(n), "D"(a1), "S"(a2) : "rcx", "r11", "memory"));
     __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2) : "rcx", "r11", "memory");
     return ret;
 }
@@ -93,7 +99,7 @@ static __inline long __syscall2(long n, long a1, long a2)
 static __inline long __syscall3(long n, long a1, long a2, long a3)
 {
     unsigned long ret;
-    __syscall_prolog(__volatile__("vmgexit" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3) : "rcx", "r11", "memory"));
+    __syscall_prolog(__volatile__(vmgexit : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3) : "rcx", "r11", "memory"));
     __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3) : "rcx", "r11", "memory");
     return ret;
 }
@@ -102,7 +108,7 @@ static __inline long __syscall4(long n, long a1, long a2, long a3, long a4)
 {
     unsigned long ret;
     register long r10 __asm__("r10") = a4;
-    __syscall_prolog(__volatile__("vmgexit" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10) : "rcx", "r11", "memory"));
+    __syscall_prolog(__volatile__(vmgexit : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10) : "rcx", "r11", "memory"));
     __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10) : "rcx", "r11", "memory");
     return ret;
 }
@@ -112,7 +118,7 @@ static __inline long __syscall5(long n, long a1, long a2, long a3, long a4, long
     unsigned long ret;
     register long r10 __asm__("r10") = a4;
     register long r8 __asm__("r8") = a5;
-    __syscall_prolog(__volatile__("vmgexit" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8) : "rcx", "r11", "memory"));
+    __syscall_prolog(__volatile__(vmgexit : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8) : "rcx", "r11", "memory"));
     __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8) : "rcx", "r11", "memory");
     return ret;
 }
@@ -123,7 +129,7 @@ static __inline long __syscall6(long n, long a1, long a2, long a3, long a4, long
     register long r10 __asm__("r10") = a4;
     register long r8 __asm__("r8") = a5;
     register long r9 __asm__("r9") = a6;
-    __syscall_prolog(__volatile__("vmgexit" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory"));
+    __syscall_prolog(__volatile__(vmgexit : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory"));
     __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
     return ret;
 }

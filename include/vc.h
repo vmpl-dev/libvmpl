@@ -153,12 +153,18 @@ static inline void sev_es_wr_ghcb_msr(uint64_t val)
 
 static inline void vc_vmgexit(void)
 {
-#if defined(__clang__)
-    // Clang-specific code
+#if defined(__GNUC__)
+#if __GNUC__ < 12
     __asm__ volatile("rep; vmmcall");
-#elif defined(__GNUC__) || defined(__GNUG__)
-    // GCC-specific code
+#else
     __asm__ volatile("vmgexit");
+#endif
+#else
+#if defined(__clang__)
+    __asm__ volatile("rep; vmmcall");
+#else
+#error "Unsupported compiler"
+#endif
 #endif
 }
 
