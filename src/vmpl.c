@@ -1244,7 +1244,6 @@ void dump_vmsa_config(struct vmsa_config *conf)
  * __dune_go_linux().
  */
 void on_dune_exit(struct vmsa_config *conf)
-__attribute__((noreturn))
 {
     printf("on_dune_exit()\n");
     switch (conf->ret) {

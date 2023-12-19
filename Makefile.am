@@ -1,7 +1,7 @@
 AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4
 # 将config.h包含在编译中
-AM_CPPFLAGS = -I$(top_srcdir)/include -I../svsm-dev -include config.h
+AM_CPPFLAGS = -I$(top_srcdir)/include -I../vmpl-dev -include config.h
 AM_CFLAGS = -Wall -g -O3 -MD
 AM_LDFLAGS = -L. -lvmpl
 
