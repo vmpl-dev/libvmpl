@@ -37,6 +37,7 @@
 #include "apic.h"
 #include "vmpl-dev.h"
 #include "vmpl.h"
+#include "pgtable.h"
 #include "mm.h"
 #include "pmm.h"
 #include "seimi.h"

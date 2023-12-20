@@ -9,6 +9,7 @@ AM_LDFLAGS = -L. -lvmpl
 lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
+                    src/pgtable.c \
                     src/mm.c \
                     src/seimi.c \
                     src/ghcb.c src/vmsa.c src/vc.c \
@@ -34,6 +35,7 @@ pkgincludedir = $(includedir)/vmpl
 pkginclude_HEADERS = include/vmpl.h \
                     include/sys.h include/syscall.h \
                     include/vc.h \
+                    include/pgtable.h \
                     include/mm.h \
                     include/seimi.h \
                     include/apic.h \

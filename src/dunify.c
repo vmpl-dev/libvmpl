@@ -17,6 +17,7 @@
 
 #include "vc.h"
 #include "vmpl.h"
+#include "mm.h"
 #include "log.h"
 
 // Declare original malloc and free
@@ -175,4 +176,75 @@ int pthread_create(pthread_t *restrict res,
 	free(args);
 
 	return rc;
+}
+
+#undef mmap
+void *mmap(void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset)
+{
+	// Call original mmap
+	static typeof(&mmap) mmap_orig = NULL;
+	if (!mmap_orig)
+		mmap_orig = dlsym(RTLD_NEXT, "mmap");
+	
+	if (!getenv("RUN_IN_VMPL_MMAP")) {
+		return mmap_orig(addr, length, prot, flags, fd, offset);
+	}
+
+	// Intercept mmap calls when running in VMPL, such that we can handle the memory allocation
+	// in the guest process.
+	if (addr == NULL) {
+		if (flags & MAP_FIXED) {
+			// Allocate memory in the guest process
+			void *guest_addr = vmpl_alloc(length);
+			if (guest_addr == NULL) {
+				log_err("failed to allocate memory in guest process");
+				return -1;
+			}
+
+			return (int)guest_addr;
+		}
+	}
+
+	return vmpl_mmap(addr, length, prot, flags, fd, offset);
+
+	return 0;
+}
+
+#undef mremap
+void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ... /* void *new_address */)
+{
+	// Call original mremap
+	static typeof(&mremap) mremap_orig = NULL;
+	if (!mremap_orig)
+		mremap_orig = dlsym(RTLD_NEXT, "mremap");
+	
+	if (!getenv("RUN_IN_VMPL_MMAP")) {
+		return mremap_orig(old_address, old_size, new_size, flags);
+	}
+
+	// Intercept mremap calls when running in VMPL, such that we can handle the memory allocation
+	// in the guest process.
+
+	return vmpl_mremap(old_address, old_size, new_size, flags);
+}
+
+#undef munmap
+int munmap(void *addr, size_t length)
+{
+	// Call original munmap
+	static typeof(&munmap) munmap_orig = NULL;
+	if (!munmap_orig)
+		munmap_orig = dlsym(RTLD_NEXT, "munmap");
+	
+	if (!getenv("RUN_IN_VMPL_MMAP")) {
+		return munmap_orig(addr, length);
+	}
+
+	// Intercept munmap calls when running in VMPL, such that we can handle the memory allocation
+	// in the guest process.
+
+	return vmpl_munmap(addr, length);
+
+	return 0;
 }
