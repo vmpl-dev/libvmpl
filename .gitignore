@@ -1,0 +1,37 @@
+# Object files
+*.o
+*.la
+*.lo
+*.log
+*.asm
+*.xml
+# autoconf, automake, libtool files
+aclocal.m4
+ar-lib
+autom4te.cache
+benchmark.asm
+benchmark.log
+build
+compile
+config.guess
+config.h.in
+config.h.in~
+config.status
+config.sub
+configure
+configure~
+configure.ac~
+debian
+depcomp
+.deps
+.dirstamp
+.libs
+include/config.h
+install-sh
+libtool
+ltmain.sh
+m4
+Makefile
+Makefile.in
+missing
+stamp-h1
