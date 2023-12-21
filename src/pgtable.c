@@ -8,6 +8,7 @@
 #include "sev.h"
 #include "log.h"
 #include "bitmap.h"
+#include "pmm.h"
 #include "pgtable.h"
 
 #define MEMORY_POOL_START 0x140000000
@@ -20,7 +21,7 @@
 
 #define padding(level) ((level)*4 + 4)
 static char *pt_names[] = { "PML4", "PDP", "PD", "PT", "Page" };
-static uint64_t *this_pgd;
+static __thread uint64_t *this_pgd;
 static void *free_pages;
 
 /**
@@ -63,64 +64,54 @@ failed:
     return -ENOMEM;
 }
 
-#if 0
+#ifdef CONFIG_VMPL_PGTABLE_ALLOC
 /**
  * @brief  Update page table entry with the given virtual address
- * @note   在每一次缺页异常的时候调用，以更新线性映射页表，保持每一个页表页都在虚拟机地址空间有映射
- * 1. 先得到vaddr对应的每一级页表页的物理地址paddr
- * 2. 线性映射每一级页表的paddr到虚拟地址空间
- * @param  vaddr: 虚拟地址
- * @param  level: 
- * @param  fd: 
- * @retval 
+ * @note   Preallocate page table pages, and map them to the virtual address space
+ * @param  fd: File descriptor of the vmpl-dev
+ * @retval 0 on success, -1 on failure
  */
-static int __pgtable_update(uint64_t vaddr, int level, int fd)
+static int __pgtable_update(int fd)
 {
-    pml4e_t *pml4e = pml4_offset(this_pgd, vaddr);
-    log_trace("pml4e: %p, *pml4e: %lx", pml4e, *pml4e);
-    // TODO: map the pdp page table
+    int rc;
+    pte_t *ptep;
+    uint64_t *base, *p, *vaddr;
+    uint64_t paddr;
+    log_debug("pgtable update");
 
-    pdpe_t *pdpe = pdp_offset(pml4e, vaddr);
-    log_trace("pdpe: %p, *pdpe: %lx", pdpe, *pdpe);
-    // TODO: map the pd page table
+    // preallocate page table pages
+    base = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, NULL, 0);
 
-    pde_t *pde = pd_offset(pdpe, vaddr);
-    log_trace("pde: %p, *pde: %lx", pde, *pde);
-    // TODO: map the pt page table
-    vaddr = mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE,
-                 PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
-    if (vaddr == MAP_FAILED) {
-        perror("dune: failed to map pgtable");
-        goto failed;
+    // for each page, obtain the physical address, and map it to the virtual address space
+    for (p = base; p < base + PAGE_SIZE; p += PAGE_SIZE / sizeof(*p)) {
+        // obtain the physical address of the page
+        rc = lookup_address((uint64_t)p, NULL, &ptep);
+        if (rc) {
+            log_err("lookup address failed");
+            goto failed;
+        }
+
+        paddr = pte_addr(*ptep);
+        // map the page table page to the virtual address space
+        vaddr = mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE,
+                     PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
+        if (vaddr == MAP_FAILED) {
+            perror("dune: failed to map pgtable");
+            goto failed;
+        }
     }
-
-    log_trace("%*s%s [%p - %09lx]", padding(level), "", pt_names[level], vaddr, paddr);
-
-    pte_t *pte = pte_offset(pde, vaddr);
+    return base;
 failed:
     return -ENOMEM;
 }
 #endif
-
-static int __pgtable_init_free_pages(int fd)
-{
-    void *addr;
-    addr = mmap((void *)PGTABLE_MMAP_BASE, PAGE_SIZE, PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, 0);
-    if (addr == MAP_FAILED) {
-        perror("dune: failed to map pgtable");
-        goto failed;
-    }
-
-    return 0;
-failed:
-    return -ENOMEM;
-}
 
 int pgtable_init(uint64_t **pgd, uint64_t cr3, int fd)
 {
 	int rc;
 	log_debug("pgtable init");
 
+    // Initialize page table
 	rc = __pgtable_init(cr3, 0, fd);
     if (rc) {
         log_err("pgtable init failed");
@@ -129,6 +120,16 @@ int pgtable_init(uint64_t **pgd, uint64_t cr3, int fd)
 
     *pgd = (uint64_t *)(PGTABLE_MMAP_BASE + cr3);
     this_pgd = *pgd;
+
+#ifdef CONFIG_VMPL_PGTABLE_ALLOC
+    // Update page table
+    rc = __pgtable_update(fd);
+    if (rc) {
+        log_err("pgtable update failed");
+        return rc;
+    }
+#endif
+
     return 0;
 }
 
@@ -162,6 +163,61 @@ int pgtable_selftest(uint64_t *pgd, uint64_t va)
     }
 
     log_debug("level: %d, pa: %lx", level, pte_addr(*ptep));
+
+    return 0;
+}
+
+int __pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd, uint64_t level)
+{
+    int rc = 0;
+    uint64_t *src_pgd_entry, *dst_pgd_entry;
+    log_debug("pgtable clone");
+    // TODO: Recursively clone page table entries
+    // 1. Allocate a new page table
+    // 2. Clone the page table entries
+    // 3. Update the page table entry in the parent page table
+    if (level == 0) {
+        return 0;
+    }
+
+    dst_pgd_entry = (uint64_t *)pmm_alloc(1);
+    if (dst_pgd_entry == NULL) {
+        log_err("pmm alloc failed");
+        return -ENOMEM;
+    }
+
+    *dst_pgd_entry = *src_pgd;
+    *dst_pgd = (uint64_t)dst_pgd_entry;
+
+    *src_pgd_entry = (uint64_t *)phys_to_virt(*src_pgd);
+    *dst_pgd_entry = (uint64_t *)phys_to_virt(*dst_pgd);
+
+    for (int i = 0; i < 512; i++) {
+        if (src_pgd_entry[i] & 0x1) {
+            rc = __pgtable_clone(&dst_pgd_entry[i], &src_pgd_entry[i], level - 1);
+            if (rc) {
+                log_err("pgtable clone failed");
+                return rc;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd)
+{
+    int rc = 0;
+    log_debug("pgtable clone");
+    // TODO: Clone page table entries
+    // 1. Allocate a new page table
+    // 2. Clone the page table entries
+    // 3. Update the page table entry in the parent page table
+    rc = __pgtable_clone(dst_pgd, src_pgd, 4);
+    if (rc) {
+        log_err("pgtable clone failed");
+        return rc;
+    }
 
     return 0;
 }
@@ -272,6 +328,31 @@ uint64_t pgtable_va_to_pa(uint64_t va)
     return pte_addr(*ptep);
 }
 
+// https://www.kernel.org/doc/Documentation/vm/pagemap.txt
+uint64_t pgtable_va_to_pa(uint64_t vaddr)
+{
+    FILE *pagemap;
+    intptr_t paddr = 0;
+    int offset = (vaddr / sysconf(_SC_PAGESIZE)) * sizeof(uint64_t);
+    uint64_t e;
+
+    if ((pagemap = fopen("/proc/self/pagemap", "r"))) {
+        if (lseek(fileno(pagemap), offset, SEEK_SET) == offset) {
+            if (fread(&e, sizeof(uint64_t), 1, pagemap)) {
+                if (e & (1ULL << 63)) { // page present ?
+                    paddr = e & ((1ULL << 54) - 1); // pfn mask
+                    paddr = paddr * sysconf(_SC_PAGESIZE);
+                    // add offset within page
+                    paddr = paddr | (vaddr & (sysconf(_SC_PAGESIZE) - 1));
+                }   
+            }   
+        }   
+        fclose(pagemap);
+    }   
+
+    return paddr;
+}
+
 static void update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)
 {
 	int ret;
@@ -292,5 +373,18 @@ static long remap_pfn_range(uint64_t vstart, uint64_t vend, uint64_t pa)
     size_t nr_pages = (vend - vstart) >> PAGE_SHIFT;
     for (size_t i = 0; i < nr_pages; i++) {
         update_leaf_pte(this_pgd, vstart + i * PAGE_SIZE, pa + i * PAGE_SIZE);
+    }
+}
+
+void remap_va_to_pa(uint64_t va_start, uint64_t va_end, uint64_t pa_start)
+{
+    uint64_t va;
+    for (va = va_start; va < va_end; va += PAGE_SIZE) {
+        uint64_t pa = pgtable_va_to_pa(va);
+        if (pa == 0) {
+            log_err("Failed to get physical address for va: %llx", va);
+            return;
+        }
+        update_leaf_pte(this_pgd, va, pa_start + (va - va_start));
     }
 }

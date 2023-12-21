@@ -22,7 +22,9 @@ void *vmpl_mremap(void *old_address, size_t old_size, size_t new_size, int flags
 	return NULL;
 }
 
-void vmpl_unmap(void *addr)
+int vmpl_munmap(void *addr, size_t length)
 {
     // TODO: Implement memory allocator
+
+    return 0;
 }

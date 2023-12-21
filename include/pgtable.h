@@ -147,6 +147,7 @@ int pgtable_init(uint64_t **pgd, uint64_t cr3, int fd);
 int pgtable_free(uint64_t *pgd);
 int pgtable_selftest(uint64_t *pgd, uint64_t va);
 
+int pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd);
 int pgtable_mmap(uint64_t *pgd, uint64_t va, size_t len, int perm);
 int pgtable_mprotect(uint64_t *pgd, uint64_t va, size_t len, int perm);
 int pgtable_unmap(uint64_t *pgd, uint64_t va, size_t len, int level);

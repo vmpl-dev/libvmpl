@@ -178,6 +178,37 @@ int pthread_create(pthread_t *restrict res,
 	return rc;
 }
 
+#undef sbrk
+int brk(void *addr)
+{
+	static typeof(&brk) brk_orig = NULL;
+	if (!brk_orig)
+		brk_orig = dlsym(RTLD_NEXT, "sbrk");
+
+	if (!getenv("RUN_IN_VMPL_MMAP")) {
+		return brk_orig(addr);
+	}
+
+	// TODO: Intercept sbrk
+
+	return brk_orig(addr);
+}
+
+void *sbrk(intptr_t increment)
+{
+	static typeof(&sbrk) sbrk_orig = NULL;
+	if (!sbrk_orig)
+		sbrk_orig = dlsym(RTLD_NEXT, "sbrk");
+
+	if (!getenv("RUN_IN_VMPL_MMAP")) {
+		return sbrk_orig(increment);
+	}
+
+	// TODO: Intercept sbrk
+
+	return sbrk_orig(increment);
+}
+
 #undef mmap
 void *mmap(void *addr, size_t length, int prot, int flags,
                   int fd, off_t offset)
@@ -206,9 +237,9 @@ void *mmap(void *addr, size_t length, int prot, int flags,
 		}
 	}
 
-	return vmpl_mmap(addr, length, prot, flags, fd, offset);
+	// TODO: Handle mmap
 
-	return 0;
+	return vmpl_mmap(addr, length, prot, flags, fd, offset);
 }
 
 #undef mremap
@@ -225,6 +256,8 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 
 	// Intercept mremap calls when running in VMPL, such that we can handle the memory allocation
 	// in the guest process.
+
+	// TODO: Handle mremap
 
 	return vmpl_mremap(old_address, old_size, new_size, flags);
 }
@@ -244,7 +277,7 @@ int munmap(void *addr, size_t length)
 	// Intercept munmap calls when running in VMPL, such that we can handle the memory allocation
 	// in the guest process.
 
-	return vmpl_munmap(addr, length);
+	// TODO: Handle munmap
 
-	return 0;
+	return vmpl_munmap(addr, length);
 }
