@@ -178,7 +178,7 @@ int pthread_create(pthread_t *restrict res,
 	return rc;
 }
 
-#undef sbrk
+#ifdef CONFIG_VMPL_ALLOC
 int brk(void *addr)
 {
 	static typeof(&brk) brk_orig = NULL;
@@ -209,7 +209,6 @@ void *sbrk(intptr_t increment)
 	return sbrk_orig(increment);
 }
 
-#undef mmap
 void *mmap(void *addr, size_t length, int prot, int flags,
                   int fd, off_t offset)
 {
@@ -242,7 +241,6 @@ void *mmap(void *addr, size_t length, int prot, int flags,
 	return vmpl_mmap(addr, length, prot, flags, fd, offset);
 }
 
-#undef mremap
 void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ... /* void *new_address */)
 {
 	// Call original mremap
@@ -262,7 +260,6 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 	return vmpl_mremap(old_address, old_size, new_size, flags);
 }
 
-#undef munmap
 int munmap(void *addr, size_t length)
 {
 	// Call original munmap
@@ -281,3 +278,4 @@ int munmap(void *addr, size_t length)
 
 	return vmpl_munmap(addr, length);
 }
+#endif

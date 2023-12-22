@@ -107,17 +107,19 @@
 #define SYSCFG_MFDM BIT(19) // MtrrFixDramModEn R/W
 #define SYSCFG_MFDE BIT(18) // MtrrFixDramEn R/W
 
+#if 0
 // 3.2.2 System-Linkage Registers
-// #define MSR_STAR 0xc0000081
-// #define MSR_LSTAR 0xc0000082
-// #define MSR_CSTAR 0xc0000083
-// #define MSR_SFMASK 0xc0000084
-// #define MSR_FS_BASE 0xc0000100
-// #define MSR_GS_BASE 0xc0000101
-// #define MSR_KERNEL_GS_BASE 0xc0000102
-// #define MSR_SYSENTER_CS 0x174
-// #define MSR_SYSENTER_ESP 0x175
-// #define MSR_SYSENTER_EIP 0x176
+#define MSR_STAR 0xc0000081
+#define MSR_LSTAR 0xc0000082
+#define MSR_CSTAR 0xc0000083
+#define MSR_SFMASK 0xc0000084
+#define MSR_FS_BASE 0xc0000100
+#define MSR_GS_BASE 0xc0000101
+#define MSR_KERNEL_GS_BASE 0xc0000102
+#define MSR_SYSENTER_CS 0x174
+#define MSR_SYSENTER_ESP 0x175
+#define MSR_SYSENTER_EIP 0x176
+#endif
 
 // 3.2.3 Memory-Typing Registers
 #define MTRR_CAP_REG 0x0FE

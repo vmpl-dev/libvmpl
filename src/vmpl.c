@@ -60,6 +60,7 @@ struct dune_percpu {
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
     uint64_t *pgd;
+    struct vmpl_vm_t vmpl_vm;
     struct pmm *pmm;
     void *lstar;
     void *vsyscall;
@@ -544,19 +545,9 @@ static int setup_ghcb(struct dune_percpu *percpu) { return 0; }
 static int setup_pgtable(struct dune_percpu *percpu)
 {
     int rc;
-    uint64_t cr3;
     log_info("setup pgtable");
 
-    // 获取cr3, 用于hypercall
-    rc = ioctl(dune_fd, VMPL_IOCTL_GET_CR3, &cr3);
-    if (rc != 0) {
-        perror("dune: failed to get CR3");
-        goto failed;
-    }
-
-    log_debug("dune: CR3 at 0x%lx", cr3);
-
-    rc = pgtable_init(&percpu->pgd, cr3, dune_fd);
+    rc = pgtable_init(&percpu->pgd, dune_fd);
     if (rc != 0) {
         perror("dune: failed to setup PGD");
         goto failed;
@@ -574,6 +565,8 @@ static int setup_pgtable(struct dune_percpu *percpu)
     log_success("pgtable test passed");
 #endif
 
+    vmpl_vm_init(&percpu->vmpl_vm);
+
     return 0;
 failed:
     return rc;
@@ -583,46 +576,60 @@ static int setup_pgtable(struct dune_percpu *percpu) { return 0; }
 #endif
 
 #ifdef CONFIG_VMPL_PGTABLE
-static void vmpl_do_page_fault(uint64_t va)
+static int vmpl_do_page_fault(uint64_t va, uint64_t err)
 {
-    // uint64_t paddr;
-    // TODO: 根据va分配物理页面，然后映射到va
-    // 1. 分配物理页面
-	// paddr = pmm_alloc(percpu->pmm);
-	// 2. 映射到va，遍历pgd，分配物理页面，调用pgtable模块，将页表页映射到虚拟内存
-    // pgtable_map(percpu->pgd, va, paddr, PGTABLE_PRESENT | PGTABLE_WRITE);
-	// 3. 通知vmpl
-	// 4. 通知vmpl，分配成功
-	// 5. 通知vmpl，分配失败
-	// 6. 通知vmpl，分配失败，且没有空闲物理页面
+    int rc;
+    int level;
+    pte_t *ptep;
+    rc = lookup_address(va, &level, &ptep);
+    if (rc != 0) {
+        log_err("dune: failed to lookup address");
+        goto failed;
+    }
+
+    if (level != 1) {
+        // Allocate pgtable page, map it, and retry
+        log_info("Allocate pgtable page, map it, and retry");
+		return -1;
+	} else {
+		// Allocate physical page and map it
+        log_info("Allocate physical page and map it");
+        // if the pte is not present, allocate a physical page and map it
+        if (pte_present(*ptep) && !pte_write(*ptep)) {
+            uint64_t pa = pmm_alloc(percpu->pmm);
+            if (!pa) {
+                log_err("dune: failed to allocate physical page");
+                goto failed;
+            }
+
+            *ptep |= pa | PTE_PRESENT | PTE_WRITE | PTE_USER;
+        }
+
+        // Handle page fault
+        log_debug("dune: page fault at 0x%lx", va);
+		return - 1;
+	}
+
+	return 0;
+failed:
+    return rc;
 }
 
-static void vmpl_pf_handler(struct dune_tf *tf)
+static void vmpl_default_pf_handler(struct dune_tf *tf)
 {
-#if 0
-    void *addr;
-    uint64_t vaddr = read_cr2();
-    uint64_t vstart = PAGE_ALIGN_DOWN(vaddr);
-    uint64_t vend = vstart + PAGE_SIZE;
-    if ((vstart >= PGTABLE_MMAP_BASE) && vend < (PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)) {
-        log_warn("dune: page fault on PGTABLE_MMAP_BASE");
-        addr = mmap((void *)vstart, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                             MAP_SHARED | MAP_FIXED, dune_fd, 0);
-        if (addr == MAP_FAILED) {
-            perror("dune: failed to map PGTABLE_MMAP_BASE");
-            return;
+    int rc;
+    uint64_t va = read_cr2();
+    if (is_vmpl_vm(va, &percpu->vmpl_vm)) {
+        log_debug("dune: page fault at 0x%lx", va);
+        rc = vmpl_do_page_fault(va, tf->err);
+        if (rc != 0) {
+            log_err("dune: failed to handle page fault");
+            goto failed;
         }
-        // 但所有在此映射的虚拟页，都和用户已有页面不在同一个pkey domain
-        return;
     }
-#endif
 
-    // TODO: 拦截page fault, 从vmpl的pmm中分配物理页面，然后映射到va
-	// uint64_t va = read_cr2();
-    // log_debug("dune: page fault at 0x%lx", va);
-    // if (va > PMM_MMAP_BASE && va < PMM_MMAP_BASE + PMM_MMPA_SIZE)
-    // vmpl_do_page_fault(va);
-    // dune_ret_hypercall(tf, 0);
+    return;
+failed:
 	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
@@ -665,7 +672,7 @@ static int setup_pmm(struct dune_percpu *percpu)
 
     percpu->pmm = pmm;
     log_debug("register page fault handler");
-    dune_register_pgflt_handler(vmpl_pf_handler);
+    dune_register_pgflt_handler(vmpl_default_pf_handler);
 
 	return 0;
 failed:
@@ -879,6 +886,7 @@ static struct dune_percpu *vmpl_alloc_percpu(void)
 	unsigned long fs_base, gs_base;
 
     log_debug("vmpl_alloc_percpu");
+#ifdef ARCH_GET_FS
 	if (arch_prctl(ARCH_GET_FS, &fs_base) == -1) {
 		log_err("dune: failed to get FS register");
 		return NULL;
@@ -890,6 +898,7 @@ static struct dune_percpu *vmpl_alloc_percpu(void)
         return NULL;
     }
     log_debug("dune: GS base at 0x%lx with arch_prctl", gs_base);
+#else
 
     // rdfsbase
     asm volatile("rdfsbase %0" : "=r"(fs_base));
@@ -898,6 +907,7 @@ static struct dune_percpu *vmpl_alloc_percpu(void)
     // rdgsbase
     asm volatile("rdgsbase %0" : "=r"(gs_base));
     log_debug("dune: GS base at 0x%lx with rdgsbase", gs_base);
+#endif
 
 	percpu = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
 				  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);

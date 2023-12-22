@@ -25,6 +25,7 @@ typedef uint64_t pte_t;
 
 #define PAGE_SHIFT 12
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
+#define PAGE_OFFSET(addr) ((addr) & (PAGE_SIZE - 1))
 #define PAGE_ALIGN(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_DOWN(x) ((x) & ~(PAGE_SIZE - 1))
 #define PAGE_MASK(x) ((x) & (PAGE_SIZE - 1))
@@ -120,10 +121,15 @@ typedef uint64_t pte_t;
 #define pde_bad(pde)     (!(pde_val(pde) & PDE_BAD))
 #define pte_bad(pte)     (!(pte_val(pte) & PTE_BAD))
 
-#define pml4e_present(pml4e) ((pml4e) & 0x1)
-#define pdpe_present(pdpe)   ((pdpe) & 0x1)
-#define pde_present(pde)     ((pde) & 0x1)
-#define pte_present(pte)     ((pte) & 0x1)
+#define pml4e_present(pml4e) ((pml4e) & PML4E_PRESENT)
+#define pdpe_present(pdpe)   ((pdpe) & PDPE_PRESENT)
+#define pde_present(pde)     ((pde) & PDE_PRESENT)
+#define pte_present(pte)     ((pte) & PTE_PRESENT)
+
+#define pml4e_write(pml4e) ((pml4e) & PTE_WRITE)
+#define pdpe_write(pdpe)   ((pdpe) & PTE_WRITE)
+#define pde_write(pde)     ((pde) & PTE_WRITE)
+#define pte_write(pte)     ((pte) & PTE_WRITE)
 #endif
 
 #define bitset(x, n) ((x) | (1UL << (n)))
@@ -143,7 +149,7 @@ static inline bool is_aligned(PhysAddr addr, size_t alignment) {
     return (addr % alignment) == 0;
 }
 
-int pgtable_init(uint64_t **pgd, uint64_t cr3, int fd);
+int pgtable_init(uint64_t **pgd, int fd);
 int pgtable_free(uint64_t *pgd);
 int pgtable_selftest(uint64_t *pgd, uint64_t va);
 
@@ -157,6 +163,9 @@ int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep);
 
 uint64_t pgtable_pa_to_va(uint64_t pa);
 uint64_t pgtable_va_to_pa(uint64_t va);
+
+// Pre-allocaed pgtable
+
 
 // Memory allocation in the guest process
 void *vmpl_alloc(size_t size);

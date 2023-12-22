@@ -1,10 +1,13 @@
 #define _GNU_SOURCE
+#include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
 
+#include "vmpl-dev.h"
 #include "sev.h"
 #include "log.h"
 #include "bitmap.h"
@@ -23,6 +26,10 @@
 static char *pt_names[] = { "PML4", "PDP", "PD", "PT", "Page" };
 static __thread uint64_t *this_pgd;
 static void *free_pages;
+
+#define __pgtable_map(paddr, fd)                         \
+    mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE, \
+         PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0)
 
 /**
  * @brief  Setup page table self-mapping
@@ -43,8 +50,7 @@ static int __pgtable_init(uint64_t paddr, int level, int fd)
     bitclr(paddr, 63);
     bitclr(paddr, 51);
 
-    vaddr = mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE,
-				 PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
+    vaddr = __pgtable_map(paddr, fd);
     if (vaddr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
         goto failed;
@@ -100,16 +106,27 @@ static int __pgtable_update(int fd)
             goto failed;
         }
     }
-    return base;
+
+	return 0;
 failed:
-    return -ENOMEM;
+	return -ENOMEM;
 }
 #endif
 
-int pgtable_init(uint64_t **pgd, uint64_t cr3, int fd)
+int pgtable_init(uint64_t **pgd, int fd)
 {
 	int rc;
+    uint64_t cr3;
 	log_debug("pgtable init");
+
+    // 获取cr3, 用于hypercall
+    rc = ioctl(fd, VMPL_IOCTL_GET_CR3, &cr3);
+    if (rc != 0) {
+        perror("dune: failed to get CR3");
+        return rc;
+    }
+
+    log_debug("dune: CR3 at 0x%lx", cr3);
 
     // Initialize page table
 	rc = __pgtable_init(cr3, 0, fd);
@@ -167,15 +184,56 @@ int pgtable_selftest(uint64_t *pgd, uint64_t va)
     return 0;
 }
 
+#ifdef CONFIG_VMPL_PGTABLE_ALLOC
+/**
+ * https://www.kernel.org/doc/Documentation/vm/pagemap.txt
+ */
+uint64_t pgtable_va_to_pa(uint64_t vaddr)
+{
+    uint64_t phys_addr;
+    int mem_fd = open("/proc/self/pagemap", O_RDONLY);
+    if (mem_fd < 0) {
+        log_err("open /proc/self/pagemap failed");
+        return 0;
+    }
+
+    uint64_t virt_addr = (uint64_t)virt_addr;
+    uint64_t offset = (virt_addr >> PAGE_SHIFT) * sizeof(uint64_t);
+
+    if (lseek(mem_fd, offset, SEEK_SET) == -1) {
+        log_err("lseek failed");
+        return 0;
+    }
+
+    uint64_t read_val;
+    if (read(mem_fd, &read_val, sizeof(uint64_t)) != sizeof(uint64_t)) {
+        log_err("read failed");
+        return 0;
+    }
+
+    if (!(read_val & (1ULL << 63))) {
+        log_err("page not present");
+        return 0;
+    }
+
+    phys_addr = read_val & ((1ULL << 54) - 1);
+    close(mem_fd);
+    return phys_addr;
+}
+
+/**
+ * @brief  Clone page table
+ * @note   
+ * @param  dst_pgd: Destination page table
+ * @param  src_pgd: Source page table
+ * @param  level: Level of the page table
+ * @retval 
+ */
 int __pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd, uint64_t level)
 {
     int rc = 0;
     uint64_t *src_pgd_entry, *dst_pgd_entry;
     log_debug("pgtable clone");
-    // TODO: Recursively clone page table entries
-    // 1. Allocate a new page table
-    // 2. Clone the page table entries
-    // 3. Update the page table entry in the parent page table
     if (level == 0) {
         return 0;
     }
@@ -209,10 +267,6 @@ int pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd)
 {
     int rc = 0;
     log_debug("pgtable clone");
-    // TODO: Clone page table entries
-    // 1. Allocate a new page table
-    // 2. Clone the page table entries
-    // 3. Update the page table entry in the parent page table
     rc = __pgtable_clone(dst_pgd, src_pgd, 4);
     if (rc) {
         log_err("pgtable clone failed");
@@ -221,27 +275,7 @@ int pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd)
 
     return 0;
 }
-
-int pgtable_mmap(uint64_t *pgd, uint64_t va, size_t len, int perm)
-{
-    log_debug("pgtable mmap");
-    // TODO: mmap should be implemented in pgtable_mmap
-    return 0;
-}
-
-int pgtable_mprotect(uint64_t *pgd, uint64_t va, size_t len, int perm)
-{
-    log_debug("pgtable mprotect");
-    // TODO: mprotect should be implemented in pgtable_mprotect
-    return 0;
-}
-
-int pgtable_unmap(uint64_t *pgd, uint64_t va, size_t len, int level)
-{
-    log_debug("pgtable unmap");
-    // TODO: unmap should be implemented in pgtable_unmap
-    return 0;
-}
+#endif
 
 int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
@@ -326,31 +360,6 @@ uint64_t pgtable_va_to_pa(uint64_t va)
     }
 
     return pte_addr(*ptep);
-}
-
-// https://www.kernel.org/doc/Documentation/vm/pagemap.txt
-uint64_t pgtable_va_to_pa(uint64_t vaddr)
-{
-    FILE *pagemap;
-    intptr_t paddr = 0;
-    int offset = (vaddr / sysconf(_SC_PAGESIZE)) * sizeof(uint64_t);
-    uint64_t e;
-
-    if ((pagemap = fopen("/proc/self/pagemap", "r"))) {
-        if (lseek(fileno(pagemap), offset, SEEK_SET) == offset) {
-            if (fread(&e, sizeof(uint64_t), 1, pagemap)) {
-                if (e & (1ULL << 63)) { // page present ?
-                    paddr = e & ((1ULL << 54) - 1); // pfn mask
-                    paddr = paddr * sysconf(_SC_PAGESIZE);
-                    // add offset within page
-                    paddr = paddr | (vaddr & (sysconf(_SC_PAGESIZE) - 1));
-                }   
-            }   
-        }   
-        fclose(pagemap);
-    }   
-
-    return paddr;
 }
 
 static void update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)

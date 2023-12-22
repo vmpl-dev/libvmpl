@@ -27,7 +27,6 @@ libdunify_la_SOURCES = src/dunify.c
 libdunify_la_LDFLAGS = -fPIC -shared \
                     -ldl \
                     -lvmpl \
-                    -lexecinfo \
                     -version-info 1:0:0
 
 # Specify headers to be installed
