@@ -29,7 +29,7 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm) {
     while (fgets(line, sizeof(line), maps_file)) {
         if (strstr(line, "[heap]")) {
             sscanf(line, "%lx-%lx", &start, &end);
-            log_info("Heap range: %lx - %lx\n", start, end);
+            log_info("Heap range: %lx - %lx", start, end);
         }
     }
 

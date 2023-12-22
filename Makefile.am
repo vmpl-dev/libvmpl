@@ -9,6 +9,7 @@ AM_LDFLAGS = -L. -lvmpl
 lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
+                    src/vmpl-ioctl.c \
                     src/pgtable.c \
                     src/mm.c \
                     src/seimi.c \

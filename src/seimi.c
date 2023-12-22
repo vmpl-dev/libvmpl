@@ -2,7 +2,7 @@
 #include <errno.h>
 
 #include "vmpl-seimi.h"
-#include "vmpl-dev.h"
+#include "vmpl-ioctl.h"
 #include "seimi.h"
 #include "log.h"
 
@@ -12,7 +12,7 @@ int setup_seimi(int dune_fd)
     int rc;
 
     log_info("Setting up SEIMI");
-    rc = ioctl(dune_fd, VMPL_IOCTL_SET_SEIMI, 0);
+    rc = vmpl_ioctl_set_seimi(dune_fd);
     if (rc < 0) {
         log_err("Failed to setup SEIMI: %s", strerror(errno));
     }

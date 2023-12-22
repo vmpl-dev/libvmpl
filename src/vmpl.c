@@ -36,6 +36,7 @@
 #include "mmu.h"
 #include "apic.h"
 #include "vmpl-dev.h"
+#include "vmpl-ioctl.h"
 #include "vmpl.h"
 #include "pgtable.h"
 #include "mm.h"
@@ -44,6 +45,14 @@
 #include "vc.h"
 #include "serial.h"
 #include "log.h"
+
+#define vmpl_assert(x)                                                         \
+	do {                                                                       \
+		if (!(x)) {                                                            \
+			log_err("vmpl: assertion failed: %s", #x);                         \
+			abort();                                                           \
+		}                                                                      \
+	} while (0);
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 #define XSAVE_SIZE 4096
@@ -565,17 +574,11 @@ static int setup_pgtable(struct dune_percpu *percpu)
     log_success("pgtable test passed");
 #endif
 
-    vmpl_vm_init(&percpu->vmpl_vm);
-
     return 0;
 failed:
     return rc;
 }
-#else
-static int setup_pgtable(struct dune_percpu *percpu) { return 0; }
-#endif
 
-#ifdef CONFIG_VMPL_PGTABLE
 static int vmpl_do_page_fault(uint64_t va, uint64_t err)
 {
     int rc;
@@ -583,34 +586,29 @@ static int vmpl_do_page_fault(uint64_t va, uint64_t err)
     pte_t *ptep;
     rc = lookup_address(va, &level, &ptep);
     if (rc != 0) {
-        log_err("dune: failed to lookup address");
         goto failed;
     }
 
     if (level != 1) {
         // Allocate pgtable page, map it, and retry
-        log_info("Allocate pgtable page, map it, and retry");
 		return -1;
 	} else {
+        // TODO: lazy-mapping of mmap/mremap
 		// Allocate physical page and map it
-        log_info("Allocate physical page and map it");
-        // if the pte is not present, allocate a physical page and map it
         if (pte_present(*ptep) && !pte_write(*ptep)) {
-            uint64_t pa = pmm_alloc(percpu->pmm);
+            // if the pte is present, allocate a physical page and map it
+            uint64_t pa = pmm_alloc_page(percpu->pmm);
             if (!pa) {
-                log_err("dune: failed to allocate physical page");
                 goto failed;
             }
 
             *ptep |= pa | PTE_PRESENT | PTE_WRITE | PTE_USER;
-        }
+			return 0;
+		}
 
-        // Handle page fault
-        log_debug("dune: page fault at 0x%lx", va);
 		return - 1;
 	}
 
-	return 0;
 failed:
     return rc;
 }
@@ -619,11 +617,10 @@ static void vmpl_default_pf_handler(struct dune_tf *tf)
 {
     int rc;
     uint64_t va = read_cr2();
+    // TODO: Is it surficient?
     if (is_vmpl_vm(va, &percpu->vmpl_vm)) {
-        log_debug("dune: page fault at 0x%lx", va);
         rc = vmpl_do_page_fault(va, tf->err);
         if (rc != 0) {
-            log_err("dune: failed to handle page fault");
             goto failed;
         }
     }
@@ -636,40 +633,46 @@ failed:
 static int setup_pmm(struct dune_percpu *percpu)
 {
 	int rc;
-	uint64_t *pages;
+	size_t num_pages = 256;
+	size_t num_areas = 64;
 	pmm *pmm;
 	log_info("setup pmm");
 
-    log_debug("dune: PMM at %p", pmm);
-    pages = mmap((void *)PMM_MMAP_BASE, PMM_MMPA_SIZE, PROT_READ | PROT_WRITE,
-              MAP_SHARED | MAP_FIXED, dune_fd, 0);
-
-    if (pages == MAP_FAILED) {
-        perror("dune: failed to map PMM");
-        rc = -ENOMEM;
-        goto failed;
-    }
-
-    uint64_t order = 9;
-    rc = ioctl(dune_fd, VMPL_IOCTL_GET_PAGES, &order);
-    if (rc != 0) {
-        perror("dune: failed to get pages");
-        return rc;
-    }
-
-	pmm = pmm_init(pages);
+	pmm = pmm_create(num_pages, num_areas);
     if (!pmm) {
         perror("dune: failed to setup PMM");
         rc = -ENOMEM;
         goto failed;
     }
 
-    if (pmm_self_test() == 0) {
+    // Add 64 areas to pmm
+    uint64_t phys;
+    for (size_t i = 0; i < num_areas; i++) {
+		rc = vmpl_ioctl_get_pages(dune_fd, &phys);
+        if (rc != 0) {
+            perror("dune: failed to get pages");
+            rc = -ENOMEM;
+            goto failed;
+        }
+
+		if (pmm_add_area(pmm, phys) != 0) {
+			perror("dune: failed to add area to PMM");
+            rc = -ENOMEM;
+            goto failed;
+		}
+
+        log_debug("dune: add area %d at 0x%lx", i, phys);
+	}
+
+    log_debug("dune: add %d areas to PMM", num_areas);
+    if (pmm_self_test(pmm) == 0) {
         perror("dune: failed to test PMM");
         rc = -ENOMEM;
         goto failed;
     }
 
+    size_t capacity = pmm_get_capacity(pmm);
+    log_debug("dune: pmm capacity is %ld", capacity);
     percpu->pmm = pmm;
     log_debug("register page fault handler");
     dune_register_pgflt_handler(vmpl_default_pf_handler);
@@ -678,8 +681,34 @@ static int setup_pmm(struct dune_percpu *percpu)
 failed:
     return rc;
 }
+
+static int setup_mm(struct dune_percpu *percpu)
+{
+    int rc;
+    log_info("setup mm");
+
+    // Setup pgtable
+    rc = setup_pgtable(percpu);
+    if (rc != 0) {
+        perror("dune: failed to setup pgtable");
+        goto failed;
+    }
+
+    vmpl_vm_init(&percpu->vmpl_vm);
+
+    // Setup pmm
+    rc = setup_pmm(percpu);
+    if (rc != 0) {
+        perror("dune: failed to setup pmm");
+        goto failed;
+    }
+
+    return 0;
+failed:
+    return rc;
+}
 #else
-static int setup_pmm(struct dune_percpu *percpu) { return 0; }
+static int setup_mm(struct dune_percpu *percpu) { return 0; }
 #endif
 
 #ifdef CONFIG_VMPL_XSAVE
@@ -984,6 +1013,8 @@ failed:
     return rc;
 }
 
+
+
 /**
  * Initializes the VMPL library before the main program starts.
  * This function sets up VMPL2 access permission, builds assert, sets up signal, and sets up IDT.
@@ -994,24 +1025,15 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 
     // Setup CPU set
     rc = setup_cpuset();
-    if (rc != 0) {
-        perror("dune: failed to setup CPU set");
-        goto failed;
-    }
+    vmpl_assert(rc == 0);
 
     // Setup Stack
     rc = setup_stack();
-    if (rc != 0) {
-        perror("dune: failed to setup stack");
-        goto failed;
-    }
+    vmpl_assert(rc == 0);
 
     // Setup GHCB for hypercall
     rc = setup_ghcb(percpu);
-    if (rc != 0) {
-        perror("dune: failed to setup GHCB");
-        goto failed;
-    }
+    vmpl_assert(rc == 0);
 
     // Setup segments registers
     setup_vmsa(percpu, config);
@@ -1019,37 +1041,19 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     // Setup GDT for hypercall
     setup_gdt(percpu);
 
-    // Setup pgtable mapping
-	rc = setup_pgtable(percpu);
-    if (rc != 0) {
-        perror("dune: failed to setup pgtable");
-        goto failed;
-    }
-
-    // Setup pmm
-    rc = setup_pmm(percpu);
-    if (rc != 0) {
-        perror("dune: failed to setup pmm");
-        goto failed;
-    }
+    // Setup Memory Management
+	rc = setup_mm(percpu);
+    vmpl_assert(rc == 0);
 
     // Setup SEIMI for Intra-Process Isolation
     rc = setup_seimi(dune_fd);
-    if (rc != 0) {
-        perror("dune: failed to set SEIMI");
-        goto failed;
-    }
+    vmpl_assert(rc == 0);
 
     // Setup XSAVE for FPU
     rc = xsave_begin(percpu);
-    if (rc != 0) {
-        perror("dune: failed to set XSAVE");
-        goto failed;
-    }
+    vmpl_assert(rc == 0);
 
-    return 0;    
-failed:
-    return rc;
+    return 0;
 }
 
 /**

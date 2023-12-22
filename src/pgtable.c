@@ -8,6 +8,7 @@
 #include <assert.h>
 
 #include "vmpl-dev.h"
+#include "vmpl-ioctl.h"
 #include "sev.h"
 #include "log.h"
 #include "bitmap.h"
@@ -39,10 +40,10 @@ static void *free_pages;
  * @param  fd: File descriptor of the vmpl-dev
  * @retval 
  */
-static int __pgtable_init(uint64_t paddr, int level, int fd)
+static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count)
 {
-	size_t max_i;
-	uint64_t *vaddr;
+    size_t max_i;
+    uint64_t *vaddr;
 
     if (level == 4)
         return 0;
@@ -61,11 +62,13 @@ static int __pgtable_init(uint64_t paddr, int level, int fd)
     for (int i = 0; i < max_i; i++) {
         if (vaddr[i] & 0x1) {
             log_trace("%*s%s Entry[%d]: %016lx", padding(level), "", pt_names[level], i, vaddr[i]);
-            __pgtable_init(pte_addr(vaddr[i]), level + 1, fd);
+            __pgtable_init(pte_addr(vaddr[i]), level + 1, fd, pgtable_count);
         }
     }
 
-	return 0;
+    (*pgtable_count)++; // Increment page count
+
+    return 0;
 failed:
     return -ENOMEM;
 }
@@ -117,24 +120,26 @@ int pgtable_init(uint64_t **pgd, int fd)
 {
 	int rc;
     uint64_t cr3;
+	size_t pgtable_count = 0;
 	log_debug("pgtable init");
 
-    // 获取cr3, 用于hypercall
-    rc = ioctl(fd, VMPL_IOCTL_GET_CR3, &cr3);
-    if (rc != 0) {
-        perror("dune: failed to get CR3");
+	// Get CR3
+    rc = vmpl_ioctl_get_cr3(fd, &cr3);
+    if (rc) {
+        log_err("get cr3 failed");
         return rc;
     }
 
     log_debug("dune: CR3 at 0x%lx", cr3);
 
     // Initialize page table
-	rc = __pgtable_init(cr3, 0, fd);
+	rc = __pgtable_init(cr3, 0, fd, &pgtable_count);
     if (rc) {
         log_err("pgtable init failed");
         return rc;
     }
 
+    log_debug("dune: %lu page tables", pgtable_count);
     *pgd = (uint64_t *)(PGTABLE_MMAP_BASE + cr3);
     this_pgd = *pgd;
 
@@ -238,7 +243,7 @@ int __pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd, uint64_t level)
         return 0;
     }
 
-    dst_pgd_entry = (uint64_t *)pmm_alloc(1);
+    dst_pgd_entry = (uint64_t *)pmm_alloc_page(1);
     if (dst_pgd_entry == NULL) {
         log_err("pmm alloc failed");
         return -ENOMEM;

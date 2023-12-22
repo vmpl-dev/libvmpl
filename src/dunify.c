@@ -104,7 +104,6 @@ int __libc_start_main(int (*main)(int, char **, char **), int argc, char **argv,
 	return orig(main_hook, argc, argv, init_dummy, fini_dummy, ldso_dummy);
 }
 
-#undef fork
 pid_t fork()
 {
 	pid_t pid;
@@ -124,10 +123,9 @@ pid_t fork()
 		int ret = vmpl_enter(1, NULL);
 		if (ret) {
 			log_err("failed to initialize dune\n");
-			return -1;
+		} else {
+			log_debug("dune mode entered\n");
 		}
-
-		log_debug("dune mode entered\n");
 	}
 
 	return pid;
@@ -145,14 +143,13 @@ void *start_orig(void *arg)
 	int ret = vmpl_enter(1, NULL);
 	if (ret) {
 		log_err("failed to initialize dune\n");
-		return NULL;
+	} else {
+		log_debug("dune mode entered\n");
 	}
 
-	log_debug("dune mode entered\n");
 	return args->start_routine(args->arg);
 }
 
-#undef pthread_create
 int pthread_create(pthread_t *restrict res,
 					 const pthread_attr_t *restrict attrp,
 					 void *(*entry)(void *), void *restrict arg)
