@@ -606,7 +606,7 @@ static int vmpl_do_page_fault(uint64_t va, uint64_t err)
 			return 0;
 		}
 
-		return - 1;
+		return -1;
 	}
 
 failed:
@@ -615,6 +615,7 @@ failed:
 
 static void vmpl_default_pf_handler(struct dune_tf *tf)
 {
+#if 0
     int rc;
     uint64_t va = read_cr2();
     // TODO: Is it surficient?
@@ -627,6 +628,7 @@ static void vmpl_default_pf_handler(struct dune_tf *tf)
 
     return;
 failed:
+#endif
 	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
@@ -661,7 +663,7 @@ static int setup_pmm(struct dune_percpu *percpu)
             goto failed;
 		}
 
-        log_debug("dune: add area %d at 0x%lx", i, phys);
+        log_trace("dune: add area %d at 0x%lx", i, phys);
 	}
 
     log_debug("dune: add %d areas to PMM", num_areas);

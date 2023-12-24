@@ -284,13 +284,8 @@ int pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd)
 
 int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
-    log_debug("lookup address in pgd");
-    log_trace("pgd: %p, va: %lx", pgd, va);
-
     pml4e_t *pml4e = pml4_offset(pgd, va);
-    log_trace("pml4e: %p, *pml4e: %lx", pml4e, *pml4e);
     if (pml4e_none(*pml4e) || pml4e_bad(*pml4e)) {
-        log_err("pml4e is none");
         return -EINVAL;
     }
 
@@ -298,9 +293,7 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
         *level = 4;
 
     pdpe_t *pdpe = pdp_offset(pml4e, va);
-    log_trace("pdpe: %p, *pdpe: %lx", pdpe, *pdpe);
     if (pdpe_none(*pdpe) || pdpe_bad(*pdpe)) {
-        log_err("pdpe is none");
         return -EINVAL;
     }
 
@@ -308,9 +301,7 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
         *level = 3;
 
     pde_t *pde = pd_offset(pdpe, va);
-    log_trace("pde: %p, *pde: %lx", pde, *pde);
     if (pde_none(*pde) || pde_bad(*pde)) {
-        log_err("pde is none");
         return -EINVAL;
     }
 
@@ -318,9 +309,7 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
         *level = 2;
 
     pte_t *pte = pte_offset(pde, va);
-    log_trace("pte: %p, *pte: %lx", pte, *pte);
     if (pte_none(*pte) || !pte_present(*pte)) {
-        log_err("pte is none");
         return -EINVAL;
     }
 
@@ -335,9 +324,7 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
 
 int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep)
 {
-    log_debug("lookup address");
     if (this_pgd == NULL) {
-        log_err("pgd is NULL");
         return -EINVAL;
     }
 
@@ -354,12 +341,11 @@ uint64_t pgtable_va_to_pa(uint64_t va)
     pte_t *ptep;
     int level;
 
-    if ((va > PGTABLE_MMAP_BASE) && (va < PGTABLE_MMAP_BASE + PAGE_SIZE)) {
+    if ((va > PGTABLE_MMAP_BASE) && (va < PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)) {
         return virt_to_phys(va);
     } else {
         int rc = lookup_address(va, &level, &ptep);
         if (rc) {
-            log_err("lookup address failed");
             return 0;
         }
     }
@@ -375,7 +361,6 @@ static void update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)
 
     ret = lookup_address_in_pgd(pgd, va, &level, &ptep);
     if (ret) {
-        log_err("lookup address in pgd failed");
         return;
     }
 
