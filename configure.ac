@@ -22,6 +22,18 @@ AC_CONFIG_SRCDIR([src])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_MACRO_DIRS([m4])
 
+AC_ARG_WITH([vmpl-stack-size], [AS_HELP_STRING([--with-vmpl-stack-size],
+                                                [Set vmpl stack size])],
+            [with_vmpl_stack_size=$withval],
+            [with_vmpl_stack_size=0x4000000])
+AC_DEFINE_UNQUOTED([CONFIG_VMPL_STACK_SIZE], [$with_vmpl_stack_size], [vmpl stack size])
+
+AC_ARG_WITH([vmpl-heap-size], [AS_HELP_STRING([--with-vmpl-heap-size],
+                                               [Set vmpl heap size])],
+            [with_vmpl_heap_size=$withval],
+            [with_vmpl_heap_size=0x10000000])
+AC_DEFINE_UNQUOTED([CONFIG_VMPL_HEAP_SIZE], [$with_vmpl_heap_size], [vmpl heap size])
+
 AC_ARG_ENABLE([vmpl-cpuset],
               [AS_HELP_STRING([--enable-vmpl-cpuset],
                               [Enable cpuset support])],
@@ -33,7 +45,7 @@ AC_ARG_ENABLE([vmpl-signal],
               [AS_HELP_STRING([--enable-vmpl-signal],
                               [Enable signal support])],
               [enable_vmpl_signal=$enableval],
-              [enable_vmpl_signal=no])
+              [enable_vmpl_signal=yes])
 AM_CONDITIONAL([ENABLE_VMPL_SIGNAL], [test "x$enable_vmpl_signal" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-apic],

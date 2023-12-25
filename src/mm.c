@@ -17,8 +17,10 @@
  */
 int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm) {
     FILE *maps_file;
-    uint64_t start, end;
-    char line[256];
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+    size_t heap_start, heap_end;
 
     maps_file = fopen("/proc/self/maps", "r");
     if (!maps_file) {
@@ -26,15 +28,24 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm) {
         return 1;
     }
 
-    while (fgets(line, sizeof(line), maps_file)) {
+	vmpl_vm->heap_start = 0;
+    vmpl_vm->heap_end = 0;
+
+	while ((read = getline(&line, &len, maps_file)) != -1) {
         if (strstr(line, "[heap]")) {
-            sscanf(line, "%lx-%lx", &start, &end);
-            log_info("Heap range: %lx - %lx", start, end);
+            if (sscanf(line, "%lx - %lx", &heap_start, &heap_end) == 2) {
+                log_debug("Heap range: %lx-%lx", heap_start, heap_end);
+                if (vmpl_vm->heap_start == 0) {
+                    vmpl_vm->heap_start = heap_start;
+                }
+                if (vmpl_vm->heap_end < heap_end) {
+                    vmpl_vm->heap_end = heap_end;
+                }
+            }
         }
     }
 
-    vmpl_vm->heap_start = start;
-    vmpl_vm->heap_end = end;
+    log_info("Heap range: %lx-%lx", vmpl_vm->heap_start, vmpl_vm->heap_end);
 
     fclose(maps_file);
     return 0;

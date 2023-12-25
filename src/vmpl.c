@@ -377,6 +377,40 @@ static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
  * @return 0 on success, otherwise an error code.
  */
 #ifdef CONFIG_VMPL_CPUSET
+static int get_cpu_count()
+{
+    int rc;
+    long nprocs;
+    log_info("get cpu count");
+
+    nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+    if (nprocs < 0) {
+        perror("dune: failed to get cpu count");
+        rc = -EINVAL;
+        goto failed;
+    }
+
+    log_debug("dune: %ld cpus online", nprocs);
+    return nprocs;
+failed:
+    return rc;
+}
+
+static int alloc_cpu()
+{
+	static int current_cpu = 0;
+	static int cpu_count = 0;
+    log_info("alloc cpu");
+    if (cpu_count == 0) {
+        cpu_count = get_cpu_count();
+        vmpl_assert(cpu_count > 0);
+    }
+
+	int cpu = current_cpu;
+	current_cpu = (current_cpu + 1) % cpu_count;
+	return cpu;
+}
+
 static int setup_cpuset()
 {
     int cpu;
@@ -384,7 +418,7 @@ static int setup_cpuset()
 
     log_info("setup cpuset");
 
-    cpu = sched_getcpu();
+    cpu = alloc_cpu();
     CPU_ZERO(&cpuset);
     CPU_SET(cpu, &cpuset);
 
@@ -394,6 +428,7 @@ static int setup_cpuset()
     }
 
     log_debug("dune: running on CPU %d", cpu);
+    log_info("Thread %d bound to CPU %d", gettid(), cpu);
 
     return 0;
 }
@@ -551,85 +586,60 @@ static int setup_ghcb(struct dune_percpu *percpu) { return 0; }
  * @return void
  */
 #ifdef CONFIG_VMPL_PGTABLE
-static int setup_pgtable(struct dune_percpu *percpu)
+/**
+ * @brief  Setup stack for VMPL library
+ * @note   
+ * @retval None
+ */
+static int setup_stack(size_t stack_size)
 {
     int rc;
-    log_info("setup pgtable");
+	const rlim_t kStackSize = stack_size;
+	struct rlimit rl;
+	log_info("setup stack");
 
-    rc = pgtable_init(&percpu->pgd, dune_fd);
+    rc = getrlimit(RLIMIT_STACK, &rl);
     if (rc != 0) {
-        perror("dune: failed to setup PGD");
+        perror("dune: failed to get stack size");
         goto failed;
     }
 
-    log_debug("dune: PGD at %p", percpu->pgd);
-
-#ifdef CONFIG_PGTBALE_SELFTEST
-    rc = pgtable_selftest(percpu->pgd, (uint64_t)percpu->pgd);
-    if (rc != 0) {
-        perror("dune: failed to test pgtable");
-        goto failed;
+    if (rl.rlim_cur < kStackSize) {
+        rl.rlim_cur = kStackSize;
+        rc = setrlimit(RLIMIT_STACK, &rl);
+        if (rc != 0) {
+            perror("dune: failed to set stack size");
+            goto failed;
+        }
     }
-
-    log_success("pgtable test passed");
-#endif
 
     return 0;
 failed:
     return rc;
 }
 
-static int vmpl_do_page_fault(uint64_t va, uint64_t err)
+static int setup_heap(size_t increase_size)
 {
     int rc;
-    int level;
-    pte_t *ptep;
-    rc = lookup_address(va, &level, &ptep);
+    struct rlimit rl;
+    log_info("setup heap");
+
+    rc = getrlimit(RLIMIT_DATA, &rl);
     if (rc != 0) {
+        perror("dune: failed to get heap size");
         goto failed;
     }
 
-    if (level != 1) {
-        // Allocate pgtable page, map it, and retry
-		return -1;
-	} else {
-        // TODO: lazy-mapping of mmap/mremap
-		// Allocate physical page and map it
-        if (pte_present(*ptep) && !pte_write(*ptep)) {
-            // if the pte is present, allocate a physical page and map it
-            uint64_t pa = pmm_alloc_page(percpu->pmm);
-            if (!pa) {
-                goto failed;
-            }
-
-            *ptep |= pa | PTE_PRESENT | PTE_WRITE | PTE_USER;
-			return 0;
-		}
-
-		return -1;
-	}
-
-failed:
-    return rc;
-}
-
-static void vmpl_default_pf_handler(struct dune_tf *tf)
-{
-#if 0
-    int rc;
-    uint64_t va = read_cr2();
-    // TODO: Is it surficient?
-    if (is_vmpl_vm(va, &percpu->vmpl_vm)) {
-        rc = vmpl_do_page_fault(va, tf->err);
-        if (rc != 0) {
-            goto failed;
-        }
+    rl.rlim_cur += increase_size;
+    rc = setrlimit(RLIMIT_DATA, &rl);
+    if (rc != 0) {
+        perror("dune: failed to set heap size");
+        goto failed;
     }
 
-    return;
+    return 0;
 failed:
-#endif
-	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
+    return rc;
 }
 
 static int setup_pmm(struct dune_percpu *percpu)
@@ -676,12 +686,87 @@ static int setup_pmm(struct dune_percpu *percpu)
     size_t capacity = pmm_get_capacity(pmm);
     log_debug("dune: pmm capacity is %ld", capacity);
     percpu->pmm = pmm;
-    log_debug("register page fault handler");
-    dune_register_pgflt_handler(vmpl_default_pf_handler);
 
 	return 0;
 failed:
     return rc;
+}
+
+static int setup_pgtable(struct dune_percpu *percpu)
+{
+    int rc;
+    log_info("setup pgtable");
+
+    rc = pgtable_init(&percpu->pgd, dune_fd);
+    if (rc != 0) {
+        perror("dune: failed to setup PGD");
+        goto failed;
+    }
+
+    log_debug("dune: PGD at %p", percpu->pgd);
+
+#ifdef CONFIG_PGTBALE_SELFTEST
+    rc = pgtable_selftest(percpu->pgd, (uint64_t)percpu->pgd);
+    if (rc != 0) {
+        perror("dune: failed to test pgtable");
+        goto failed;
+    }
+#endif
+
+    return 0;
+failed:
+    return rc;
+}
+
+static int vmpl_do_page_fault(uint64_t va, uint64_t err)
+{
+    int rc;
+    int level;
+    pte_t *ptep;
+    rc = lookup_address(va, &level, &ptep);
+    if (rc != 0) {
+        goto failed;
+    }
+
+    if (level != 1) {
+        // Allocate pgtable page, map it, and retry
+		return -1;
+	} else {
+		// Allocate physical page and map it
+        if (pte_present(*ptep) && !pte_write(*ptep)) {
+            // if the pte is present, allocate a physical page and map it
+            uint64_t pa = pmm_alloc_page(percpu->pmm);
+            if (!pa) {
+                goto failed;
+            }
+
+            *ptep |= pa | PTE_PRESENT | PTE_WRITE | PTE_USER;
+			return 0;
+		}
+
+		return -1;
+	}
+
+failed:
+    return rc;
+}
+
+static void vmpl_default_pf_handler(struct dune_tf *tf)
+{
+#if 0
+    int rc;
+    uint64_t va = read_cr2();
+    if (is_vmpl_vm(va, &percpu->vmpl_vm)) {
+        rc = vmpl_do_page_fault(va, tf->err);
+        if (rc != 0) {
+            goto failed;
+        }
+    }
+
+    return;
+failed:
+#endif
+	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
 static int setup_mm(struct dune_percpu *percpu)
@@ -689,25 +774,30 @@ static int setup_mm(struct dune_percpu *percpu)
     int rc;
     log_info("setup mm");
 
-    // Setup pgtable
-    rc = setup_pgtable(percpu);
-    if (rc != 0) {
-        perror("dune: failed to setup pgtable");
-        goto failed;
-    }
+    // Setup Stack
+    rc = setup_stack(CONFIG_VMPL_STACK_SIZE);
+    vmpl_assert(rc == 0);
 
-    vmpl_vm_init(&percpu->vmpl_vm);
+    // Setup Heap
+    rc = setup_heap(CONFIG_VMPL_HEAP_SIZE);
+    vmpl_assert(rc == 0);
+
+    // Setup VMPL VM
+    rc = vmpl_vm_init(&percpu->vmpl_vm);
+    vmpl_assert(rc == 0);
 
     // Setup pmm
     rc = setup_pmm(percpu);
-    if (rc != 0) {
-        perror("dune: failed to setup pmm");
-        goto failed;
-    }
+    vmpl_assert(rc == 0);
+
+    // Setup pgtable
+    rc = setup_pgtable(percpu);
+    vmpl_assert(rc == 0);
+
+    log_debug("register page fault handler");
+    dune_register_pgflt_handler(vmpl_default_pf_handler);
 
     return 0;
-failed:
-    return rc;
 }
 #else
 static int setup_mm(struct dune_percpu *percpu) { return 0; }
@@ -775,38 +865,6 @@ static int xsave_end(struct dune_percpu *percpu)
 static int xsave_begin(struct dune_percpu *percpu) { return 0; }
 static int xsave_end(struct dune_percpu *percpu) { return 0; }
 #endif
-
-/**
- * @brief  Setup stack for VMPL library
- * @note   
- * @retval None
- */
-static int setup_stack(void)
-{
-    int rc;
-    const rlim_t kStackSize = BIT(26); // min stack size = 64 MB
-    struct rlimit rl;
-    log_info("setup stack");
-
-    rc = getrlimit(RLIMIT_STACK, &rl);
-    if (rc != 0) {
-        perror("dune: failed to get stack size");
-        goto failed;
-    }
-
-    if (rl.rlim_cur < kStackSize) {
-        rl.rlim_cur = kStackSize;
-        rc = setrlimit(RLIMIT_STACK, &rl);
-        if (rc != 0) {
-            perror("dune: failed to set stack size");
-            goto failed;
-        }
-    }
-
-    return 0;
-failed:
-    return rc;
-}
 
 /** 
  * @brief  Dune signal handler registration
@@ -887,7 +945,7 @@ static int setup_safe_stack(struct dune_percpu *percpu)
 	int i;
 	char *safe_stack;
 
-    log_info("setup safe stack");
+	log_info("setup safe stack");
 	safe_stack = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
 					  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
@@ -1015,8 +1073,6 @@ failed:
     return rc;
 }
 
-
-
 /**
  * Initializes the VMPL library before the main program starts.
  * This function sets up VMPL2 access permission, builds assert, sets up signal, and sets up IDT.
@@ -1025,30 +1081,26 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 {
     int rc;
 
+    // Setup GDT for hypercall
+    setup_gdt(percpu);
+
+    // Setup segments registers
+    setup_vmsa(percpu, config);
+
     // Setup CPU set
     rc = setup_cpuset();
-    vmpl_assert(rc == 0);
-
-    // Setup Stack
-    rc = setup_stack();
     vmpl_assert(rc == 0);
 
     // Setup GHCB for hypercall
     rc = setup_ghcb(percpu);
     vmpl_assert(rc == 0);
 
-    // Setup segments registers
-    setup_vmsa(percpu, config);
-
-    // Setup GDT for hypercall
-    setup_gdt(percpu);
+    // Setup SEIMI for Intra-Process Isolation
+    rc = setup_seimi(dune_fd);
+    vmpl_assert(rc == 0);
 
     // Setup Memory Management
 	rc = setup_mm(percpu);
-    vmpl_assert(rc == 0);
-
-    // Setup SEIMI for Intra-Process Isolation
-    rc = setup_seimi(dune_fd);
     vmpl_assert(rc == 0);
 
     // Setup XSAVE for FPU
