@@ -401,13 +401,16 @@ static int alloc_cpu()
 	static int current_cpu = 0;
 	static int cpu_count = 0;
     log_info("alloc cpu");
+    if (current_cpu == 0) {
+        current_cpu = sched_getcpu();
+	}
     if (cpu_count == 0) {
         cpu_count = get_cpu_count();
         vmpl_assert(cpu_count > 0);
     }
 
-	int cpu = current_cpu;
 	current_cpu = (current_cpu + 1) % cpu_count;
+	int cpu = current_cpu;
 	return cpu;
 }
 

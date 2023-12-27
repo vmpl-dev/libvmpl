@@ -98,7 +98,7 @@ int vmpl_ioctl_vmpl_run(int vmpl_fd, struct vmsa_config *vmsa_config) {
         return -errno;
     }
 
-    return 0;
+    return rc;
 }
 
 #ifdef CONFIG_DUNE_BOOT
