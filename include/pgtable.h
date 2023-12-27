@@ -10,6 +10,10 @@
 #include "config.h"
 #include "sys.h"
 
+#define GENMASK_ULL(h, l) \
+    (((~0ULL) << (l)) & (~0ULL >> (64 - 1 - (h))))
+#define BIT_64(nr) (1UL << (nr))
+
 #ifdef CONFIG_PGTABLE_LA57
 typedef uint64_t pgd_t;
 typedef uint64_t p4d_t;
@@ -71,14 +75,20 @@ typedef uint64_t pte_t;
 #define pmd_present(pmd) ((pmd) & 0x1)
 #define pte_present(pte) ((pte) & 0x1)
 #else
-#define PML4E_PRESENT (1UL << 0)
-#define PDPE_PRESENT  (1UL << 0)
-#define PDE_PRESENT   (1UL << 0)
-#define PTE_PRESENT   (1UL << 0)
-#define PTE_WRITE   (1UL << 1)
-#define PTE_USER    (1UL << 2)
-#define PTE_ACCESSED (1UL << 5)
-#define PTE_DIRTY    (1UL << 6)
+#define PTE_P       BIT_64(0)    /* Present */
+#define PTE_W       BIT_64(1)    /* Writable */
+#define PTE_U       BIT_64(2)    /* User-accessible */
+#define PTE_PWT     BIT_64(3)    /* Write-through */
+#define PTE_PCD     BIT_64(4)    /* Cache disabled */
+#define PTE_A       BIT_64(5)    /* Accessed */
+#define PTE_D       BIT_64(6)    /* Dirty */
+#define PTE_PS      BIT_64(7)    /* Page-size */
+#define PTE_PAT     BIT_64(7)    /* PAT */
+#define PTE_G       BIT_64(8)    /* Global */
+#define PTE_AVAIL   GENMASK_ULL(11, 9) /* Available for software use */
+#define PTE_PAT_PS  BIT_64(12) /* Page size */
+#define PTE_AVAIL2  GENMASK_ULL(63, 52) /* Available for software use */
+#define PTE_NX      BIT_64(63)   /* No execute: only if NX feature present */
 
 #define PML4E_BAD (1UL << 1)
 #define PDPE_BAD  (1UL << 1)
@@ -106,10 +116,10 @@ typedef uint64_t pte_t;
 #define pd_offset(pd, va)     (pde_deref(pd) + (pd_index(va) << 3))
 #define pte_offset(pt, va)    (pte_deref(pt) + (pt_index(va) << 3))
 
-#define pml4e_none(pml4e) (!((pml4e) & PML4E_PRESENT))
-#define pdpe_none(pdpe)   (!((pdpe) & PDPE_PRESENT))
-#define pde_none(pde)     (!((pde) & PDE_PRESENT))
-#define pte_none(pte)     (!((pte) & PTE_PRESENT))
+#define pml4e_none(pml4e) (!((pml4e) & PTE_P))
+#define pdpe_none(pdpe)   (!((pdpe) & PTE_P))
+#define pde_none(pde)     (!((pde) & PTE_P))
+#define pte_none(pte)     (!((pte) & PTE_P))
 
 #define pml4e_val(pml4e) ((pml4e) & 0xfffUL)
 #define pdpe_val(pdpe)   ((pdpe) & 0xfffUL)
@@ -121,15 +131,17 @@ typedef uint64_t pte_t;
 #define pde_bad(pde)     (!(pde_val(pde) & PDE_BAD))
 #define pte_bad(pte)     (!(pte_val(pte) & PTE_BAD))
 
-#define pml4e_present(pml4e) ((pml4e) & PML4E_PRESENT)
-#define pdpe_present(pdpe)   ((pdpe) & PDPE_PRESENT)
-#define pde_present(pde)     ((pde) & PDE_PRESENT)
-#define pte_present(pte)     ((pte) & PTE_PRESENT)
+#define pml4e_present(pml4e) ((pml4e) & PTE_P)
+#define pdpe_present(pdpe)   ((pdpe) & PTE_P)
+#define pde_present(pde)     ((pde) & PTE_P)
+#define pte_present(pte)     ((pte) & PTE_P)
 
-#define pml4e_write(pml4e) ((pml4e) & PTE_WRITE)
-#define pdpe_write(pdpe)   ((pdpe) & PTE_WRITE)
-#define pde_write(pde)     ((pde) & PTE_WRITE)
-#define pte_write(pte)     ((pte) & PTE_WRITE)
+#define pml4e_write(pml4e) ((pml4e) & PTE_W)
+#define pdpe_write(pdpe)   ((pdpe) & PTE_W)
+#define pde_write(pde)     ((pde) & PTE_W)
+#define pte_write(pte)     ((pte) & PTE_W)
+
+#define pte_big(pte)       ((pte) & 0x80)
 #endif
 
 #define bitset(x, n) ((x) | (1UL << (n)))

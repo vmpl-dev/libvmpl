@@ -801,6 +801,20 @@ static inline void flush_tlb(void)
 			: "rax");
 }
 
+static inline void load_cr3(unsigned long cr3)
+{       
+        asm("mov %%rax, %%cr3\n" : : "a" (cr3));
+}
+
+static inline void __invpcid(int mode, unsigned long addr)
+{
+	struct {
+		unsigned long eptp, gpa;
+	} operand = {1, addr};
+	asm volatile("invpcid (%%rax), %%rcx" ::
+		     "a" (&operand), "c" (mode) : "cc", "memory");
+}
+
 // Compare and exchange
 static inline uint64_t cmpxchg(uint64_t cmpval, uint64_t newval, uint64_t va) {
     uint64_t ret;

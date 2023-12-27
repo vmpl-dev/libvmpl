@@ -21,6 +21,8 @@ typedef struct {
 pmm *pmm_create(uint64_t num_pages, uint64_t num_areas);
 void pmm_destroy(pmm *manager);
 int pmm_add_area(pmm *manager, uint64_t start);
+uint64_t pmm_alloc_area(pmm *manager);
+void pmm_free_area(pmm *manager, const uint64_t area);
 uint64_t pmm_alloc_page(pmm *manager);
 int pmm_free_page(pmm *manager, const uint64_t page);
 int pmm_find_page(pmm *manager, const uint64_t page);

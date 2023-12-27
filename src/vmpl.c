@@ -40,6 +40,7 @@
 #include "vmpl.h"
 #include "pgtable.h"
 #include "mm.h"
+#include "vm.h"
 #include "pmm.h"
 #include "seimi.h"
 #include "vc.h"
@@ -57,7 +58,7 @@
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 #define XSAVE_SIZE 4096
 
-static int dune_fd;
+int dune_fd;
 
 struct dune_percpu {
 	uint64_t percpu_ptr;
@@ -69,6 +70,8 @@ struct dune_percpu {
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
     uint64_t *pgd;
+    uint64_t pgtable_base;
+    uint64_t pgtable_size;
     struct vmpl_vm_t vmpl_vm;
     struct pmm *pmm;
     void *lstar;
@@ -648,8 +651,8 @@ failed:
 static int setup_pmm(struct dune_percpu *percpu)
 {
 	int rc;
-	size_t num_pages = 256;
-	size_t num_areas = 64;
+	size_t num_pages = CONFIG_VMPL_NUM_PAGES;
+	size_t num_areas = CONFIG_VMPL_NUM_AREAS;
 	pmm *pmm;
 	log_info("setup pmm");
 
@@ -660,23 +663,27 @@ static int setup_pmm(struct dune_percpu *percpu)
         goto failed;
     }
 
+    struct get_pages_t param = {
+        .num_pages = num_pages,
+        .phys = 0,
+    };
+
     // Add 64 areas to pmm
-    uint64_t phys;
     for (size_t i = 0; i < num_areas; i++) {
-		rc = vmpl_ioctl_get_pages(dune_fd, &phys);
+		rc = vmpl_ioctl_get_pages(dune_fd, &param);
         if (rc != 0) {
             perror("dune: failed to get pages");
             rc = -ENOMEM;
             goto failed;
         }
 
-		if (pmm_add_area(pmm, phys) != 0) {
+		if (pmm_add_area(pmm, param.phys) != 0) {
 			perror("dune: failed to add area to PMM");
             rc = -ENOMEM;
             goto failed;
 		}
 
-        log_trace("dune: add area %d at 0x%lx", i, phys);
+        log_trace("dune: add area %d at 0x%lx", i, param.phys);
 	}
 
     log_debug("dune: add %d areas to PMM", num_areas);
@@ -695,9 +702,24 @@ failed:
     return rc;
 }
 
+static void* remap(int dune_fd, uint64_t page)
+{
+    void *addr;
+    addr = mmap((void *)(PGTABLE_MMAP_BASE + (page << PAGE_SHIFT)), PAGE_SIZE,
+                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, dune_fd, 0);
+    if (addr == MAP_FAILED)
+    {
+        perror("dune: failed to map pgtable");
+        return NULL;
+    }
+
+    return addr;
+}
+
 static int setup_pgtable(struct dune_percpu *percpu)
 {
     int rc;
+    uint64_t pgtable_base;
     log_info("setup pgtable");
 
     rc = pgtable_init(&percpu->pgd, dune_fd);
@@ -716,9 +738,34 @@ static int setup_pgtable(struct dune_percpu *percpu)
     }
 #endif
 
+    // Alloc pgtable page
+    pgtable_base = pmm_alloc_area(percpu->pmm);
+    for (size_t i = 0; i < CONFIG_VMPL_NUM_PAGES; i++) {
+        void *addr = remap(dune_fd, pgtable_base + i);
+        if (!addr) {
+            perror("dune: failed to remap pgtable");
+            goto failed;
+        }
+    }
+    percpu->pgtable_base = pgtable_base;
+    percpu->pgtable_size = CONFIG_VMPL_NUM_PAGES;
+
     return 0;
 failed:
     return rc;
+}
+
+static void* alloc_pgtable(struct dune_percpu *percpu)
+{
+    uint64_t page = CONFIG_VMPL_NUM_PAGES - percpu->pgtable_size;
+    void *addr = (void *)(PGTABLE_MMAP_BASE + (page << PAGE_SHIFT));
+    percpu->pgtable_size--;
+    return addr;
+}
+
+static uint64_t alloc_page(struct dune_percpu *percpu)
+{
+    pmm_alloc_page(percpu->pmm);
 }
 
 static int vmpl_do_page_fault(uint64_t va, uint64_t err)
@@ -738,12 +785,12 @@ static int vmpl_do_page_fault(uint64_t va, uint64_t err)
 		// Allocate physical page and map it
         if (pte_present(*ptep) && !pte_write(*ptep)) {
             // if the pte is present, allocate a physical page and map it
-            uint64_t pa = pmm_alloc_page(percpu->pmm);
+            uint64_t pa = alloc_page(percpu);
             if (!pa) {
                 goto failed;
             }
 
-            *ptep |= pa | PTE_PRESENT | PTE_WRITE | PTE_USER;
+            *ptep |= pa | PTE_P | PTE_W | PTE_U;
 			return 0;
 		}
 

@@ -34,7 +34,9 @@ static void *free_pages;
 
 /**
  * @brief  Setup page table self-mapping
- * @note   
+ * @note   采用广度优先遍历的方式，遍历每一个页表项，将进程物理内存页的vmpl属性标记为1，增加引用计数，
+ * 这样就可以自行回收物理页了。对于满足vmpl=1，refcount=1的物理页，都可以纳入到空闲页链表中。
+ * 而对于map过的物理页，vmpl=1，refcount=1
  * @param  paddr: Physical address of the page table
  * @param  level: Level of the page table
  * @param  fd: File descriptor of the vmpl-dev

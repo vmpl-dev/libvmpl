@@ -38,6 +38,7 @@ typedef uint64_t __uint64_t;
 typedef __PTRDIFF_TYPE__ intptr_t;
 typedef unsigned __PTRDIFF_TYPE__ uintptr_t;
 typedef unsigned __PTRDIFF_TYPE__ physaddr_t;
+typedef uintptr_t virtaddr_t;
 
 // Page numbers are 64 bits long.
 typedef uint64_t ppn_t;

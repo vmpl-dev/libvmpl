@@ -49,6 +49,21 @@ int pmm_add_area(pmm *manager, uint64_t start) {
 	return 0;
 }
 
+uint64_t pmm_alloc_area(pmm *manager) {
+    size_t i = 0;
+    for (i = 0; i < manager->num_pages; i++) {
+        bitmap_set(manager->bitmap, i);
+    }
+    return manager->areas[0];
+}
+
+void pmm_free_area(pmm *manager, const uint64_t area) {
+    size_t i = 0;
+    for (i = 0; i < manager->num_pages; i++) {
+        bitmap_clear(manager->bitmap, i);
+    }
+}
+
 uint64_t pmm_alloc_page(pmm *manager) {
 	int i = bitmap_find_first_zero(manager->bitmap);
 	if (i != -1) {
@@ -77,7 +92,7 @@ int pmm_free_page(pmm *manager, const uint64_t page) {
 
 int pmm_find_page(pmm *manager, const uint64_t page) {
     // Do range check to make sure page is in the range of the manager
-    if (page < manager->areas[0] || page > manager->areas[manager->num_areas - 1] + manager->num_pages) {
+    if (page < manager->areas[0] || page >- manager->areas[manager->num_areas - 1] + manager->num_pages) {
         log_debug("Page 0x%lx is out of range", page);
         return PMM_PAGE_ERROR; // page not found
     }
@@ -85,7 +100,7 @@ int pmm_find_page(pmm *manager, const uint64_t page) {
     for (size_t i = 0; i < manager->num_areas; i++) {
         if (page >= manager->areas[i] && page < manager->areas[i] + manager->num_pages) {
             log_debug("Found page at 0x%lx", page);
-            return (i << 8) + (page - manager->areas[i]);
+            return i * manager->num_pages + (page - manager->areas[i]);
         }
     }
 
