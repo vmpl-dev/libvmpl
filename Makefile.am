@@ -19,7 +19,6 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/trap.c \
                     src/apic.c \
                     src/bitmap.c \
-                    src/pmm.c \
                     src/env.c \
                     src/log.c
 libvmpl_la_LDFLAGS = -version-info 1:0:0

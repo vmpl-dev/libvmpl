@@ -40,8 +40,6 @@
 #include "vmpl.h"
 #include "pgtable.h"
 #include "mm.h"
-#include "vm.h"
-#include "pmm.h"
 #include "seimi.h"
 #include "vc.h"
 #include "serial.h"
@@ -648,74 +646,6 @@ failed:
     return rc;
 }
 
-static int setup_pmm(struct dune_percpu *percpu)
-{
-	int rc;
-	size_t num_pages = CONFIG_VMPL_NUM_PAGES;
-	size_t num_areas = CONFIG_VMPL_NUM_AREAS;
-	pmm *pmm;
-	log_info("setup pmm");
-
-	pmm = pmm_create(num_pages, num_areas);
-    if (!pmm) {
-        perror("dune: failed to setup PMM");
-        rc = -ENOMEM;
-        goto failed;
-    }
-
-    struct get_pages_t param = {
-        .num_pages = num_pages,
-        .phys = 0,
-    };
-
-    // Add 64 areas to pmm
-    for (size_t i = 0; i < num_areas; i++) {
-		rc = vmpl_ioctl_get_pages(dune_fd, &param);
-        if (rc != 0) {
-            perror("dune: failed to get pages");
-            rc = -ENOMEM;
-            goto failed;
-        }
-
-		if (pmm_add_area(pmm, param.phys) != 0) {
-			perror("dune: failed to add area to PMM");
-            rc = -ENOMEM;
-            goto failed;
-		}
-
-        log_trace("dune: add area %d at 0x%lx", i, param.phys);
-	}
-
-    log_debug("dune: add %d areas to PMM", num_areas);
-    if (pmm_self_test(pmm) == 0) {
-        perror("dune: failed to test PMM");
-        rc = -ENOMEM;
-        goto failed;
-    }
-
-    size_t capacity = pmm_get_capacity(pmm);
-    log_debug("dune: pmm capacity is %ld", capacity);
-    percpu->pmm = pmm;
-
-	return 0;
-failed:
-    return rc;
-}
-
-static void* remap(int dune_fd, uint64_t page)
-{
-    void *addr;
-    addr = mmap((void *)(PGTABLE_MMAP_BASE + (page << PAGE_SHIFT)), PAGE_SIZE,
-                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, dune_fd, 0);
-    if (addr == MAP_FAILED)
-    {
-        perror("dune: failed to map pgtable");
-        return NULL;
-    }
-
-    return addr;
-}
-
 static int setup_pgtable(struct dune_percpu *percpu)
 {
     int rc;
@@ -738,34 +668,14 @@ static int setup_pgtable(struct dune_percpu *percpu)
     }
 #endif
 
-    // Alloc pgtable page
-    pgtable_base = pmm_alloc_area(percpu->pmm);
-    for (size_t i = 0; i < CONFIG_VMPL_NUM_PAGES; i++) {
-        void *addr = remap(dune_fd, pgtable_base + i);
-        if (!addr) {
-            perror("dune: failed to remap pgtable");
-            goto failed;
-        }
-    }
-    percpu->pgtable_base = pgtable_base;
-    percpu->pgtable_size = CONFIG_VMPL_NUM_PAGES;
-
     return 0;
 failed:
     return rc;
 }
 
-static void* alloc_pgtable(struct dune_percpu *percpu)
-{
-    uint64_t page = CONFIG_VMPL_NUM_PAGES - percpu->pgtable_size;
-    void *addr = (void *)(PGTABLE_MMAP_BASE + (page << PAGE_SHIFT));
-    percpu->pgtable_size--;
-    return addr;
-}
-
 static uint64_t alloc_page(struct dune_percpu *percpu)
 {
-    pmm_alloc_page(percpu->pmm);
+    return NULL;
 }
 
 static int vmpl_do_page_fault(uint64_t va, uint64_t err)
@@ -834,10 +744,6 @@ static int setup_mm(struct dune_percpu *percpu)
 
     // Setup VMPL VM
     rc = vmpl_vm_init(&percpu->vmpl_vm);
-    vmpl_assert(rc == 0);
-
-    // Setup pmm
-    rc = setup_pmm(percpu);
     vmpl_assert(rc == 0);
 
     // Setup pgtable

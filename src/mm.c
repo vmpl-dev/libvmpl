@@ -6,7 +6,6 @@
 #include <errno.h>
 
 #include "pgtable.h"
-#include "pmm.h"
 #include "mm.h"
 #include "log.h"
 

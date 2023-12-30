@@ -12,7 +12,6 @@
 #include "sev.h"
 #include "log.h"
 #include "bitmap.h"
-#include "pmm.h"
 #include "pgtable.h"
 
 #define MEMORY_POOL_START 0x140000000

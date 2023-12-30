@@ -34,18 +34,6 @@ AC_ARG_WITH([vmpl-heap-size], [AS_HELP_STRING([--with-vmpl-heap-size],
             [with_vmpl_heap_size=0x10000000])
 AC_DEFINE_UNQUOTED([CONFIG_VMPL_HEAP_SIZE], [$with_vmpl_heap_size], [vmpl heap size])
 
-AC_ARG_WITH([vmpl-num-pages], [AS_HELP_STRING([--with-vmpl-num-pages],
-                                               [Set vmpl num pages])],
-            [with_vmpl_num_pages=$withval],
-            [with_vmpl_num_pages=256])
-AC_DEFINE_UNQUOTED([CONFIG_VMPL_NUM_PAGES], [$with_vmpl_num_pages], [vmpl num pages])
-
-AC_ARG_WITH([vmpl-num-areas], [AS_HELP_STRING([--with-vmpl-num-areas],
-                                              [Set vmpl num areas])],
-            [with_vmpl_num_areas=$withval],
-            [with_vmpl_num_areas=64])
-AC_DEFINE_UNQUOTED([CONFIG_VMPL_NUM_AREAS], [$with_vmpl_num_areas], [vmpl num areas])
-
 AC_ARG_WITH([vmpl-page-grow-size], [AS_HELP_STRING([--with-vmpl-page-grow-size],
                                                    [Set vmpl page grow size])],
             [with_vmpl_page_grow_size=$withval],
