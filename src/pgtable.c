@@ -1,3 +1,8 @@
+/**
+ * 深度优先遍历页表，将进程物理内存页的vmpl属性标记为1，增加引用计数，
+ * 这样就可以自行回收物理页了。对于满足vmpl=1，refcount=1的物理页，都可以纳入到空闲页链表中。
+ * 而对于map过的物理页，vmpl=1, refcount=1，但是不在空闲页链表中，这些物理页是不能回收的。
+ */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdint.h>
@@ -11,7 +16,8 @@
 #include "vmpl-ioctl.h"
 #include "sev.h"
 #include "log.h"
-#include "bitmap.h"
+#include "mmu.h"
+#include "page.h"
 #include "pgtable.h"
 
 #define MEMORY_POOL_START 0x140000000
@@ -24,104 +30,83 @@
 
 #define padding(level) ((level)*4 + 4)
 static char *pt_names[] = { "PML4", "PDP", "PD", "PT", "Page" };
-static __thread uint64_t *this_pgd;
 static void *free_pages;
+__thread uint64_t *this_pgd;
 
-#define __pgtable_map(paddr, fd)                         \
-    mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE, \
-         PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0)
+static inline virtaddr_t pgtable_alloc(void)
+{
+	struct page *pg;
+	virtaddr_t va;
+	pg = dune_page_alloc(dune_fd);
+	if (!pg)
+		return NULL;
+
+	memset((void *) va, 0, PGSIZE);
+	return va;
+}
 
 /**
  * @brief  Setup page table self-mapping
- * @note   采用广度优先遍历的方式，遍历每一个页表项，将进程物理内存页的vmpl属性标记为1，增加引用计数，
- * 这样就可以自行回收物理页了。对于满足vmpl=1，refcount=1的物理页，都可以纳入到空闲页链表中。
- * 而对于map过的物理页，vmpl=1，refcount=1
+ * @note   The page table is mapped to the virtual address space of the process, such that
+ * the page table can be accessed by the process. The physical page are marked as vmpl page,
+ * and the reference count is set to 0, such that the page can be reclaimed by the process.
+ * The pages used to mappt the page table are not marked as vmpl page, and the reference count
+ * is set to 0, such that the pages are not reclaimed by the process.
  * @param  paddr: Physical address of the page table
  * @param  level: Level of the page table
  * @param  fd: File descriptor of the vmpl-dev
  * @retval 
  */
-static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count)
+static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count, int *page_count)
 {
     size_t max_i;
     uint64_t *vaddr;
+    struct page *pg;
 
-    if (level == 4)
+    // Get page for refcount
+    vmpl_page_mark_addr(pte_addr(paddr));
+
+    // If this is a leaf page table
+    if (level == 4) {
+        (*page_count)++;
         return 0;
+    }
 
-    bitclr(paddr, 63);
-    bitclr(paddr, 51);
+    // Clear NX bit, and C-bit
+    paddr = bitclr(paddr, 63);
+    paddr = bitclr(paddr, 51);
 
-    vaddr = __pgtable_map(paddr, fd);
+    // Map page table to virtual address space
+    vaddr = do_mapping(fd, paddr, PAGE_SIZE);
     if (vaddr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
         goto failed;
     }
 
+    // Traverse page table
     log_trace("%*s%s [%p - %09lx]", padding(level), "", pt_names[level], vaddr, paddr);
     max_i = (level != 0) ? 512 : 256;
     for (int i = 0; i < max_i; i++) {
         if (vaddr[i] & 0x1) {
             log_trace("%*s%s Entry[%d]: %016lx", padding(level), "", pt_names[level], i, vaddr[i]);
-            __pgtable_init(pte_addr(vaddr[i]), level + 1, fd, pgtable_count);
+            __pgtable_init(pte_addr(vaddr[i]), level + 1, fd, pgtable_count, page_count);
         }
     }
 
-    (*pgtable_count)++; // Increment page count
+    // Increment page count
+    (*pgtable_count)++;
 
     return 0;
 failed:
     return -ENOMEM;
 }
 
-#ifdef CONFIG_VMPL_PGTABLE_ALLOC
-/**
- * @brief  Update page table entry with the given virtual address
- * @note   Preallocate page table pages, and map them to the virtual address space
- * @param  fd: File descriptor of the vmpl-dev
- * @retval 0 on success, -1 on failure
- */
-static int __pgtable_update(int fd)
-{
-    int rc;
-    pte_t *ptep;
-    uint64_t *base, *p, *vaddr;
-    uint64_t paddr;
-    log_debug("pgtable update");
-
-    // preallocate page table pages
-    base = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, NULL, 0);
-
-    // for each page, obtain the physical address, and map it to the virtual address space
-    for (p = base; p < base + PAGE_SIZE; p += PAGE_SIZE / sizeof(*p)) {
-        // obtain the physical address of the page
-        rc = lookup_address((uint64_t)p, NULL, &ptep);
-        if (rc) {
-            log_err("lookup address failed");
-            goto failed;
-        }
-
-        paddr = pte_addr(*ptep);
-        // map the page table page to the virtual address space
-        vaddr = mmap((void *)(PGTABLE_MMAP_BASE + paddr), PAGE_SIZE,
-                     PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
-        if (vaddr == MAP_FAILED) {
-            perror("dune: failed to map pgtable");
-            goto failed;
-        }
-    }
-
-	return 0;
-failed:
-	return -ENOMEM;
-}
-#endif
-
 int pgtable_init(uint64_t **pgd, int fd)
 {
 	int rc;
     uint64_t cr3;
 	size_t pgtable_count = 0;
+    size_t page_count = 0;
 	log_debug("pgtable init");
 
 	// Get CR3
@@ -133,25 +118,26 @@ int pgtable_init(uint64_t **pgd, int fd)
 
     log_debug("dune: CR3 at 0x%lx", cr3);
 
+#if 0
+    // Mmap 4GB for page table
+    void *addr = mmap(PGTABLE_MMAP_BASE, PGTABLE_MMAP_SIZE, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    if (addr == MAP_FAILED) {
+        perror("dune: failed to map pgtable");
+        return -ENOMEM;
+    }
+#endif
+
     // Initialize page table
-	rc = __pgtable_init(cr3, 0, fd, &pgtable_count);
+	rc = __pgtable_init(cr3, 0, fd, &pgtable_count, &page_count);
     if (rc) {
         log_err("pgtable init failed");
         return rc;
     }
 
-    log_debug("dune: %lu page tables", pgtable_count);
+    log_debug("dune: %lu page tables, %lu pages", pgtable_count, page_count);
     *pgd = (uint64_t *)(PGTABLE_MMAP_BASE + cr3);
     this_pgd = *pgd;
-
-#ifdef CONFIG_VMPL_PGTABLE_ALLOC
-    // Update page table
-    rc = __pgtable_update(fd);
-    if (rc) {
-        log_err("pgtable update failed");
-        return rc;
-    }
-#endif
 
     return 0;
 }
@@ -159,7 +145,6 @@ int pgtable_init(uint64_t **pgd, int fd)
 int pgtable_free(uint64_t *pgd)
 {
     log_debug("pgtable free");
-    // TODO: free should be implemented in pgtable_free
     return 0;
 }
 
@@ -190,99 +175,132 @@ int pgtable_selftest(uint64_t *pgd, uint64_t va)
     return 0;
 }
 
-#ifdef CONFIG_VMPL_PGTABLE_ALLOC
 /**
- * https://www.kernel.org/doc/Documentation/vm/pagemap.txt
+ * @brief This function will be called when about to map a physical page to a virtual address.
+ * It will update the page table entry of the virtual address to the physical address.
+ * @param pgd The page table of the process.
+ * @param va The virtual address of the page.
+ * @param pte_out The page table entry of the virtual address.
+ * @retval 0 on success, -1 on error
  */
-uint64_t pgtable_va_to_pa(uint64_t vaddr)
+int pgtable_lookup(pte_t *root, void *va, pte_t **pte_out)
 {
-    uint64_t phys_addr;
-    int mem_fd = open("/proc/self/pagemap", O_RDONLY);
-    if (mem_fd < 0) {
-        log_err("open /proc/self/pagemap failed");
-        return 0;
-    }
+	int i, j, k, l;
+	pte_t *pml4 = root, *pdpte, *pde, *pte;
 
-    uint64_t virt_addr = (uint64_t)virt_addr;
-    uint64_t offset = (virt_addr >> PAGE_SHIFT) * sizeof(uint64_t);
+	i = PDX(3, va);
+	j = PDX(2, va);
+	k = PDX(1, va);
+	l = PDX(0, va);
 
-    if (lseek(mem_fd, offset, SEEK_SET) == -1) {
-        log_err("lseek failed");
-        return 0;
-    }
+	if (!pte_present(pml4[i])) {
+		return -ENOENT;
+	} else {
+        pdpte = (pte_t*) __va(PTE_ADDR(pml4[i]));
+	}
 
-    uint64_t read_val;
-    if (read(mem_fd, &read_val, sizeof(uint64_t)) != sizeof(uint64_t)) {
-        log_err("read failed");
-        return 0;
-    }
+	if (!pte_present(pdpte[j])) {
+		return -ENOENT;
+	} else if (pte_big(pdpte[j])) {
+		*pte_out = &pdpte[j];
+		return 0;
+	} else {
+        pde = (pte_t*) __va(PTE_ADDR(pdpte[j]));
+	}
 
-    if (!(read_val & (1ULL << 63))) {
-        log_err("page not present");
-        return 0;
-    }
+	if (!pte_present(pde[k])) {
+		return -ENOENT;
+	} else if (pte_big(pde[k])) {
+		*pte_out = &pde[k];
+		return 0;
+	} else {
+        pte = (pte_t*) __va(PTE_ADDR(pde[k]));
+	}
 
-    phys_addr = read_val & ((1ULL << 54) - 1);
-    close(mem_fd);
-    return phys_addr;
+	*pte_out = &pte[l];
+	return 0;
 }
 
 /**
- * @brief  Clone page table
- * @note   
- * @param  dst_pgd: Destination page table
- * @param  src_pgd: Source page table
- * @param  level: Level of the page table
- * @retval 
+ * @brief This function will be called when about to map a physical page to a virtual address.
+ * It will update the page table entry of the virtual address to the physical address.
+ * @param pgd The page table of the process.
+ * @param va The virtual address of the page.
+ * @param pa The physical address of the page.
+ * @retval None
  */
-int __pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd, uint64_t level)
+int pgtable_create(pte_t *root, void *va, pte_t **pte_out)
 {
-    int rc = 0;
-    uint64_t *src_pgd_entry, *dst_pgd_entry;
-    log_debug("pgtable clone");
-    if (level == 0) {
-        return 0;
+	int i, j, k, l;
+	pte_t *pml4 = root, *pdpte, *pde, *pte;
+
+	i = PDX(3, va);
+	j = PDX(2, va);
+	k = PDX(1, va);
+	l = PDX(0, va);
+
+	if (!pte_present(pml4[i])) {
+		pdpte = pgtable_alloc();
+		pml4[i] = PTE_ADDR(pdpte) | PTE_DEF_FLAGS;
+	} else {
+		pdpte = (pte_t*) __va(PTE_ADDR(pml4[i]));
+	}
+
+	if (!pte_present(pdpte[j])) {
+		pde = pgtable_alloc();
+		pdpte[j] = PTE_ADDR(pde) | PTE_DEF_FLAGS;
+	} else if (pte_big(pdpte[j])) {
+		*pte_out = &pdpte[j];
+		return 0;
+	} else {
+		pde = (pte_t*) __va(PTE_ADDR(pdpte[j]));
+	}
+
+	if (!pte_present(pde[k])) {
+		pte = pgtable_alloc();
+		pde[k] = PTE_ADDR(pte) | PTE_DEF_FLAGS;
+	} else if (pte_big(pde[k])) {
+		*pte_out = &pde[k];
+		return 0;
+	} else {
+		pte = (pte_t*) __va(PTE_ADDR(pde[k]));
+	}
+
+	*pte_out = &pte[l];
+	return 0;
+}
+
+/**
+ * @brief This function will be called when about to map a physical page to a virtual address.
+ * It will update the page table entry of the virtual address to the physical address.
+ * @param pgd The page table of the process.
+ * @param va The virtual address of the page.
+ * @param pa The physical address of the page.
+ * @retval None
+ */
+int pgtable_update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)
+{
+	int ret;
+	pte_t *ptep;
+
+    ret = pgtable_lookup(pgd, va, &ptep);
+    if (ret) {
+        return ret;
     }
 
-    dst_pgd_entry = (uint64_t *)pmm_alloc_page(1);
-    if (dst_pgd_entry == NULL) {
-        log_err("pmm alloc failed");
-        return -ENOMEM;
-    }
-
-    *dst_pgd_entry = *src_pgd;
-    *dst_pgd = (uint64_t)dst_pgd_entry;
-
-    *src_pgd_entry = (uint64_t *)phys_to_virt(*src_pgd);
-    *dst_pgd_entry = (uint64_t *)phys_to_virt(*dst_pgd);
-
-    for (int i = 0; i < 512; i++) {
-        if (src_pgd_entry[i] & 0x1) {
-            rc = __pgtable_clone(&dst_pgd_entry[i], &src_pgd_entry[i], level - 1);
-            if (rc) {
-                log_err("pgtable clone failed");
-                return rc;
-            }
-        }
-    }
+    (*ptep) |= pa >> PAGE_SHIFT;
 
     return 0;
 }
 
-int pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd)
-{
-    int rc = 0;
-    log_debug("pgtable clone");
-    rc = __pgtable_clone(dst_pgd, src_pgd, 4);
-    if (rc) {
-        log_err("pgtable clone failed");
-        return rc;
-    }
-
-    return 0;
-}
-#endif
-
+/** 
+ * @brief Look up the page table entry of a virtual address in the page table of a process.
+ * @param pgd The page table of the process.
+ * @param va The virtual address of the page.
+ * @param level The level of the page table entry.
+ * @param ptep The page table entry of the virtual address.
+ * @retval 0 on success, -1 on error
+ */
 int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
     pml4e_t *pml4e = pml4_offset(pgd, va);
@@ -323,6 +341,12 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
     return 0;
 }
 
+/**
+ * @brief Look up the page table entry of a virtual address in the page table of a process.
+ * @param va The virtual address of the page.
+ * @param level The level of the page table entry.
+ * @param ptep The page table entry of the virtual address.
+ */
 int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep)
 {
     if (this_pgd == NULL) {
@@ -332,59 +356,79 @@ int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep)
     return lookup_address_in_pgd(this_pgd, va, level, ptep);
 }
 
+/**
+ * @brief  This function will be called when walking the page table to get the virtual address
+ * of the page table. The page table is linearly mapped to the virtual address space of the
+ * process, such that the page table can be accessed by the process.
+ * @param pa The physical address of the page.
+ * @retval The virtual address of the page.
+ */
 uint64_t pgtable_pa_to_va(uint64_t pa)
 {
     return phys_to_virt(pa);
 }
 
+/**
+ * @brief This function will be called when walking the page table to get the physical address
+ * of a virtual address. It consists of two parts:
+ * 1. If the virtual address is in the range of the page table, then the physical address can be
+ * calculated by PA + PGTABLE_MMAP_BASE == VA.
+ * 2. If the virtual address is not in the range of the page table, then the physical address can
+ * be calculated by the lookup_address function.
+ * @param va The virtual address of the page.
+ * @retval The physical address of the page.
+ */
 uint64_t pgtable_va_to_pa(uint64_t va)
 {
     pte_t *ptep;
     int level;
 
-    if ((va > PGTABLE_MMAP_BASE) && (va < PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)) {
-        return virt_to_phys(va);
-    } else {
+    if ((va < PGTABLE_MMAP_BASE) || (va >= PGTABLE_MMAP_END)) {
         int rc = lookup_address(va, &level, &ptep);
         if (rc) {
             return 0;
         }
+
+        return pte_addr(*ptep);
     }
 
-    return pte_addr(*ptep);
+    // XXX: Using PA + PGTABLE_MMAP_BASE == VA
+    return virt_to_phys(va);
 }
 
-static void update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)
+/**
+ * @brief  Remap a range of virtual address to a range of physical address. This function is used
+ * to map the physical memory of the process to the virtual address space of the process.
+ * @param  vstart: The start virtual address of the range.
+ * @param  vend: The end virtual address of the range.
+ * @param  pstart: The start physical address of the range.
+ * @retval The number of pages remapped.
+ */
+long remap_pfn_range(uint64_t vstart, uint64_t vend, uint64_t pstart)
 {
-	int ret;
-	pte_t *ptep;
-	int level;
-
-    ret = lookup_address_in_pgd(pgd, va, &level, &ptep);
-    if (ret) {
-        return;
-    }
-
-    (*ptep) |= pa >> PAGE_SHIFT;
-}
-
-static long remap_pfn_range(uint64_t vstart, uint64_t vend, uint64_t pa)
-{
-    size_t nr_pages = (vend - vstart) >> PAGE_SHIFT;
-    for (size_t i = 0; i < nr_pages; i++) {
-        update_leaf_pte(this_pgd, vstart + i * PAGE_SIZE, pa + i * PAGE_SIZE);
+    uint64_t va = vstart, pa = pstart;
+    while (va < vend) {
+        pgtable_update_leaf_pte(this_pgd, va, pa);
+        va += PAGE_SIZE, pa += PAGE_SIZE;
     }
 }
 
-void remap_va_to_pa(uint64_t va_start, uint64_t va_end, uint64_t pa_start)
+/**
+ * @brief  Remap a range of virtual address to a range of physical address. This function is used
+ * to map the physical memory of the process to the virtual address space of the process.
+ * @param  vstart: The start virtual address of the range.
+ * @param  vend: The end virtual address of the range.
+ * @param  pstart: The start physical address of the range.
+ */
+void remap_va_to_pa(uint64_t vstart, uint64_t vend, uint64_t pstart)
 {
     uint64_t va;
-    for (va = va_start; va < va_end; va += PAGE_SIZE) {
+    for (va = vstart; va < vend; va += PAGE_SIZE) {
         uint64_t pa = pgtable_va_to_pa(va);
         if (pa == 0) {
             log_err("Failed to get physical address for va: %llx", va);
             return;
         }
-        update_leaf_pte(this_pgd, va, pa_start + (va - va_start));
+        pgtable_update_leaf_pte(this_pgd, va, pstart + (va - vstart));
     }
 }

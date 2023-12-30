@@ -127,9 +127,6 @@ extern int vmpl_enter(int argc, char *argv[]);
 }
 #endif
 
-#define dune_enter() vmpl_enter(1, NULL)
-#define dune_init_and_enter() vmpl_enter(1, NULL)
-
 #define VMPL_ENTER                  \
 	do                              \
 	{                               \

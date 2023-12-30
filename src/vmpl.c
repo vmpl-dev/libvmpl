@@ -38,6 +38,7 @@
 #include "vmpl-dev.h"
 #include "vmpl-ioctl.h"
 #include "vmpl.h"
+#include "page.h"
 #include "pgtable.h"
 #include "mm.h"
 #include "seimi.h"
@@ -68,10 +69,7 @@ struct dune_percpu {
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
     uint64_t *pgd;
-    uint64_t pgtable_base;
-    uint64_t pgtable_size;
     struct vmpl_vm_t vmpl_vm;
-    struct pmm *pmm;
     void *lstar;
     void *vsyscall;
 	void *dune_syscall;
@@ -673,57 +671,57 @@ failed:
     return rc;
 }
 
-static uint64_t alloc_page(struct dune_percpu *percpu)
-{
-    return NULL;
-}
-
-static int vmpl_do_page_fault(uint64_t va, uint64_t err)
-{
-    int rc;
-    int level;
-    pte_t *ptep;
-    rc = lookup_address(va, &level, &ptep);
-    if (rc != 0) {
-        goto failed;
-    }
-
-    if (level != 1) {
-        // Allocate pgtable page, map it, and retry
-		return -1;
-	} else {
-		// Allocate physical page and map it
-        if (pte_present(*ptep) && !pte_write(*ptep)) {
-            // if the pte is present, allocate a physical page and map it
-            uint64_t pa = alloc_page(percpu);
-            if (!pa) {
-                goto failed;
-            }
-
-            *ptep |= pa | PTE_P | PTE_W | PTE_U;
-			return 0;
-		}
-
-		return -1;
-	}
-
-failed:
-    return rc;
-}
-
 static void vmpl_default_pf_handler(struct dune_tf *tf)
 {
 #if 0
     int rc;
-    uint64_t va = read_cr2();
-    if (is_vmpl_vm(va, &percpu->vmpl_vm)) {
-        rc = vmpl_do_page_fault(va, tf->err);
+    virtaddr_t va;
+    struct page *page;
+    physaddr_t pa;
+    pte_t *pte_out;
+
+    va = read_cr2();
+
+    // Handle page fault on lazy-allocated virtual memory region.
+    if (is_vmpl_vm_lazy(va, &percpu->vmpl_vm)) {
+        // Create page table on demand
+        rc = pgtable_lookup(&percpu->pgd, dune_fd, &pte_out);
+        uint64_t pa = vmpl_page_alloc(percpu);
+        *pte_out = pa | PTE_DEF_FLAGS;
+        return;
+    }
+
+    // Handle page fault on heap virtual memory region.
+    if (is_vmpl_vm_heap(va, &percpu->vmpl_vm)) {
+        // Create page table on demand
+        rc = pgtable_create(&percpu->pgd, dune_fd, &pte_out);
         if (rc != 0) {
             goto failed;
         }
+        // Allocate physical page
+        page = vmpl_page_alloc(percpu);
+        if (!page) {
+            goto failed;
+        }
+        // Map virtual address to physical address
+        pa = vmpl_page2pa(page);
+        *pte_out = pa | PTE_DEF_FLAGS;
+        return;
     }
 
-    return;
+    // Handle page fault on linear mapped virtual memory region.
+    if (is_vmpl_vm_linear(va, &percpu->vmpl_vm)) {
+        // Create page table on demand
+        pgtable_create(&percpu->pgd, dune_fd, &pte_out);
+        // Map linear address to physical address
+        phys_addr_t pa = pgtable_va_to_pa(va);
+        *pte_out = pa | PTE_DEF_FLAGS;
+        return;
+    }
+
+    // Handle page fault on COW virtual memory region.
+    vmpl_vm_default_pgflt_handler(va, tf->err);
+
 failed:
 #endif
 	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
@@ -740,6 +738,11 @@ static int setup_mm(struct dune_percpu *percpu)
 
     // Setup Heap
     rc = setup_heap(CONFIG_VMPL_HEAP_SIZE);
+    vmpl_assert(rc == 0);
+
+    // Setup VMPL-Dune Page Management
+    rc = page_init(dune_fd);
+    log_debug("dune: page_init rc: %d", rc);
     vmpl_assert(rc == 0);
 
     // Setup VMPL VM

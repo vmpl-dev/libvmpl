@@ -101,10 +101,17 @@ typedef uint64_t pte_t;
 #define pfn2page(pfn) ((pfn) << 12)
 #define page2pfn(page) ((page) >> 12)
 
+#if 0
 #define pml4_index(va) (((unsigned long)(va) >> 39) & 0x1ff)
 #define pdp_index(va)  (((unsigned long)(va) >> 30) & 0x1ff)
 #define pd_index(va)   (((unsigned long)(va) >> 21) & 0x1ff)
 #define pt_index(va)   (((unsigned long)(va) >> 12) & 0x1ff)
+#else
+#define pml4_index(va) PDX(3, va)
+#define pdp_index(va)  PDX(2, va)
+#define pd_index(va)   PDX(1, va)
+#define pt_index(va)   PDX(0, va)
+#endif
 
 #define pml4_deref(pml4)   __va(pte_addr(*pml4))
 #define pdpe_deref(pdpe)   __va(pte_addr(*pdpe))
@@ -153,6 +160,10 @@ typedef uint64_t pte_t;
 #define PGTABLE_MMAP_SIZE BIT(36)
 #define PGTABLE_MMAP_END  (PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)
 
+#define PDADDR(n, i)	(((unsigned long) (i)) << PDSHIFT(n))
+#define PTE_DEF_FLAGS	(PTE_P | PTE_W | PTE_U)
+#define LGPGSIZE	(1 << (PGSHIFT + NPTBITS))
+
 typedef uint64_t PhysAddr;
 typedef uint64_t VirtAddr;
 typedef uint64_t PhysFrame;
@@ -161,26 +172,19 @@ static inline bool is_aligned(PhysAddr addr, size_t alignment) {
     return (addr % alignment) == 0;
 }
 
+extern int dune_fd;
+extern __thread uint64_t *this_pgd;
 int pgtable_init(uint64_t **pgd, int fd);
 int pgtable_free(uint64_t *pgd);
 int pgtable_selftest(uint64_t *pgd, uint64_t va);
-
-int pgtable_clone(uint64_t *dst_pgd, uint64_t *src_pgd);
-int pgtable_mmap(uint64_t *pgd, uint64_t va, size_t len, int perm);
-int pgtable_mprotect(uint64_t *pgd, uint64_t va, size_t len, int perm);
-int pgtable_unmap(uint64_t *pgd, uint64_t va, size_t len, int level);
+int pgtable_lookup(pte_t *root, void *va, pte_t **pte_out);
+int pgtable_create(pte_t *root, void *va, pte_t **pte_out);
+int pgtable_update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa);
 
 int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep);
 int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep);
 
 uint64_t pgtable_pa_to_va(uint64_t pa);
 uint64_t pgtable_va_to_pa(uint64_t va);
-
-// Pre-allocaed pgtable
-
-
-// Memory allocation in the guest process
-void *vmpl_alloc(size_t size);
-void vmpl_free(void *addr);
 
 #endif

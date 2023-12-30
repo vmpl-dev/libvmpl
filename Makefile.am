@@ -10,6 +10,7 @@ lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
                     src/vmpl-ioctl.c \
+                    src/page.c \
                     src/pgtable.c \
                     src/mm.c \
                     src/seimi.c \
@@ -32,8 +33,10 @@ libdunify_la_LDFLAGS = -fPIC -shared \
 # Specify headers to be installed
 pkgincludedir = $(includedir)/vmpl
 pkginclude_HEADERS = include/vmpl.h \
+                    include/dune.h \
                     include/sys.h include/syscall.h \
                     include/vc.h \
+                    include/page.h \
                     include/pgtable.h \
                     include/mm.h \
                     include/seimi.h \
