@@ -79,6 +79,22 @@ int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param) {
     return 0;
 }
 
+int vmpl_ioctl_get_layout(int vmpl_fd, struct vmsa_layout *vmsa_layout) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_LAYOUT, vmsa_layout);
+    if (rc != 0) {
+        perror("dune: failed to get layout");
+        return rc;
+    }
+
+    // log phys_limit, base_map and base_stack of the layout
+    log_debug("dune: phys_limit at 0x%lx", vmsa_layout->phys_limit);
+    log_debug("dune: base_map at 0x%lx", vmsa_layout->base_map);
+    log_debug("dune: base_stack at 0x%lx", vmsa_layout->base_stack);
+
+    return 0;
+}
+
 int vmpl_ioctl_set_seimi(int vmpl_fd) {
 	int rc;
 	rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SEIMI, 0);
