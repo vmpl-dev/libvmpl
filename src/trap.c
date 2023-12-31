@@ -131,9 +131,9 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 	// we use printf() because this might
 	// have to work even if libc doesn't.
 	printf("dune: --- Begin Trap Dump ---\n");
-	printf("dune: RIP 0x%016llx\n", tf->rip);
+	printf("dune: RIP 0x%016lx\n", tf->rip);
 	printf("dune: CS 0x%02x SS 0x%02x\n", tf->cs, tf->ss);
-	printf("dune: ERR 0x%08lx RFLAGS 0x%08lx\n", tf->err, tf->rflags);
+	printf("dune: ERR 0x%08x RFLAGS 0x%08lx\n", tf->err, tf->rflags);
 	printf("dune: RAX 0x%016lx RCX 0x%016lx\n", tf->rax, tf->rcx);
 	printf("dune: RDX 0x%016lx RBX 0x%016lx\n", tf->rdx, tf->rbx);
 	printf("dune: RSP 0x%016lx RBP 0x%016lx\n", tf->rsp, tf->rbp);

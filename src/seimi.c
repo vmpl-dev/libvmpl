@@ -45,4 +45,5 @@ void *sa_alloc(size_t length, bool need_ro, long *offset)
 bool sa_free(void *addr, size_t length)
 {
     munmap(addr, length);
+    return true;
 }
