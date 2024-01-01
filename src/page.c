@@ -5,6 +5,7 @@
 
 #define _GNU_SOURCE
 
+#include <stdio.h>
 #include <errno.h>
 #include <sys/mman.h>
 #include <string.h>
@@ -24,7 +25,7 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
 {
     void *addr;
     addr = mmap((void *)(PGTABLE_MMAP_BASE + phys), len,
-                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
+                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, phys);
     if (addr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
         return NULL;
@@ -129,7 +130,7 @@ void vmpl_page_free(struct page *pg)
 }
 
 void vmpl_page_stats(void) {
-
+	printf("VMPL pages: %d/%ld\n", num_vmpl_pages, MAX_PAGES);
 }
 
 bool vmpl_page_isfrompool(physaddr_t pa)
@@ -193,6 +194,7 @@ void dune_page_free(struct page *pg)
 
 void dune_page_stats(void)
 {
+	printf("Dune pages: %d/%ld\n", num_dune_pages, MAX_PAGES);
 }
 
 // Page Management [General]
@@ -213,4 +215,15 @@ err:
 	printf("Failed to initialize page management\n");
 	free(pages);
 	return -ENOMEM;
+}
+
+void page_exit(void)
+{
+	free(pages);
+}
+
+void page_stats(void)
+{
+	vmpl_page_stats();
+	dune_page_stats();
 }

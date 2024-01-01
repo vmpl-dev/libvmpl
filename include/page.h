@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <sys/queue.h>
 #include <assert.h>
 
@@ -22,7 +23,8 @@ struct page {
 };
 
 extern struct page *pages;
-extern int num_pages;
+extern int num_dune_pages;
+extern int num_vmpl_pages;
 
 #define PAGEBASE	0x100000000 /* 4 GB start */
 #define MAX_PAGES	(1ul << 20) /* 4 GB of memory */

@@ -20,8 +20,8 @@
 #include "page.h"
 #include "pgtable.h"
 
-#define MEMORY_POOL_START 0x140000000
-#define MEMORY_POOL_END 0x170000000
+#define MEMORY_POOL_START   PGTABLE_MMAP_BASE
+#define MEMORY_POOL_END     PGTABLE_MMAP_END
 
 #define __va(x) ((void *)((unsigned long)(x) + PGTABLE_MMAP_BASE))
 #define __pa(x) ((unsigned long)(x) - PGTABLE_MMAP_BASE)
@@ -30,17 +30,19 @@
 
 #define padding(level) ((level)*4 + 4)
 static char *pt_names[] = { "PML4", "PDP", "PD", "PT", "Page" };
-static void *free_pages;
-__thread uint64_t *this_pgd;
+pte_t *pgroot;
 
 static inline virtaddr_t pgtable_alloc(void)
 {
 	struct page *pg;
+    physaddr_t pa;
 	virtaddr_t va;
 	pg = dune_page_alloc(dune_fd);
 	if (!pg)
 		return NULL;
 
+    pa = dune_page2pa(pg);
+    va = pgtable_pa_to_va(pa);
 	memset((void *) va, 0, PGSIZE);
 	return va;
 }
@@ -71,10 +73,6 @@ static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count,
         (*page_count)++;
         return 0;
     }
-
-    // Clear NX bit, and C-bit
-    paddr = bitclr(paddr, 63);
-    paddr = bitclr(paddr, 51);
 
     // Map page table to virtual address space
     vaddr = do_mapping(fd, paddr, PAGE_SIZE);
@@ -137,18 +135,18 @@ int pgtable_init(uint64_t **pgd, int fd)
 
     log_debug("dune: %lu page tables, %lu pages", pgtable_count, page_count);
     *pgd = (uint64_t *)(PGTABLE_MMAP_BASE + cr3);
-    this_pgd = *pgd;
+    pgroot = *pgd;
 
     return 0;
 }
 
-int pgtable_free(uint64_t *pgd)
+int pgtable_free(pte_t *pgd)
 {
     log_debug("pgtable free");
     return 0;
 }
 
-int pgtable_selftest(uint64_t *pgd, uint64_t va)
+int pgtable_selftest(pte_t *pgd, uint64_t va)
 {
     int rc;
     pte_t *ptep;
@@ -278,7 +276,7 @@ int pgtable_create(pte_t *root, void *va, pte_t **pte_out)
  * @param pa The physical address of the page.
  * @retval None
  */
-int pgtable_update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)
+int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
 {
 	int ret;
 	pte_t *ptep;
@@ -301,7 +299,7 @@ int pgtable_update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa)
  * @param ptep The page table entry of the virtual address.
  * @retval 0 on success, -1 on error
  */
-int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
+int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
     pml4e_t *pml4e = pml4_offset(pgd, va);
     if (pml4e_none(*pml4e) || pml4e_bad(*pml4e)) {
@@ -347,13 +345,13 @@ int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep)
  * @param level The level of the page table entry.
  * @param ptep The page table entry of the virtual address.
  */
-int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep)
+int lookup_address(uint64_t va, int *level, pte_t **ptep)
 {
-    if (this_pgd == NULL) {
+    if (pgroot == NULL) {
         return -EINVAL;
     }
 
-    return lookup_address_in_pgd(this_pgd, va, level, ptep);
+    return lookup_address_in_pgd(pgroot, va, level, ptep);
 }
 
 /**
@@ -406,11 +404,19 @@ uint64_t pgtable_va_to_pa(uint64_t va)
  */
 long remap_pfn_range(uint64_t vstart, uint64_t vend, uint64_t pstart)
 {
+    int rc;
     uint64_t va = vstart, pa = pstart;
     while (va < vend) {
-        pgtable_update_leaf_pte(this_pgd, va, pa);
+        rc = pgtable_update_leaf_pte(pgroot, va, pa);
+        if (rc) {
+            log_err("Failed to update leaf pte");
+            return rc;
+        }
+
         va += PAGE_SIZE, pa += PAGE_SIZE;
     }
+
+    return (vend - vstart) / PAGE_SIZE;
 }
 
 /**
@@ -429,6 +435,6 @@ void remap_va_to_pa(uint64_t vstart, uint64_t vend, uint64_t pstart)
             log_err("Failed to get physical address for va: %llx", va);
             return;
         }
-        pgtable_update_leaf_pte(this_pgd, va, pstart + (va - vstart));
+        pgtable_update_leaf_pte(pgroot, va, pstart + (va - vstart));
     }
 }

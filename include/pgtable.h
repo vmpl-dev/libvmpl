@@ -173,7 +173,7 @@ static inline bool is_aligned(PhysAddr addr, size_t alignment) {
 }
 
 extern int dune_fd;
-extern __thread uint64_t *this_pgd;
+extern pte_t *pgroot;
 int pgtable_init(uint64_t **pgd, int fd);
 int pgtable_free(uint64_t *pgd);
 int pgtable_selftest(uint64_t *pgd, uint64_t va);
@@ -182,7 +182,7 @@ int pgtable_create(pte_t *root, void *va, pte_t **pte_out);
 int pgtable_update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa);
 
 int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep);
-int lookup_address(uint64_t va, uint64_t *level, pte_t **ptep);
+int lookup_address(uint64_t va, int *level, pte_t **ptep);
 
 uint64_t pgtable_pa_to_va(uint64_t pa);
 uint64_t pgtable_va_to_pa(uint64_t va);
