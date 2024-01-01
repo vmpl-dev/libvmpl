@@ -21,7 +21,32 @@
 #include "vmpl.h"
 #include "mm.h"
 #include "log.h"
-#include "hotcalls.h"
+#include "dunify.h"
+
+// environment variables
+bool hotcalls_enabled = false;
+bool run_in_vmpl = false;
+bool run_in_vmpl_process = false;
+bool run_in_vmpl_thread = false;
+
+static void init_env()
+{
+	if (getenv("HOTCALLS_ENABLED")) {
+		hotcalls_enabled = true;
+	}
+
+	if (getenv("RUN_IN_VMPL")) {
+		run_in_vmpl = true;
+	}
+
+	if (getenv("RUN_IN_VMPL_PROCESS")) {
+		run_in_vmpl_process = true;
+	}
+
+	if (getenv("RUN_IN_VMPL_THREAD")) {
+		run_in_vmpl_thread = true;
+	}
+}
 
 // Declare original malloc and free
 static int (*main_orig)(int, char **, char **);
@@ -81,8 +106,11 @@ static void cleanup()
 
 static int main_hook(int argc, char **argv, char **envp)
 {
+	// Initialize environment variables
+	init_env();
+
 	// Initialize hotcalls
-	if (getenv("HOTCALLS_ENABLED")) {
+	if (hotcalls_enabled) {
 		hotcalls_setup(1);
 	}
 
@@ -90,7 +118,7 @@ static int main_hook(int argc, char **argv, char **envp)
 	atexit(cleanup);
 
 	// Call original main
-	if (!getenv("RUN_IN_VMPL")) {
+	if (!run_in_vmpl) {
 		return main_orig(argc, argv, envp);
 	}
 
@@ -103,8 +131,6 @@ static int main_hook(int argc, char **argv, char **envp)
 		log_err("failed to initialize dune");
 	} else {
 		log_debug("dune mode entered!");
-		// Test hotcalls
-		hotcalls_write(STDOUT_FILENO, "Hello from hotcalls!\n", 21);
 	}
 
 	return main_orig(argc, argv, envp);
@@ -140,14 +166,14 @@ pid_t fork()
 	pid = fork_orig();
 	if (pid == 0) {
 		// Initialize hotcalls
-		if (getenv("HOTCALLS_ENABLED")) {
+		if (hotcalls_enabled) {
 			hotcalls_setup(1);
 		}
 
 		// Register cleanup function
 		atexit(cleanup);
 
-		if (getenv("RUN_IN_VMPL_PROCESS")) {
+		if (run_in_vmpl_process) {
 			log_debug("entering dune mode...\n");
 			int ret = vmpl_enter(1, NULL);
 			if (ret) {
@@ -198,8 +224,7 @@ int pthread_create(pthread_t *restrict res,
 	// Call original pthread_create if not running in VMPL thread or hotcalls is not
 	// initialized yet (i.e., we are in the main thread). Otherwise, create a VMPL thread.
 	// Note that we need to create a VMPL thread for hotcalls to work.
-	if (!getenv("RUN_IN_VMPL_THREAD") 
-		||(getenv("HOTCALLS_ENABLED") && !hotcalls_initialized())) {
+	if (!run_in_vmpl_thread ||(hotcalls_enabled && !hotcalls_initialized())) {
 		return pthread_create_orig(res, attrp, entry, arg);
 	}
 

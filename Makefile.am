@@ -10,11 +10,11 @@ lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
                     src/vmpl-ioctl.c \
+                    src/vmpl-hotcalls.c \
                     src/page.c \
                     src/pgtable.c \
                     src/mm.c \
                     src/seimi.c \
-                    src/hotcalls.c \
                     src/ghcb.c src/vmsa.c src/vc.c \
                     src/dune.S src/vsyscall.S \
                     src/serial.c \
@@ -44,7 +44,7 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/page.h \
                     include/pgtable.h \
                     include/mm.h \
-                    include/hotcalls.h \
+                    include/vmpl-hotcalls.h \
                     include/seimi.h \
                     include/apic.h \
                     include/bitmap.h \

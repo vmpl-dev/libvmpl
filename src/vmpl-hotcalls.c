@@ -5,7 +5,7 @@
 #include <sys/fcntl.h>
 #include <hotcalls/hotcalls.h>
 
-#include "hotcalls.h"
+#include "vmpl-hotcalls.h"
 
 long hotcalls_read(int fd, void *buf, size_t count)
 {
