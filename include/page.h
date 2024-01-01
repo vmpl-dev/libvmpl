@@ -48,7 +48,7 @@ extern bool vmpl_page_isfrompool(physaddr_t pa);
 static inline void vmpl_page_mark(struct page *pg)
 {
 	pg->vmpl = 1;
-	pg->ref = 0;
+	pg->ref = 1;
 }
 static inline void vmpl_page_mark_addr(physaddr_t pa)
 {
@@ -113,5 +113,7 @@ static inline void dune_page_put(struct page *pg)
 
 // -----------------------PAGE MANAGEMENT-----------------------
 int page_init(int fd);
+void page_stats(void);
+void page_test(int vmpl_fd);
 
 #endif

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -138,6 +139,21 @@ bool vmpl_page_isfrompool(physaddr_t pa)
 	return pages[pa >> PGSHIFT].vmpl == Vmpl1;
 }
 
+static void vmpl_page_test(int vmpl_fd)
+{
+	struct page *pg;
+	assert(vmpl_fd > 0);
+
+	pg = vmpl_page_alloc(vmpl_fd);
+	assert(pg);
+	assert(pg->ref == 1);
+	assert(pg->vmpl == Vmpl1);
+
+	vmpl_page_free(pg);
+	assert(pg->ref == 0);
+	assert(pg->vmpl == Vmpl1);
+}
+
 // Dune Page Management	[Linear Mapped Pages]
 static pthread_mutex_t page_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct page_head dune_pages_free;
@@ -197,6 +213,21 @@ void dune_page_stats(void)
 	printf("Dune pages: %d/%ld\n", num_dune_pages, MAX_PAGES);
 }
 
+static void dune_page_test(int vmpl_fd)
+{
+	struct page *pg;
+	assert(vmpl_fd > 0);
+
+	pg = dune_page_alloc(vmpl_fd);
+	assert(pg);
+	assert(pg->ref == 1);
+	assert(pg->vmpl == Vmpl0);
+
+	dune_page_free(pg);
+	assert(pg->ref == 0);
+	assert(pg->vmpl == Vmpl0);
+}
+
 // Page Management [General]
 int page_init(int fd)
 {
@@ -226,4 +257,10 @@ void page_stats(void)
 {
 	vmpl_page_stats();
 	dune_page_stats();
+}
+
+void page_test(int vmpl_fd)
+{
+	vmpl_page_test(vmpl_fd);
+	dune_page_test(vmpl_fd);
 }

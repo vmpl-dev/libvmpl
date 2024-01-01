@@ -34,12 +34,6 @@ static struct perm_map_t perm_maps[] = {
 	{PERM_BIG_1GB, PTE_PS}
 };
 
-static pte_t load_pgroot(void)
-{
-	uint64_t cr3 = read_cr3();
-	return cr3 | PGTABLE_MMAP_BASE;
-}
-
 static inline pte_t get_pte_perm(int perm)
 {
 	pte_t pte_perm = 0;
