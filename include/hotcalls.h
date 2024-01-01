@@ -1,5 +1,5 @@
-#ifndef __HOTCALLS_H__
-#define __HOTCALLS_H__
+#ifndef __VMPL_HOTCALLS_H__
+#define __VMPL_HOTCALLS_H__
 
 #include <stdint.h>
 #include <stddef.h>
@@ -9,6 +9,7 @@
 
 #include <hotcalls/hotcalls.h>
 
+#define __alias(name) __attribute__((alias(#name)))
 typedef unsigned long syscall_arg_t;
 
 static inline long hotcalls0(syscall_arg_t sysnr)
@@ -97,4 +98,4 @@ long hotcalls_ioctl(int fd, unsigned long request, void *argp);
 long hotcalls_readv(int fd, const struct iovec *iov, int iovcnt);
 long hotcalls_writev(int fd, const struct iovec *iov, int iovcnt);
 
-#endif // __HOTCALLS_H__
+#endif // __VMPL_HOTCALLS_H__

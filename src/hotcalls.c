@@ -1,6 +1,8 @@
+#include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/syscall.h>
+#include <sys/fcntl.h>
 #include <hotcalls/hotcalls.h>
 
 #include "hotcalls.h"
