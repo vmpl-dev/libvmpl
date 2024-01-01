@@ -28,7 +28,8 @@ libvmpl_la_LDFLAGS = -fPIC -shared \
                     -lhotcalls \
                     -version-info 1:0:0
 
-libdunify_la_SOURCES = src/dunify.c
+libdunify_la_SOURCES = src/dunify.c \
+                    src/hotcalls.c
 libdunify_la_LDFLAGS = -fPIC -shared \
                     -ldl \
                     -lvmpl \

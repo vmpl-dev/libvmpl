@@ -33,18 +33,22 @@ static void init_env()
 {
 	if (getenv("HOTCALLS_ENABLED")) {
 		hotcalls_enabled = true;
+		log_debug("hotcalls enabled");
 	}
 
 	if (getenv("RUN_IN_VMPL")) {
 		run_in_vmpl = true;
+		log_debug("run in vmpl");
 	}
 
 	if (getenv("RUN_IN_VMPL_PROCESS")) {
 		run_in_vmpl_process = true;
+		log_debug("run in vmpl process");
 	}
 
 	if (getenv("RUN_IN_VMPL_THREAD")) {
 		run_in_vmpl_thread = true;
+		log_debug("run in vmpl thread");
 	}
 }
 
