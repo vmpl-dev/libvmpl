@@ -13,6 +13,7 @@
 // This is done to reduce the size of the hot path.
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
+#ifdef CONFIG_VMPL_HOTCALLS
 ssize_t read(int fd, void *buf, size_t count)
 {
 	static typeof(&read) read_orig = NULL;
@@ -147,3 +148,4 @@ long writev(int fd, const struct iovec *iov, int iovcnt)
 
 	return hotcalls_writev(fd, iov, iovcnt);
 }
+#endif

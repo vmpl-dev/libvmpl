@@ -1,6 +1,17 @@
 ## Build:
-```
+```bash
 ./configure --enable-dune-boot --enable-pgtable-selftest --enable-vmpl-pgtable --enable-vmpl-signal
+```
+
+## Install:
+```bash
+pushd libdict
+CC=musl-gcc
+INSTALL_PREFIX=/usr/local/musl
+INSTALL_USER=$(id -u)
+INSTALL_GROUP=$(id -g)
+make install
+popd
 ```
 
 ## Plan:
@@ -66,6 +77,3 @@
             [√] mprotect
             [√] brk
             [√] sbrk
-
-
-有一些dune做着蹩脚的地方，在vmpl1上很好实现，目前open, read, write, close, ioctl, mremap, munmap, exit共八个系统调用通过了测试，可以在vmpl1执行了。但syscall对应的vmpl权限管理还没做，预计很快就会支持dune的trap-handler和elf-loader

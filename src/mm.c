@@ -10,6 +10,8 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdbool.h>
+#include <assert.h>
+#include <limits.h>
 #include <stdint.h>
 #include <errno.h>
 #include <sys/mman.h>
@@ -17,8 +19,18 @@
 #include "mmu.h"
 #include "vmpl-ioctl.h"
 #include "page.h"
+#include "vma.h"
+#include "vm.h"
 #include "mm.h"
 #include "log.h"
+
+#define VMPL_VM_MAP_PHYS_FMT	"start = 0x%lx, end = 0x%lx, perm = 0x%lx"
+#define VMPL_VM_MAP_PAGES_FMT	"start = 0x%lx, end = 0x%lx, perm = 0x%lx"
+#define VMPL_VM_MMAP_FMT		"start = 0x%lx, end = 0x%lx, perm = 0x%lx, flags = 0x%lx, fd = %d, offset = 0x%lx"
+#define VMPL_VM_MREMAP_FMT		"old_start = 0x%lx, old_end = 0x%lx, new_start = 0x%lx, new_end = 0x%lx, perm = 0x%lx"
+#define VMPL_VM_MUNMAP_FMT		"start = 0x%lx, end = 0x%lx"
+#define VMPL_VM_MPROTECT_FMT	"start = 0x%lx, end = 0x%lx, perm = 0x%lx"
+#define VMPL_VM_CLONE_FMT		"start = 0x%lx, end = 0x%lx, prot = 0x%lx, path = 0x%lx"
 
 static struct perm_map_t perm_maps[] = {
 	{PERM_R, PTE_P},
@@ -55,16 +67,15 @@ static inline pte_t get_pte_perm(int perm)
 
 static inline struct page * vmpl_va2page(virtaddr_t va)
 {
-	physaddr_t pa;
-	pa = pgtable_va_to_pa(va);
+	physaddr_t pa = pgtable_va_to_pa(va);
 	assert(pa != 0);
 	return vmpl_pa2page(pa);
 }
 
 static inline virtaddr_t vmpl_page2va(struct page *pg)
 {
-	physaddr_t pa;
-	pa = vmpl_page2pa(pg);
+	physaddr_t pa = vmpl_page2pa(pg);
+	
 	return pgtable_pa_to_va(pa);
 }
 
@@ -111,6 +122,7 @@ static inline void put_page(void * page)
 /**
  * @brief Dune VM Page Walk
  * @note  XXX: Using PA == VA - PGTABLE_MMAP_BASE
+ * The page walk callback function takes a page table entry and a virtual address.
  * @param dir The root of the page table.
  * @param start_va The start of the virtual address range to walk.
  * @param end_va The end of the virtual address range to walk.
@@ -118,12 +130,14 @@ static inline void put_page(void * page)
  * @param arg An argument to pass to the callback function.
  * @param level The level of the page table.
  * @param create Whether to create pages if they don't exist.
+ * @retval 0 on success, non-zero on failure.
  */
 int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
 			page_walk_cb cb, const void *arg, int level,
 			int create)
 {
 	int i, ret;
+	pte_t *new_dir;
 	int start_idx = PDX(level, start_va);
 	int end_idx = PDX(level, end_va);
 	void *base_va = (void *) ((unsigned long)
@@ -132,7 +146,6 @@ int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
 	assert(level >= 0 && level <= NPTLVLS);
 	assert(end_idx < NPTENTRIES);
 
-	// Iterate over page table entries in the page table page
 	for (i = start_idx; i <= end_idx; i++) {
 		void *n_start_va, *n_end_va;
 		void *cur_va = base_va + PDADDR(level, i);
@@ -170,31 +183,23 @@ int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
 
 		// Allocate page table page
 		if (!pte_present(*pte)) {
-			pte_t *new_pte;
-
 			if (!create)
 				continue;
-			
-			// Allocate page table page
-			struct page *page = dune_page_alloc(dune_fd);
-			if (!page)
-				return -ENOMEM;
-			
-			// Clear page table page
-			physaddr_t pa = dune_page2pa(page);
-			new_pte = (pte_t *) pgtable_pa_to_va(pa);
-			memset(new_pte, 0, PGSIZE);
 
-			// Update the pte to point to the new page table page
-			*pte = PTE_ADDR(pa) | PTE_DEF_FLAGS;
+			new_dir = alloc_virt_page();
+			if (!new_dir)
+				return -ENOMEM;
+			memset(new_dir, 0, PGSIZE);
+
+			uint64_t pa = pgtable_va_to_pa(new_dir);
+			*pte = pte_addr(pa) | PTE_DEF_FLAGS;
+		} else {
+			new_dir = pgtable_do_mapping(pte_addr(*pte));
 		}
 
-		// Compute start and end virtual addresses for next level
 		n_start_va = (i == start_idx) ? start_va : cur_va;
 		n_end_va = (i == end_idx) ? end_va : cur_va + PDADDR(level, 1) - 1;
 
-		// Recurse into next level of page table page
-		pte_t *new_dir = (pte_t *)pgtable_pa_to_va(PTE_ADDR(*pte));
 		ret = __vmpl_vm_page_walk(new_dir, n_start_va, n_end_va, cb, arg,
 								  level - 1, create);
 		if (ret)
@@ -239,6 +244,18 @@ static int __vmpl_vm_map_pages_helper(const void *arg, pte_t *pte, void *va)
 	return 0;
 }
 
+static int __vmpl_vm_mremap_helper(const void *arg, pte_t *pte, void *va)
+{
+	pte_t perm = (pte_t) arg;
+	physaddr_t pa = alloc_phys_page();
+	if (!pa)
+		return -ENOMEM;
+
+	*pte = PTE_ADDR(pa) | perm;
+
+	return 0;
+}
+
 /**
  * Change the permissions of a virtual memory page.
  * @param arg A pointer to a pte_t structure.
@@ -256,7 +273,7 @@ static int __vmpl_vm_mprotect_helper(const void *arg, pte_t *pte, void *va)
 		return -ENOMEM;
 #endif
 
-	*pte = PTE_ADDR(*pte) | (PTE_FLAGS(*pte) & PTE_PS) | perm;
+	*pte = pte_addr(*pte) | (PTE_FLAGS(*pte) & PTE_PS) | perm;
 	return 0;
 }
 
@@ -274,12 +291,12 @@ static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 	pte_t *newPte;
 
 	// Create new page table entry for the new page table root
-	ret = pgtable_create(newRoot, va, &newPte);
+	ret = pgtable_lookup(newRoot, va, true, &newPte);
 	if (ret < 0)
 		return ret;
 
 	// Refcount the physical page
-	vmpl_page_get_addr(PTE_ADDR(*pte));
+	vmpl_page_get_addr(pte_addr(*pte));
 
 	// Copy the page table entry
 	*newPte = *pte;
@@ -297,7 +314,7 @@ static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 static int __vmpl_vm_free_helper(const void *arg, pte_t *pte, void *va)
 {
 	// Refcount the physical page
-	vmpl_page_put_addr(PTE_ADDR(*pte));
+	vmpl_page_put_addr(pte_addr(*pte));
 
 	// Invalidate mapping
 	*pte = 0;
@@ -392,26 +409,72 @@ int vmpl_vm_map_pages(pte_t *root, void *va, size_t len, int perm)
 
 #ifdef CONFIG_VMPL_MMAP
 /**
- * This is a prologure before redirecting `mmap` to the guest OS.
- * It is used to ensure that all the pgtable pages are linearly mapped in the
- * vmpl-process address space.
+ * @brief This is a prologure before redirecting `mmap` to the guest OS.
+ * @note Note: This function is not implemented.
+ * @param root The root of the page table.
+ * @param addr The address to map.
+ * @param length The length of the mapping.
+ * @param prot The permissions to set.
+ * @param flags The flags to set.
+ * @param fd The file descriptor to map.
+ * @param offset The offset into the file.
+ * @return 0 on success, non-zero on failure.
  */
 void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
                   int fd, off_t offset)
 {
-	void *ret;
+	void *va_start, *va_end;
 	int rc;
 
-	__vmpl_vm_page_walk(root, VA_START, VA_END,
+	log_debug(VMPL_VM_MMAP_FMT, addr, addr + length - 1, prot, flags, fd, offset);
+	// 1. Check that the address is not NULL
+	if (addr) {
+		addr = (void *)PAGE_ALIGN_DOWN((uintptr_t)addr);
+		length = PAGE_ALIGN_UP(length);
+	}
+
+	// 2. Filter out unsupported flags
+	if (flags & ~(MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED |
+				  MAP_GROWSDOWN | MAP_STACK | MAP_HUGETLB))
+		return MAP_FAILED;
+
+	// 3. Filter out unsupported file-backed mappings
+	if (fd != -1)
+		return -ENOSYS;
+
+	// 4. Check that the address range is not already mapped
+	rc = vmpl_vm_find_vma(&vmpl_vm, addr, length);
+	if (rc != NULL) {
+		errno = EEXIST;
+		return -ENOMEM;
+	}
+
+	// 5. Find unused address range
+	va_start = vmpl_vm_find_vma(&vmpl_vm, NULL, length);
+	if (va_start == NULL) {
+		errno = ENOMEM;
+		return -ENOMEM;
+	}
+
+	// 6. Handle anonymous mappings
+	va_end = va_start + length - 1;
+	__vmpl_vm_page_walk(&vmpl_vm.pgd, va_start, va_end,
 			&__vmpl_vm_map_pages_helper, root,
 			3, CREATE_NONE);
 
-	return ret;
+	return va_start;
 }
 
 /**
  * @brief This is a prologure before redirecting `mremap` to the guest OS.
  * @note Note: This function is not implemented.
+ * @param root The root of the page table.
+ * @param old_address The old address.
+ * @param old_size The old size.
+ * @param new_size The new size.
+ * @param flags The flags to set.
+ * @param new_address The new address.
+ * @return 0 on success, non-zero on failure.
  */
 void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 					 size_t new_size, int flags, void *new_address)
@@ -419,26 +482,61 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	void *ret;
 	int rc;
 
+	log_debug(VMPL_VM_MREMAP_FMT, old_address, old_address + old_size - 1,
+			  new_address, new_address + new_size - 1, flags);
+	// 1. Check that the address is not NULL
+	if (old_address) {
+		old_address = (void *)PAGE_ALIGN_DOWN((uintptr_t)old_address);
+		old_size = PAGE_ALIGN_UP(old_size);
+	}
+
+	// 2. Filter out unsupported flags
+	if (flags & ~(MREMAP_MAYMOVE | MREMAP_FIXED))
+		return MAP_FAILED;
+
+	// 3. Check that the address range is mapped
+	rc = find_vma_intersection(&vmpl_vm, old_address, old_size);
+	if (rc == NULL) {
+		errno = ENOMEM;
+		return -ENOMEM;
+	}
+
+	// 4. Handle anonymous mappings
+	ret = vmpl_vm_mmap(root, NULL, new_size, 0, 0, -1, 0);
+	if (ret == MAP_FAILED)
+		return MAP_FAILED;
+
 	return ret;
 }
 
 #endif
 
 /**
- * This is a prologure before redirecting `munmap` to the guest OS.
+ * @brief Unmap virtual memory pages.
+ * @note Note: len must be a multiple of PGSIZE.
+ * @param root The root of the page table.
+ * @param va The virtual address to unmap.
+ * @param len The length of the mapping.
+ * @return 0 on success, non-zero on failure.
  */
 void vmpl_vm_unmap(pte_t *root, void *va, size_t len)
 {
+	log_debug(VMPL_VM_MUNMAP_FMT, va, va + len - 1);
 	/* FIXME: Doesn't free as much memory as it could */
 	__vmpl_vm_page_walk(root, va, va + len - 1,
-			&__vmpl_vm_free_helper, NULL,
-			3, CREATE_NONE);
+						&__vmpl_vm_free_helper, NULL,
+						3, CREATE_NONE);
 
 	vmpl_flush_tlb();
 }
 
 /**
- * This is a prologure before redirecting `mprotect` to the guest OS.
+ * @brief Change the permissions of virtual memory pages.
+ * @note Note: len must be a multiple of PGSIZE.
+ * @param root The root of the page table.
+ * @param va The virtual address to change.
+ * @param len The length of the mapping.
+ * @param perm The permissions to set.
  */
 int vmpl_vm_mprotect(pte_t *root, void *va, size_t len, int perm)
 {
@@ -452,10 +550,10 @@ int vmpl_vm_mprotect(pte_t *root, void *va, size_t len, int perm)
 	}
 
 	pte_perm = get_pte_perm(perm);
-
+	log_debug(VMPL_VM_MPROTECT_FMT, va, va + len - 1, pte_perm);
 	ret = __vmpl_vm_page_walk(root, va, va + len - 1,
-							  &__vmpl_vm_mprotect_helper,
-							  (void *)pte_perm, 3, CREATE_NONE);
+							  &__vmpl_vm_mprotect_helper, (void *)pte_perm,
+							  3, CREATE_NONE);
 	if (ret)
 		return ret;
 
@@ -465,51 +563,139 @@ int vmpl_vm_mprotect(pte_t *root, void *va, size_t len, int perm)
 }
 
 /**
- * Clone a page root.
+ * @brief Clone a page table.
+ * @note  This function is not implemented.
+ * @param root The root of the page table.
+ * @return The new page table root on success, NULL on failure.
  */
 pte_t *vmpl_vm_clone(pte_t *root)
 {
-       int ret;
-       pte_t *newRoot;
+	int ret;
+	pte_t *newRoot;
 
-       newRoot = alloc_virt_page();
-       memset(newRoot, 0, PGSIZE);
+	log_debug("vmpl_vm_clone: root = 0x%lx", root);
+	newRoot = alloc_virt_page();
+	memset(newRoot, 0, PGSIZE);
 
-       ret = __vmpl_vm_page_walk(root, VA_START, VA_END,
-                       &__vmpl_vm_clone_helper, newRoot,
-                       3, CREATE_NONE);
-       if (ret < 0) {
-               vmpl_vm_free(newRoot);
-               return NULL;
-       }
+	// for each vma, walk the page table and clone the pages
+	dict_itor *itor = dict_itor_new(vmpl_mm.vmpl_vm.vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *vma = dict_itor_key(itor);
+		log_debug(VMPL_VM_CLONE_FMT, vma->start, vma->end, vma->prot, vma->path);
+		ret = __vmpl_vm_page_walk(root, vma->start, vma->end,
+								&__vmpl_vm_clone_helper, newRoot,
+								3, CREATE_NONE);
+		if (ret < 0) {
+			goto failed;
+		}
+	}
 
-       return newRoot;
+	return newRoot;
+failed:
+	vmpl_vm_free(newRoot);
+	return NULL;
 }
 
 /**
  * Free the page table and decrement the reference count on any pages.
+ * @param root The root of the page table.
  */
 void vmpl_vm_free(pte_t *root)
 {
+	log_debug("root = 0x%lx", root);
 	// XXX: Should only need one page walk
 	// XXX: Hacky - Until I fix ref counting
 #ifdef CONFIG_DUNE_DEPRECATED
 	__vmpl_vm_page_walk(root, VA_START, VA_END,
-			&__vmpl_vm_free_helper, NULL,
-			3, CREATE_NONE);
+						&__vmpl_vm_free_helper, NULL,
+						3, CREATE_NONE);
 #endif
 
 	__vmpl_vm_page_walk(root, VA_START, VA_END,
-			&__vmpl_vm_free_helper, NULL,
-			2, CREATE_NONE);
+						&__vmpl_vm_free_helper, NULL,
+						2, CREATE_NONE);
 
 	__vmpl_vm_page_walk(root, VA_START, VA_END,
-			&__vmpl_vm_free_helper, NULL,
-			1, CREATE_NONE);
+						&__vmpl_vm_free_helper, NULL,
+						1, CREATE_NONE);
 
 	put_page(root);
+}
 
-	return;
+/**
+ * @brief Handle page fault on heap virtual memory area.
+ * @param vm The vmpl_vm_t structure to search.
+ * @param addr The virtual address to search for.
+ * @param len The length of the virtual address range to search for.
+ * @return A pointer to the VMA that contains the given virtual address, or NULL
+ */
+long handle_heap_fault(uintptr_t addr, uint64_t fec, pte_t *pte)
+{
+	// Allocate a new page
+	void *newPage = alloc_virt_page();
+	if (!newPage) {
+		log_err("alloc_virt_page");
+		return -1;
+	}
+
+	// Map the new page
+	physaddr_t pa = pgtable_va_to_pa(newPage);
+	*pte = PTE_ADDR(pa) | PTE_W | PTE_U | PTE_P;
+
+	// Invalidate
+	vmpl_flush_tlb_one(addr);
+	return 0;
+}
+
+/**
+ * @brief Handle page fault on stack virtual memory area.
+ * @note This function should be called from the page fault handler.
+ * @param addr The address that caused the page fault.
+ * @param fec The fault error code.
+ * @param pte The page table entry to set.
+ * @return 0 on success, non-zero on failure.
+ */
+long handle_stack_fault(uintptr_t addr, uint64_t fec, pte_t *pte)
+{
+	// Allocate a new page
+	void *newPage = alloc_virt_page();
+	if (!newPage) {
+		log_err("alloc_virt_page");
+		return -1;
+	}
+
+	// Map the new page
+	physaddr_t pa = pgtable_va_to_pa(newPage);
+	*pte = PTE_ADDR(pa) | PTE_W | PTE_U | PTE_P;
+
+	// Invalidate
+	vmpl_flush_tlb_one(addr);
+	return 0;
+}
+
+/**
+ * @brief Handle page fault on lazily allocated virtual memory area.
+ * @note This function should be called from the page fault handler.
+ * @param addr The address that caused the page fault.
+ * @param fec The fault error code.
+ * @return 0 on success, non-zero on failure.
+ */
+long handle_anonymous_fault(uintptr_t addr, uint64_t fec, pte_t *pte)
+{
+	// Allocate a new page
+	void *newPage = alloc_virt_page();
+	if (!newPage) {
+		log_err("alloc_virt_page");
+		return -1;
+	}
+
+	// Map the new page
+	physaddr_t pa = pgtable_va_to_pa(newPage);
+	*pte = PTE_ADDR(pa) | PTE_W | PTE_U | PTE_P;
+
+	// Invalidate
+	vmpl_flush_tlb_one(addr);
+	return 0;
 }
 
 /**
@@ -519,19 +705,14 @@ void vmpl_vm_free(pte_t *root)
  * @param fec The fault error code.
  * @return 0 on success, non-zero on failure.
  */
-void vmpl_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
+long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
 {
-	pte_t *pte = NULL;
 	int rc;
 
 	/*
 	 * Assert on present and reserved bits.
 	 */
 	assert(!(fec & (FEC_P | FEC_RSV)));
-
-	rc = pgtable_lookup(pgroot, (void *)addr, &pte);
-	assert(rc == 0);
-
 	if ((fec & FEC_W) && (*pte & PTE_COW)) {
 		struct page *pg = vmpl_pa2page(PTE_ADDR(*pte));
 		pte_t perm = PTE_FLAGS(*pte);
@@ -559,65 +740,150 @@ void vmpl_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 
 		// Invalidate
 		vmpl_flush_tlb_one(addr);
+
+		return 0;
 	}
+
+	return -1;
 }
 
 /**
- * Initialize the virtual memory subsystem.
- * This function should be called before any other vmpl_vm_* functions.
- * @param vmpl_vm The vmpl_vm_t structure to initialize.
+ * Handle a page fault.
+ * This function should be called from the page fault handler.
+ * @param addr The address that caused the page fault.
+ * @param fec The fault error code.
  * @return 0 on success, non-zero on failure.
  */
-int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm) {
+long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
+{
 	int rc;
-    FILE *maps_file;
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-    size_t heap_start, heap_end;
-	struct vmsa_layout layout;
+	struct vmpl_vma_t *vma = NULL;
+	pte_t *pte = NULL;
 
-	rc = vmpl_ioctl_get_layout(dune_fd, &layout);
-	if (rc < 0) {
-		log_err("vmpl_ioctl_get_layout failed");
-		return rc;
+	// Find the VMA that contains the faulting address 
+	vma = find_vma_intersection(&vmpl_mm.vmpl_vm, PAGE_ALIGN_DOWN(addr), PAGE_SIZE);
+	if (!vma) {
+		return -1;
+	}
+	
+	// Find the page table entry for the faulting address
+	rc = pgtable_lookup(vmpl_mm.pgd, (void *)addr, false, &pte);
+	if (rc != 0) {
+		return -1;
 	}
 
-    maps_file = fopen("/proc/self/maps", "r");
-    if (!maps_file) {
-        perror("fopen");
-        return 1;
+	log_debug("addr = 0x%lx, fec = 0x%lx, pte = 0x%lx", addr, fec, *pte);
+	// Check if the VMA is a heap VMA
+	if (vma->vmpl_vma_flags & VMPL_VMA_TYPE_HEAP) {
+		rc = handle_heap_fault(addr, fec, pte);
+	} else if (vma->vmpl_vma_flags & VMPL_VMA_TYPE_STACK) {
+		rc = handle_stack_fault(addr, fec, pte);
+	} else if (vma->vmpl_vma_flags & VMPL_VMA_TYPE_ANONYMOUS) {
+		rc = handle_anonymous_fault(addr, fec, pte);
+	} else {
+		rc = handle_cow_pgflt(addr, fec, pte);
+	}
+
+	return rc;
+}
+
+struct vmpl_mm_t vmpl_mm;
+
+/**
+ * @brief Initialize the VMPL Memory Management. 
+ * @note This function should be called before any other vmpl_mm_* functions.
+ * @param vmpl_mm The vmpl_mm_t structure to initialize.
+ * @return 0 on success, non-zero on failure.
+ */
+int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
+{
+    int rc;
+    // VMPL Page Management
+    rc = page_init(dune_fd);
+    assert(rc == 0);
+
+#ifdef CONFIG_VMPL_MMAP
+    // Mmap 4GB for page table
+    void *addr = mmap(PGTABLE_MMAP_BASE, PGTABLE_MMAP_SIZE, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (addr == MAP_FAILED) {
+        log_err("failed to map pgtable");
+        return -ENOMEM;
+    }
+#endif
+
+	// VMPL-VM Abstraction
+	rc = vmpl_vm_init(&vmpl_mm->vmpl_vm);
+	if (rc != 0) {
+		log_err("failed to setup VMPL-VM");
+		return -1;
+	}
+
+	// VMPL Page Table Management
+    rc = pgtable_init(&vmpl_mm->pgd, dune_fd);
+    if (rc != 0) {
+        log_err("failed to setup PGD");
+		return -1;
     }
 
-	vmpl_vm->heap_start = 0;
-    vmpl_vm->heap_end = 0;
-	vmpl_vm->linear_start = PGTABLE_MMAP_BASE;
-	vmpl_vm->linear_end = PGTABLE_MMAP_END;
-	vmpl_vm->mmap_start = 0;
-	vmpl_vm->mmap_end = 0;
+	return 0;
+}
 
-	while ((read = getline(&line, &len, maps_file)) != -1) {
-        if (strstr(line, "[heap]")) {
-            if (sscanf(line, "%lx - %lx", &heap_start, &heap_end) == 2) {
-                log_debug("Heap range: %lx-%lx", heap_start, heap_end);
-                if (vmpl_vm->heap_start == 0) {
-                    vmpl_vm->heap_start = heap_start;
-                }
-                if (vmpl_vm->heap_end < heap_end) {
-                    vmpl_vm->heap_end = heap_end;
-                }
-            }
-        }
-		if (strstr(line, "[stack]")) {
-			if (sscanf(line, "%lx - %lx", &vmpl_vm->stack_start, &vmpl_vm->stack_end) == 2) {
-				log_debug("Stack range: %lx-%lx", vmpl_vm->stack_start, vmpl_vm->stack_end);
-			}
-		}
-    }
+/**
+ * @brief Exit the VMPL Memory Management.
+ * @note This function should be called after any other vmpl_mm_* functions.
+ * @param vmpl_mm The vmpl_mm_t structure to exit.
+ * @return 0 on success, non-zero on failure.
+ */
+int vmpl_mm_exit(struct vmpl_mm_t *vmpl_mm)
+{
+	int rc;
+	rc = vmpl_vm_exit(&vmpl_mm->vmpl_vm);
+	if (rc != 0) {
+		log_err("failed to exit VMPL-VM");
+		return -1;
+	}
 
-    log_info("Heap range: %lx-%lx", vmpl_vm->heap_start, vmpl_vm->heap_end);
-	log_info("Stack range: %lx-%lx", vmpl_vm->stack_start, vmpl_vm->stack_end);
+	rc = pgtable_exit(vmpl_mm->pgd);
+	if (rc != 0) {
+		log_err("failed to exit PGD");
+		return -1;
+	}
 
-    fclose(maps_file);
-    return 0;
+	rc = page_exit();
+	if (rc != 0) {
+		log_err("failed to exit page");
+		return -1;
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Print the VMPL Memory Management.
+ * @note This function should be called after any other vmpl_mm_* functions.
+ * @param vmpl_mm The vmpl_mm_t structure to print.
+ * @return 0 on success, non-zero on failure.
+ */
+void vmpl_mm_stats(struct vmpl_mm_t *vmpl_mm)
+{
+	printf("VMPL Memory Management Stats:\n");
+	page_stats();
+	pgtable_stats(vmpl_mm->pgd);
+	vmpl_vm_stats(&vmpl_mm->vmpl_vm);
+}
+
+/**
+ * @brief Test the VMPL Memory Management.
+ * @note This function should be called after any other vmpl_mm_* functions.
+ * @param vmpl_mm The vmpl_mm_t structure to test.
+ * @return 0 on success, non-zero on failure.
+ */
+void vmpl_mm_test(struct vmpl_mm_t *vmpl_mm)
+{
+	log_info("VMPL-MM Test");
+	page_test(dune_fd);
+	pgtable_test(vmpl_mm->pgd, (uint64_t)vmpl_mm->pgd);
+	vmpl_vm_test(&vmpl_mm->vmpl_vm);
+	log_success("VMPL-MM Test Passed");
 }

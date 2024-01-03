@@ -25,14 +25,32 @@ AC_CONFIG_MACRO_DIRS([m4])
 AC_ARG_WITH([vmpl-stack-size], [AS_HELP_STRING([--with-vmpl-stack-size],
                                                 [Set vmpl stack size])],
             [with_vmpl_stack_size=$withval],
-            [with_vmpl_stack_size=0x4000000])
+            [with_vmpl_stack_size=0x4000000UL])
 AC_DEFINE_UNQUOTED([CONFIG_VMPL_STACK_SIZE], [$with_vmpl_stack_size], [vmpl stack size])
 
 AC_ARG_WITH([vmpl-heap-size], [AS_HELP_STRING([--with-vmpl-heap-size],
                                                [Set vmpl heap size])],
             [with_vmpl_heap_size=$withval],
-            [with_vmpl_heap_size=0x10000000])
+            [with_vmpl_heap_size=0x10000000UL])
 AC_DEFINE_UNQUOTED([CONFIG_VMPL_HEAP_SIZE], [$with_vmpl_heap_size], [vmpl heap size])
+
+AC_ARG_WITH([vmpl-va-start], [AS_HELP_STRING([--with-vmpl-va-start],
+                                              [Set vmpl va start])],
+            [with_vmpl_va_start=$withval],
+            [with_vmpl_va_start=0xF000000000UL])
+AC_DEFINE_UNQUOTED([CONFIG_VMPL_VA_START], [$with_vmpl_va_start], [vmpl va start])
+
+AC_ARG_WITH([vmpl-va-size], [AS_HELP_STRING([--with-vmpl-va-size],
+                                             [Set vmpl va size])],
+            [with_vmpl_va_size=$withval],
+            [with_vmpl_va_size=0x10000000UL])
+AC_DEFINE_UNQUOTED([CONFIG_VMPL_VA_SIZE], [$with_vmpl_va_size], [vmpl va size])
+
+AC_ARG_WITH([vmpl-fit-algorithm], [AS_HELP_STRING([--with-vmpl-fit-algorithm],
+                                                  [Set vmpl fit algorithm])],
+            [with_vmpl_fit_algorithm=$withval],
+            [with_vmpl_fit_algorithm=2])
+AC_DEFINE_UNQUOTED([CONFIG_VMPL_FIT_ALGORITHM], [$with_vmpl_fit_algorithm], [vmpl fit algorithm])
 
 AC_ARG_WITH([vmpl-page-grow-size], [AS_HELP_STRING([--with-vmpl-page-grow-size],
                                                    [Set vmpl page grow size])],
@@ -51,6 +69,12 @@ AC_ARG_WITH([vmpl-pgtable-count], [AS_HELP_STRING([--with-vmpl-pgtable-count],
             [with_vmpl_pgtable_count=$withval],
             [with_vmpl_pgtable_count=512])
 AC_DEFINE_UNQUOTED([CONFIG_VMPL_PGTABLE_COUNT], [$with_vmpl_pgtable_count], [vmpl pgtable count])
+
+AC_ARG_ENABLE([vmpl-test], [AS_HELP_STRING([--enable-vmpl-test],
+                                           [Enable vmpl test support])],
+              [enable_vmpl_test=$enableval],
+              [enable_vmpl_test=no])
+AM_CONDITIONAL([ENABLE_VMPL_TEST], [test "x$enable_vmpl_test" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-cpuset],
               [AS_HELP_STRING([--enable-vmpl-cpuset],
@@ -163,26 +187,12 @@ AC_ARG_ENABLE([pgtbale-la57],
               [enable_pgtbale_la57=no])
 AM_CONDITIONAL([ENABLE_PGTBALE_LA57], [test "x$enable_pgtbale_la57" = "xyes"])
 
-AC_ARG_ENABLE([pgtable-selftest],
-              [AS_HELP_STRING([--enable-pgtable-selftest],
-                              [Enable pgtable selftest support])],
-              [enable_pgtable_selftest=$enableval],
-              [enable_pgtable_selftest=yes])
-AM_CONDITIONAL([ENABLE_PGTBALE_SELFTEST], [test "x$enable_pgtable_selftest" = "xyes"])
-
 AC_ARG_ENABLE([stack-trace],
               [AS_HELP_STRING([--enable-stack-trace],
                               [Enable stack trace support])],
               [enable_stack_trace=$enableval],
               [enable_stack_trace=no])
 AM_CONDITIONAL([ENABLE_STACK_TRACE], [test "x$enable_stack_trace" = "xyes"])
-
-AC_ARG_ENABLE([ghcb-selftest],
-              [AS_HELP_STRING([--enable-ghcb-selftest],
-                              [Enable ghcb selftest support])],
-              [enable_ghcb_selftest=$enableval],
-              [enable_ghcb_selftest=no])
-AM_CONDITIONAL([ENABLE_GHCB_SELFTEST], [test "x$enable_ghcb_selftest" = "xyes"])
 
 AC_ARG_ENABLE([serial-port],
               [AS_HELP_STRING([--enable-serial-port],
@@ -197,6 +207,10 @@ AS_IF([test "x$enable_vmpl_syscall" = "xyes" -a "$x$enable_vmpl_seimi" = "xyes"]
 AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
 AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
+
+if test "x$enable_vmpl_test" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_TEST], [1], [Enable vmpl test support])
+fi
 
 if test "x$enable_vmpl_cpuset" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_CPUSET], [1], [Enable cpuset support])
@@ -262,16 +276,8 @@ if test "x$enable_pgtbale_la57" = "xyes"; then
     AC_DEFINE([CONFIG_PGTBALE_LA57], [1], [Enable pgtbale la57 support])
 fi
 
-if test "x$enable_pgtable_selftest" = "xyes"; then
-    AC_DEFINE([CONFIG_PGTBALE_SELFTEST], [1], [Enable pgtable selftest support])
-fi
-
 if test "x$enable_stack_trace" = "xyes"; then
     AC_DEFINE([CONFIG_STACK_TRACE], [1], [Enable stack trace support])
-fi
-
-if test "x$enable_ghcb_selftest" = "xyes"; then
-    AC_DEFINE([CONFIG_GHCB_SELFTEST], [1], [Enable ghcb selftest support])
 fi
 
 if test "x$enable_vmpl_ghcb" = "xyes" -a "x$enable_serial_port" = "xyes"; then

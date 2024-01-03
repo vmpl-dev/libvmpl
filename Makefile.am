@@ -3,7 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 # 将config.h包含在编译中
 AM_CPPFLAGS = -I$(top_srcdir)/include -I../vmpl-dev -include config.h
 AM_CFLAGS = -Wall -g -O3 -MD
-AM_LDFLAGS = -L. -lvmpl -lhotcalls
+AM_LDFLAGS = -L. -lvmpl -lhotcalls -ldict
 
 # Specify shared libraries to be built
 lib_LTLIBRARIES = libvmpl.la libdunify.la
@@ -13,9 +13,11 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/vmpl-hotcalls.c \
                     src/page.c \
                     src/pgtable.c \
+                    src/vma.c \
+                    src/vm.c \
                     src/mm.c \
                     src/seimi.c \
-                    src/ghcb.c src/vmsa.c src/vc.c \
+                    src/ghcb.c src/vc.c \
                     src/dune.S src/vsyscall.S \
                     src/serial.c \
                     src/trap.c \
@@ -26,6 +28,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
 libvmpl_la_LDFLAGS = -fPIC -shared \
                     -ldl \
                     -lhotcalls \
+                    -ldict \
                     -version-info 1:0:0
 
 libdunify_la_SOURCES = src/dunify.c \
@@ -42,8 +45,11 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/dune.h \
                     include/sys.h include/syscall.h \
                     include/vc.h \
+                    include/vmpl-ioctl.h \
                     include/page.h \
                     include/pgtable.h \
+                    include/vma.h \
+                    include/vm.h \
                     include/mm.h \
                     include/vmpl-hotcalls.h \
                     include/seimi.h \

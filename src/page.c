@@ -22,6 +22,13 @@
 struct page *pages;
 
 // VMPL Page Management [Common Functions]
+/**
+ * @brief Map a page in the VMPL-VM and mark it as VMPL page.
+ * @note The page must not be already mapped in the VMPL-VM.
+ * @param fd VMPL device file descriptor
+ * @param phys Physical address of the page
+ * @param len Length of the page
+ */
 void* do_mapping(int fd, uint64_t phys, size_t len)
 {
     void *addr;
@@ -29,9 +36,8 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
                 PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, phys);
     if (addr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
-        return NULL;
     }
-
+	
     return addr;
 }
 
@@ -39,7 +45,7 @@ static int grow_pages(int fd, struct page_head *head, size_t num_pages, bool map
 {
 	int rc;
 	struct get_pages_t param;
-	size_t begin, end;
+	struct page *begin, *end, *pg;
 	void *ptr;
 
 	// Allocate more physical pages
@@ -53,13 +59,12 @@ static int grow_pages(int fd, struct page_head *head, size_t num_pages, bool map
 	log_debug("Allocated %lu pages, phys = 0x%lx", num_pages, param.phys);
 
 	// Add to free list
-	begin = PPN(param.phys - PAGEBASE);
+	begin = vmpl_pa2page(param.phys);
 	end = begin + num_pages;
-	for (size_t i = begin; i < end; i++) {
-		log_trace("Adding page %lx/%lx", i, MAX_PAGES);
-		pages[i].ref = 0;
-		pages[i].vmpl = Vmpl1;
-		SLIST_INSERT_HEAD(head, &pages[i], link);
+	for (pg = begin; pg < end; pg++) {
+		log_trace("Adding page %lx/%lx to free list", pg - begin, num_pages);
+		vmpl_page_mark(pg);
+		SLIST_INSERT_HEAD(head, pg, link);
 	}
 
 	if (!mapping)
@@ -131,12 +136,18 @@ void vmpl_page_free(struct page *pg)
 }
 
 void vmpl_page_stats(void) {
-	printf("VMPL pages: %d/%ld\n", num_vmpl_pages, MAX_PAGES);
+	printf("VMPL Pages Stats:\n");
+	printf("VMPL Pages: %d/%ld\n", num_vmpl_pages, MAX_PAGES);
 }
 
 bool vmpl_page_isfrompool(physaddr_t pa)
 {
-	return pages[pa >> PGSHIFT].vmpl == Vmpl1;
+	struct page *pg;
+	if (pa < PAGEBASE)
+		return false;
+
+	pg = vmpl_pa2page(pa);
+	return pg->vmpl == Vmpl1 ? true : false;
 }
 
 static void vmpl_page_test(int vmpl_fd)
@@ -144,14 +155,17 @@ static void vmpl_page_test(int vmpl_fd)
 	struct page *pg;
 	assert(vmpl_fd > 0);
 
+	log_info("VMPL Pages Test");
 	pg = vmpl_page_alloc(vmpl_fd);
 	assert(pg);
 	assert(pg->ref == 1);
 	assert(pg->vmpl == Vmpl1);
 
+	vmpl_page_put(pg);
 	vmpl_page_free(pg);
 	assert(pg->ref == 0);
 	assert(pg->vmpl == Vmpl1);
+	log_success("VMPL Pages Test Passed");
 }
 
 // Dune Page Management	[Linear Mapped Pages]
@@ -210,22 +224,27 @@ void dune_page_free(struct page *pg)
 
 void dune_page_stats(void)
 {
-	printf("Dune pages: %d/%ld\n", num_dune_pages, MAX_PAGES);
+	printf("Dune Pages Stats:\n");
+	printf("Dune Pages: %d/%ld\n", num_dune_pages, MAX_PAGES);
 }
 
 static void dune_page_test(int vmpl_fd)
 {
 	struct page *pg;
+	virtaddr_t va;
 	assert(vmpl_fd > 0);
 
+	log_info("Dune Page Test");
 	pg = dune_page_alloc(vmpl_fd);
 	assert(pg);
 	assert(pg->ref == 1);
-	assert(pg->vmpl == Vmpl0);
+	assert(pg->vmpl == Vmpl1);
 
+	dune_page_put(pg);
 	dune_page_free(pg);
 	assert(pg->ref == 0);
-	assert(pg->vmpl == Vmpl0);
+	assert(pg->vmpl == Vmpl1);
+	log_success("Dune Page Test Passed");
 }
 
 // Page Management [General]
@@ -248,19 +267,24 @@ err:
 	return -ENOMEM;
 }
 
-void page_exit(void)
+int page_exit(void)
 {
 	free(pages);
+
+	return 0;
 }
 
 void page_stats(void)
 {
+	printf("Page Stats:\n");
 	vmpl_page_stats();
 	dune_page_stats();
 }
 
 void page_test(int vmpl_fd)
 {
+	log_info("Page Test");
 	vmpl_page_test(vmpl_fd);
 	dune_page_test(vmpl_fd);
+	log_success("Page Test Passed");
 }

@@ -5,11 +5,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/queue.h>
-#include <assert.h>
 
+#include "config.h"
 #include "types.h"
 #include "mmu-x86.h"
-#include "config.h"
+#include <assert.h>
 
 // -----------------------VMPL COMMON-----------------------
 SLIST_HEAD(page_head, page);
@@ -30,6 +30,22 @@ extern int num_vmpl_pages;
 #define MAX_PAGES	(1ul << 20) /* 4 GB of memory */
 
 extern void *do_mapping(int fd, uint64_t phys, size_t len);
+static inline struct page * __get_page(struct page *pg)
+{
+	assert(pg >= pages);
+	assert(pg < (pages + MAX_PAGES));
+	assert(pg->vmpl == 1);
+
+	pg->ref++;
+}
+static inline void __put_page(struct page *pg)
+{
+	assert(pg >= pages);
+	assert(pg < (pages + MAX_PAGES));
+	assert(pg->vmpl == 1);
+
+	pg->ref--;
+}
 
 // -----------------------VMPL PAGE MANAGEMENT-----------------------
 extern struct page * vmpl_page_alloc(int fd);
@@ -48,7 +64,7 @@ extern bool vmpl_page_isfrompool(physaddr_t pa);
 static inline void vmpl_page_mark(struct page *pg)
 {
 	pg->vmpl = 1;
-	pg->ref = 1;
+	pg->ref = 0;
 }
 static inline void vmpl_page_mark_addr(physaddr_t pa)
 {
@@ -57,13 +73,7 @@ static inline void vmpl_page_mark_addr(physaddr_t pa)
 }
 static inline struct page * vmpl_page_get(struct page *pg)
 {
-	assert(pg >= pages);
-	assert(pg < (pages + MAX_PAGES));
-	assert(pg->vmpl == 1);
-
-	pg->ref++;
-
-	return pg;
+	return __get_page(pg);
 }
 static inline struct page * vmpl_page_get_addr(physaddr_t pa)
 {
@@ -74,11 +84,7 @@ static inline struct page * vmpl_page_get_addr(physaddr_t pa)
 }
 static inline void vmpl_page_put(struct page *pg)
 {
-	assert(pg >= pages);
-	assert(pg < (pages + MAX_PAGES));
-	assert(pg->vmpl == 1);
-
-	pg->ref--;
+	__put_page(pg);
 
 	if (!pg->ref)
 		vmpl_page_free(pg);
@@ -96,11 +102,7 @@ extern void dune_page_free(struct page *pg);
 extern void dune_page_stats(void);
 static inline void dune_page_put(struct page *pg)
 {
-	assert(pg >= pages);
-	assert(pg < (pages + MAX_PAGES));
-	assert(pg->vmpl == 1);
-
-	pg->ref--;
+	__put_page(pg);
 
 	if (!pg->ref)
 		dune_page_free(pg);
@@ -113,6 +115,7 @@ static inline void dune_page_put(struct page *pg)
 
 // -----------------------PAGE MANAGEMENT-----------------------
 int page_init(int fd);
+int page_exit(void);
 void page_stats(void);
 void page_test(int vmpl_fd);
 

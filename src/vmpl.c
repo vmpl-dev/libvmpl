@@ -11,11 +11,11 @@
  * @see https://github.com/mbs0221/my-toy/blob/master/libvmpl/src/vmpl.c
  */
 #define _GNU_SOURCE
+#include <assert.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <errno.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <syscall.h>
@@ -46,14 +46,6 @@
 #include "serial.h"
 #include "log.h"
 
-#define vmpl_assert(x)                                                         \
-	do {                                                                       \
-		if (!(x)) {                                                            \
-			log_err("vmpl: assertion failed: %s", #x);                         \
-			abort();                                                           \
-		}                                                                      \
-	} while (0);
-
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 #define XSAVE_SIZE 4096
 
@@ -68,8 +60,6 @@ struct dune_percpu {
 	struct Tss tss;
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
-    uint64_t *pgd;
-    struct vmpl_vm_t vmpl_vm;
     void *lstar;
     void *vsyscall;
 	void *dune_syscall;
@@ -96,7 +86,6 @@ static uint64_t gdt_template[NR_GDT_ENTRIES] = {
 typedef uint16_t segdesc_t;
 typedef uint64_t tssdesc_t;
 typedef uint16_t segsel_t;
-typedef uintptr_t phys_addr_t;
 
 static struct idtd idt[IDT_ENTRIES];
 static __thread struct dune_percpu *percpu;
@@ -123,6 +112,7 @@ static void get_segment_registers(struct vmsa_config *regs) {
         [ss] "i"(offsetof(struct vmsa_config, ss)));
 }
 
+#ifdef CONFIG_DUMP_DETAILS
 /**
  * @brief  Dump GDT Entries
  * @note   
@@ -207,16 +197,16 @@ static void dump_percpu(struct dune_percpu *percpu)
 static void dump_configs(struct dune_percpu *percpu)
 {
     log_debug("VMPL Configs:");
-#ifdef CONFIG_DUMP_DETAILS
+
     dump_idt(idt);
     dump_gdt(percpu->gdt);
     dump_tss(&percpu->tss);
-#ifdef CONFIG_VMPL_GHCB
     dump_ghcb(percpu->ghcb);
-#endif
-#endif
     dump_percpu(percpu);
 }
+#else
+static void dump_configs(struct dune_percpu *percpu) {}
+#endif
 
 /**
  * Sets up the Global Descriptor Table (GDT) with the appropriate entries.
@@ -405,7 +395,7 @@ static int alloc_cpu()
 	}
     if (cpu_count == 0) {
         cpu_count = get_cpu_count();
-        vmpl_assert(cpu_count > 0);
+        assert(cpu_count > 0);
     }
 
 	current_cpu = (current_cpu + 1) % cpu_count;
@@ -567,7 +557,7 @@ static int setup_ghcb(struct dune_percpu *percpu)
 
     // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
     log_debug("dune: GHCB at %p", ghcb);
-#ifdef CONFIG_GHCB_SELFTEST
+#ifdef CONFIG_VMPL_TEST
     ghcb->sw_exit_code = GHCB_NAE_RUN_VMPL;
     ghcb->sw_exit_info_1 = RUN_VMPL;
     ghcb->sw_exit_info_2 = 0;
@@ -644,86 +634,15 @@ failed:
     return rc;
 }
 
-static int setup_pgtable(struct dune_percpu *percpu)
-{
-    int rc;
-    uint64_t pgtable_base;
-    log_info("setup pgtable");
-
-    rc = pgtable_init(&percpu->pgd, dune_fd);
-    if (rc != 0) {
-        perror("dune: failed to setup PGD");
-        goto failed;
-    }
-
-    log_debug("dune: PGD at %p", percpu->pgd);
-
-#ifdef CONFIG_PGTBALE_SELFTEST
-    rc = pgtable_selftest(percpu->pgd, (uint64_t)percpu->pgd);
-    if (rc != 0) {
-        perror("dune: failed to test pgtable");
-        goto failed;
-    }
-#endif
-
-    return 0;
-failed:
-    return rc;
-}
-
 static void vmpl_default_pf_handler(struct dune_tf *tf)
 {
-#if 0
-    int rc;
-    virtaddr_t va;
-    struct page *page;
-    physaddr_t pa;
-    pte_t *pte_out;
-
-    va = read_cr2();
-
-    // Handle page fault on lazy-allocated virtual memory region.
-    if (is_vmpl_vm_lazy(va, &percpu->vmpl_vm)) {
-        // Create page table on demand
-        rc = pgtable_lookup(&percpu->pgd, dune_fd, &pte_out);
-        uint64_t pa = vmpl_page_alloc(percpu);
-        *pte_out = pa | PTE_DEF_FLAGS;
+    int rc = 0;
+    uint64_t addr = read_cr2();
+    rc = vmpl_mm_default_pgflt_handler(addr, tf->err);
+    if (rc == 0) {
         return;
     }
-
-    // Handle page fault on heap virtual memory region.
-    if (is_vmpl_vm_heap(va, &percpu->vmpl_vm)) {
-        // Create page table on demand
-        rc = pgtable_create(&percpu->pgd, dune_fd, &pte_out);
-        if (rc != 0) {
-            goto failed;
-        }
-        // Allocate physical page
-        page = vmpl_page_alloc(percpu);
-        if (!page) {
-            goto failed;
-        }
-        // Map virtual address to physical address
-        pa = vmpl_page2pa(page);
-        *pte_out = pa | PTE_DEF_FLAGS;
-        return;
-    }
-
-    // Handle page fault on linear mapped virtual memory region.
-    if (is_vmpl_vm_linear(va, &percpu->vmpl_vm)) {
-        // Create page table on demand
-        pgtable_create(&percpu->pgd, dune_fd, &pte_out);
-        // Map linear address to physical address
-        phys_addr_t pa = pgtable_va_to_pa(va);
-        *pte_out = pa | PTE_DEF_FLAGS;
-        return;
-    }
-
-    // Handle page fault on COW virtual memory region.
-    vmpl_vm_default_pgflt_handler(va, tf->err);
-
-failed:
-#endif
+    
 	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
@@ -734,27 +653,18 @@ static int setup_mm(struct dune_percpu *percpu)
 
     // Setup Stack
     rc = setup_stack(CONFIG_VMPL_STACK_SIZE);
-    vmpl_assert(rc == 0);
+    assert(rc == 0);
 
     // Setup Heap
     rc = setup_heap(CONFIG_VMPL_HEAP_SIZE);
-    vmpl_assert(rc == 0);
-
-    // Setup VMPL-Dune Page Management
-    rc = page_init(dune_fd);
-    log_debug("dune: page_init rc: %d", rc);
-    vmpl_assert(rc == 0);
+    assert(rc == 0);
 
     // Setup VMPL VM
-    rc = vmpl_vm_init(&percpu->vmpl_vm);
-    vmpl_assert(rc == 0);
+    rc = vmpl_mm_init(&vmpl_mm);
+    assert(rc == 0);
 
-    // Setup pgtable
-    rc = setup_pgtable(percpu);
-    vmpl_assert(rc == 0);
-
-    log_debug("register page fault handler");
-    dune_register_pgflt_handler(vmpl_default_pf_handler);
+    // Setup Page Fault Handler
+    dune_register_intr_handler(T_PF, vmpl_default_pf_handler);
 
     return 0;
 }
@@ -1048,23 +958,23 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 
     // Setup CPU set
     rc = setup_cpuset();
-    vmpl_assert(rc == 0);
+    assert(rc == 0);
 
     // Setup GHCB for hypercall
     rc = setup_ghcb(percpu);
-    vmpl_assert(rc == 0);
+    assert(rc == 0);
 
     // Setup SEIMI for Intra-Process Isolation
     rc = setup_seimi(dune_fd);
-    vmpl_assert(rc == 0);
+    assert(rc == 0);
 
     // Setup Memory Management
 	rc = setup_mm(percpu);
-    vmpl_assert(rc == 0);
+    assert(rc == 0);
 
     // Setup XSAVE for FPU
     rc = xsave_begin(percpu);
-    vmpl_assert(rc == 0);
+    assert(rc == 0);
 
     return 0;
 }
@@ -1158,6 +1068,12 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     return 0;
 }
 
+static void vmpl_init_stats(void)
+{
+    log_info("VMPL Stats:");
+    vmpl_mm_stats(&vmpl_mm);
+}
+
 /**
  * Initializes a test for the VMPL library.
  * This function writes a banner to the standard output and exits.
@@ -1166,6 +1082,7 @@ static int vmpl_init_post(struct dune_percpu *percpu)
  */
 static int vmpl_init_test(void)
 {
+    vmpl_mm_test(&vmpl_mm);
     log_success("**********************************************");
     log_success("*                                            *");
     log_success("*              Welcome to VMPL!              *");
@@ -1242,6 +1159,7 @@ int vmpl_enter(int argc, char *argv[])
     dune_boot(__percpu);
     vmpl_init_post(__percpu);
     vmpl_init_test();
+    vmpl_init_stats();
 
     percpu = __percpu;
     return 0;
@@ -1252,6 +1170,7 @@ failed:
     return -EIO;
 }
 
+#ifdef CONFIG_DUMP_DETAILS
 void dump_vmsa_config(struct vmsa_config *conf)
 {
     printf("vmsa_config:");
@@ -1264,6 +1183,9 @@ void dump_vmsa_config(struct vmsa_config *conf)
     printf("es: %16lx, ss: %16lx, tr: %16lx, fs: %16lx", conf->es, conf->ss, conf->tr, conf->fs);
     printf("gs: %16lx, gdtr: %16lx, idtr: %16lx", conf->gs, conf->gdtr, conf->idtr);
 }
+#else
+void dump_vmsa_config(struct vmsa_config *conf) { }
+#endif
 
 /**
  * on_dune_exit - handle Dune exits
@@ -1284,14 +1206,13 @@ void on_dune_exit(struct vmsa_config *conf)
 		__dune_go_dune(dune_fd, conf);
 		break;
     case DUNE_RET_SIGNAL:
-        // log_warn("dune: exit due to signal %ld", conf->status);
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:
-        // log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
+        log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
         break;
     default:
-        // log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
+        log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
         break;
     }
 

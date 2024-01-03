@@ -4,8 +4,10 @@
  * 而对于map过的物理页，vmpl=1, refcount=1，但是不在空闲页链表中，这些物理页是不能回收的。
  */
 #define _GNU_SOURCE
+#include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -65,8 +67,8 @@ static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count,
     uint64_t *vaddr;
     struct page *pg;
 
-    // Get page for refcount
-    vmpl_page_mark_addr(pte_addr(paddr));
+    // Mark page as vmpl page
+    vmpl_page_mark_addr(paddr);
 
     // If this is a leaf page table
     if (level == 4) {
@@ -99,7 +101,7 @@ failed:
     return -ENOMEM;
 }
 
-int pgtable_init(uint64_t **pgd, int fd)
+int pgtable_init(pte_t **pgd, int fd)
 {
 	int rc;
     uint64_t cr3;
@@ -116,16 +118,6 @@ int pgtable_init(uint64_t **pgd, int fd)
 
     log_debug("dune: CR3 at 0x%lx", cr3);
 
-#if 0
-    // Mmap 4GB for page table
-    void *addr = mmap(PGTABLE_MMAP_BASE, PGTABLE_MMAP_SIZE, PROT_READ | PROT_WRITE,
-                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-    if (addr == MAP_FAILED) {
-        perror("dune: failed to map pgtable");
-        return -ENOMEM;
-    }
-#endif
-
     // Initialize page table
 	rc = __pgtable_init(cr3, 0, fd, &pgtable_count, &page_count);
     if (rc) {
@@ -140,37 +132,76 @@ int pgtable_init(uint64_t **pgd, int fd)
     return 0;
 }
 
+int pgtable_exit(pte_t *pgd)
+{
+    log_debug("pgtable exit");
+
+    return 0;
+}
+
 int pgtable_free(pte_t *pgd)
 {
     log_debug("pgtable free");
     return 0;
 }
 
-int pgtable_selftest(pte_t *pgd, uint64_t va)
+void pgtable_stats(pte_t *pgd)
+{
+    printf("Page Table Stats:\n");
+}
+
+/**
+ * @brief  Test the page table.
+ * @param pgd: The page table of the process.
+ * @param va: The virtual address of the page.
+ * @retval None
+ */
+void pgtable_test(pte_t *pgd, uint64_t va)
 {
     int rc;
     pte_t *ptep;
     int level;
 
-    log_debug("pgtable selftest");
-
+    log_info("Page Table Test");
     rc = lookup_address_in_pgd(pgd, va, &level, &ptep);
-    if (rc) {
-        log_err("lookup address in pgd failed");
-        return rc;
-    }
-
-    log_debug("level: %d, pa: %lx", level, pte_addr(*ptep));
-
+    assert(rc == 0);
+    assert(level == 1);
     rc = lookup_address(va, &level, &ptep);
-    if (rc) {
-        log_err("lookup address failed");
-        return rc;
-    }
-
-    log_debug("level: %d, pa: %lx", level, pte_addr(*ptep));
+    assert(rc == 0);
+    assert(level == 1);
+    rc = pgtable_lookup(pgd, va, false, &ptep);
+    assert(rc == 0);
+    log_success("Page Table Test Passed");
 
     return 0;
+}
+
+/**
+ * @brief Map a physical page in the page table.
+ * @note The page table is linearly mapped to the virtual address space of the process, such that
+ * the page table can be accessed by the process. The physical page are marked as vmpl page,
+ * and the reference count is set to 0, such that the page can be reclaimed by the process.
+ * @param phys The physical address of the page.
+ * @retval The virtual address of the page.
+ */
+pte_t *pgtable_do_mapping(uint64_t phys)
+{
+    pte_t *va;
+    if (vmpl_page_isfrompool(phys)) {
+        return __va(phys);
+    }
+
+    log_warn("pgtable_do_mapping: %lx", phys);
+    va = do_mapping(dune_fd, phys, PAGE_SIZE);
+    if (va == MAP_FAILED) {
+        perror("dune: failed to map pgtable");
+        goto failed;
+    }
+
+    vmpl_page_mark_addr(phys);
+failed:
+    log_err("pgtable_do_mapping failed");
+    return va;
 }
 
 /**
@@ -181,89 +212,59 @@ int pgtable_selftest(pte_t *pgd, uint64_t va)
  * @param pte_out The page table entry of the virtual address.
  * @retval 0 on success, -1 on error
  */
-int pgtable_lookup(pte_t *root, void *va, pte_t **pte_out)
+int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 {
 	int i, j, k, l;
 	pte_t *pml4 = root, *pdpte, *pde, *pte;
+    uint64_t pa;
+
+    assert(root != NULL);
+    assert(va != NULL);
+    assert(pte_out != NULL);
 
 	i = PDX(3, va);
 	j = PDX(2, va);
 	k = PDX(1, va);
 	l = PDX(0, va);
 
+    log_debug("pgtable_lookup: %p, %d, %d, %d, %d", va, i, j, k, l);
+    log_debug("pml4[%d] = %lx", i, pml4[i]);
 	if (!pte_present(pml4[i])) {
-		return -ENOENT;
-	} else {
-        pdpte = (pte_t*) __va(PTE_ADDR(pml4[i]));
-	}
+        if (!create)
+            return -ENOENT;
+        pdpte = pgtable_alloc();
+        pml4[i] = pte_addr(__pa(pdpte)) | PTE_DEF_FLAGS;
+    } else {
+        pdpte = pgtable_do_mapping(pte_addr(pml4[i]));
+    }
 
+    log_debug("pdpte[%d] = %lx", j, pdpte[j]);
 	if (!pte_present(pdpte[j])) {
-		return -ENOENT;
-	} else if (pte_big(pdpte[j])) {
-		*pte_out = &pdpte[j];
-		return 0;
-	} else {
-        pde = (pte_t*) __va(PTE_ADDR(pdpte[j]));
-	}
+        if (!create)
+            return -ENOENT;
+        pde = pgtable_alloc();
+        pdpte[j] = pte_addr(__pa(pde)) | PTE_DEF_FLAGS;
+    } else if (pte_big(pdpte[j])) {
+        *pte_out = &pdpte[j];
+        return 0;
+    } else {
+        pde = pgtable_do_mapping(pte_addr(pdpte[j]));
+    }
 
+    log_debug("pde[%d] = %lx", k, pde[k]);
 	if (!pte_present(pde[k])) {
-		return -ENOENT;
-	} else if (pte_big(pde[k])) {
-		*pte_out = &pde[k];
-		return 0;
-	} else {
-        pte = (pte_t*) __va(PTE_ADDR(pde[k]));
-	}
+        if (!create)
+            return -ENOENT;
+        pte = pgtable_alloc();
+        pde[k] = pte_addr(__pa(pte)) | PTE_DEF_FLAGS;
+    } else if (pte_big(pde[k])) {
+        *pte_out = &pde[k];
+        return 0;
+    } else {
+        pte = pgtable_do_mapping(pte_addr(pde[k]));
+    }
 
-	*pte_out = &pte[l];
-	return 0;
-}
-
-/**
- * @brief This function will be called when about to map a physical page to a virtual address.
- * It will update the page table entry of the virtual address to the physical address.
- * @param pgd The page table of the process.
- * @param va The virtual address of the page.
- * @param pa The physical address of the page.
- * @retval None
- */
-int pgtable_create(pte_t *root, void *va, pte_t **pte_out)
-{
-	int i, j, k, l;
-	pte_t *pml4 = root, *pdpte, *pde, *pte;
-
-	i = PDX(3, va);
-	j = PDX(2, va);
-	k = PDX(1, va);
-	l = PDX(0, va);
-
-	if (!pte_present(pml4[i])) {
-		pdpte = pgtable_alloc();
-		pml4[i] = PTE_ADDR(pdpte) | PTE_DEF_FLAGS;
-	} else {
-		pdpte = (pte_t*) __va(PTE_ADDR(pml4[i]));
-	}
-
-	if (!pte_present(pdpte[j])) {
-		pde = pgtable_alloc();
-		pdpte[j] = PTE_ADDR(pde) | PTE_DEF_FLAGS;
-	} else if (pte_big(pdpte[j])) {
-		*pte_out = &pdpte[j];
-		return 0;
-	} else {
-		pde = (pte_t*) __va(PTE_ADDR(pdpte[j]));
-	}
-
-	if (!pte_present(pde[k])) {
-		pte = pgtable_alloc();
-		pde[k] = PTE_ADDR(pte) | PTE_DEF_FLAGS;
-	} else if (pte_big(pde[k])) {
-		*pte_out = &pde[k];
-		return 0;
-	} else {
-		pte = (pte_t*) __va(PTE_ADDR(pde[k]));
-	}
-
+    log_debug("pte[%d] = %lx", l, pte[l]);
 	*pte_out = &pte[l];
 	return 0;
 }
@@ -281,12 +282,12 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
 	int ret;
 	pte_t *ptep;
 
-    ret = pgtable_lookup(pgd, va, &ptep);
+    ret = pgtable_lookup(pgd, va, false, &ptep);
     if (ret) {
         return ret;
     }
 
-    (*ptep) |= pa >> PAGE_SHIFT;
+    (*ptep) |= PTE_ADDR(pa) | PTE_DEF_FLAGS;
 
     return 0;
 }
@@ -301,6 +302,7 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
  */
 int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
+    log_debug("lookup_address_in_pgd: %p", va);
     pml4e_t *pml4e = pml4_offset(pgd, va);
     if (pml4e_none(*pml4e) || pml4e_bad(*pml4e)) {
         return -EINVAL;
@@ -309,6 +311,7 @@ int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
     if (level)
         *level = 4;
 
+    log_debug("pml4e: %lx", *pml4e);
     pdpe_t *pdpe = pdp_offset(pml4e, va);
     if (pdpe_none(*pdpe) || pdpe_bad(*pdpe)) {
         return -EINVAL;
@@ -317,6 +320,7 @@ int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
     if (level)
         *level = 3;
 
+    log_debug("pdpe: %lx", *pdpe);
     pde_t *pde = pd_offset(pdpe, va);
     if (pde_none(*pde) || pde_bad(*pde)) {
         return -EINVAL;
@@ -325,11 +329,13 @@ int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
     if (level)
         *level = 2;
 
+    log_debug("pde: %lx", *pde);
     pte_t *pte = pte_offset(pde, va);
     if (pte_none(*pte) || !pte_present(*pte)) {
         return -EINVAL;
     }
 
+    log_debug("pte: %lx", *pte);
     if (ptep)
         *ptep = pte;
 
@@ -363,6 +369,7 @@ int lookup_address(uint64_t va, int *level, pte_t **ptep)
  */
 uint64_t pgtable_pa_to_va(uint64_t pa)
 {
+    assert((pa >= MEMORY_POOL_START) && (pa < MEMORY_POOL_END));
     return phys_to_virt(pa);
 }
 
@@ -381,17 +388,21 @@ uint64_t pgtable_va_to_pa(uint64_t va)
     pte_t *ptep;
     int level;
 
-    if ((va < PGTABLE_MMAP_BASE) || (va >= PGTABLE_MMAP_END)) {
-        int rc = lookup_address(va, &level, &ptep);
-        if (rc) {
-            return 0;
-        }
+    // XXX: Using PA + PGTABLE_MMAP_BASE == VA
+    if ((va >= PGTABLE_MMAP_BASE) && (va < PGTABLE_MMAP_END)) {
+        return virt_to_phys(va);
+    }
 
+#ifdef CONFIG_VMPL_PGTABLE
+    int rc = lookup_address(va, &level, &ptep);
+#else
+    int rc = pgtable_lookup(pgroot, va, false, &ptep);
+#endif
+    if (rc == 0) {
         return pte_addr(*ptep);
     }
 
-    // XXX: Using PA + PGTABLE_MMAP_BASE == VA
-    return virt_to_phys(va);
+    return 0;
 }
 
 /**

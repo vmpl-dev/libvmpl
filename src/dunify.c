@@ -55,52 +55,6 @@ static void init_env()
 // Declare original malloc and free
 static int (*main_orig)(int, char **, char **);
 
-static void print_procmaps()
-{
-	FILE *fp = fopen("/proc/self/maps", "r");
-	if (fp == NULL) {
-		log_err("failed to open /proc/self/maps");
-		return;
-	}
-
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-	while ((read = getline(&line, &len, fp)) != -1) {
-		printf("%s", line);
-	}
-	fclose(fp);
-	fflush(stdout);
-}
-
-static void get_fs_base(char *name)
-{
-	unsigned long fs_base0, fs_base1, fs_base2;
-
-	if (arch_prctl(ARCH_GET_FS, &fs_base0) == -1) {
-		log_err("arch_prctl failed");
-	}
-
-	__asm__ volatile("mov %%fs:0, %0\n" : "=r"(fs_base1));
-	__asm__ volatile("rdfsbase %0\n" : "=r"(fs_base2));
-	if (fs_base0 != fs_base1 || fs_base0 != fs_base2) {
-		log_err("fs_base0: %lx, fs_base1: %lx, fs_base2: %lx", fs_base0,
-				fs_base1, fs_base2);
-		log_err("fs_base0!= fs_base1 || fs_base0!= fs_base2");
-	} else {
-		log_success("%s fs_base=%lx", name, fs_base0);
-	}
-}
-
-static void print_env(char **envp)
-{
-	// Print environment variables
-	for (char **env = envp; *env != 0; env++) {
-		char *thisEnv = *env;
-		log_debug("%s", thisEnv);
-	}
-}
-
 static void cleanup()
 {
 	if (getenv("HOTCALLS_ENABLED")) {
@@ -126,9 +80,6 @@ static int main_hook(int argc, char **argv, char **envp)
 		return main_orig(argc, argv, envp);
 	}
 
-	print_procmaps();
-	get_fs_base("main_hook");
-	print_env(envp);
 	log_debug("entering dune mode...");
 	int ret = vmpl_enter(argc, argv);
 	if (ret) {
@@ -178,12 +129,12 @@ pid_t fork()
 		atexit(cleanup);
 
 		if (run_in_vmpl_process) {
-			log_debug("entering dune mode...\n");
+			log_debug("entering dune mode...");
 			int ret = vmpl_enter(1, NULL);
 			if (ret) {
-				log_err("failed to initialize dune\n");
+				log_err("failed to initialize dune");
 			} else {
-				log_debug("dune mode entered\n");
+				log_debug("dune mode entered");
 			}
 		}
 	}
@@ -199,12 +150,12 @@ struct start_args {
 void *start_orig(void *arg)
 {
 	struct start_args *args = (struct start_args *)arg;
-	log_debug("entering dune mode...\n");
+	log_debug("entering dune mode...");
 	int ret = vmpl_enter(1, NULL);
 	if (ret) {
-		log_err("failed to initialize dune\n");
+		log_err("failed to initialize dune");
 	} else {
-		log_debug("dune mode entered\n");
+		log_debug("dune mode entered");
 	}
 
 	void *rc = args->start_routine(args->arg);

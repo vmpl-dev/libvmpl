@@ -174,14 +174,17 @@ static inline bool is_aligned(PhysAddr addr, size_t alignment) {
 
 extern int dune_fd;
 extern pte_t *pgroot;
-int pgtable_init(uint64_t **pgd, int fd);
-int pgtable_free(uint64_t *pgd);
-int pgtable_selftest(uint64_t *pgd, uint64_t va);
-int pgtable_lookup(pte_t *root, void *va, pte_t **pte_out);
+int pgtable_init(pte_t **pgd, int fd);
+int pgtable_exit(pte_t *pgd);
+int pgtable_free(pte_t *pgd);
+void pgtable_stats(pte_t *pgd);
+void pgtable_test(pte_t *pgd, uint64_t va);
+pte_t *pgtable_do_mapping(uint64_t phys);
+int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out);
 int pgtable_create(pte_t *root, void *va, pte_t **pte_out);
-int pgtable_update_leaf_pte(uint64_t *pgd, uint64_t va, uint64_t pa);
+int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa);
 
-int lookup_address_in_pgd(uint64_t *pgd, uint64_t va, int *level, pte_t **ptep);
+int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep);
 int lookup_address(uint64_t va, int *level, pte_t **ptep);
 
 uint64_t pgtable_pa_to_va(uint64_t pa);

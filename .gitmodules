@@ -1,0 +1,6 @@
+[submodule "avl"]
+	path = avl
+	url = git://git.savannah.gnu.org/avl.git
+[submodule "libdict"]
+	path = libdict
+	url = https://github.com/fmela/libdict.git

@@ -3,6 +3,7 @@
 #include "ghcb.h"
 #include "log.h"
 
+#ifdef CONFIG_DUMP_DETAILS
 void dump_ghcb(struct Ghcb *ghcb)
 {
     if (!ghcb) {
@@ -24,3 +25,4 @@ void dump_ghcb(struct Ghcb *ghcb)
     log_debug("  version: %u", ghcb->version);
     log_debug("  usage: %u", ghcb->usage);
 }
+#endif
