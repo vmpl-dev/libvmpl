@@ -1,3 +1,4 @@
+#include "pgtable.h"
 #include "vm.h"
 #include "log.h"
 
@@ -63,11 +64,9 @@ struct vmpl_vma_t *find_vma_intersection(struct vmpl_vm_t *vm, uint64_t start_ad
 	 * The VMA dosen't intersect with the given range.
 	 */
 	if (vma && end_addr <= vma->start) {
-		log_warn("VMA dosen't intersect with the given range");
 		vma = NULL;
 	}
 
-	log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
 	return vma;
 }
 
@@ -135,18 +134,25 @@ struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2) 
  * @brief  Allocate a VMA from the VMPL-VM.
  * @note VMPL-VM Low Level API
  * @param vm The VMPL-VM to allocate from.
+ * @param va_start The start address of the VMA to allocate.
  * @param size The size of the VMA to allocate.
  * @return The allocated VMA if successful, NULL otherwise.
  */
-struct vmpl_vma_t *alloc_vma(struct vmpl_vm_t *vm, size_t size) {
-	uint64_t va_start;
-	log_debug("va_start = 0x%lx, va_end = 0x%lx, size = 0x%lx", vm->va_start, vm->va_end, size);
-	va_start = vm->fit_algorithm(vm->vma_dict, size, vm->va_start, vm->va_end);
+struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size_t size) {
+	struct vmpl_vma_t *vma;
+
+	assert(vm != NULL);
+	assert(va_start >= vm->va_start);
+	assert(va_start < vm->va_end);
+	assert(va_start + size <= vm->va_end);
+
+	log_debug("va_start = 0x%lx, va_end = 0x%lx, size = 0x%lx", va_start, vm->va_end, size);
+	va_start = vm->fit_algorithm(vm->vma_dict, size, va_start, vm->va_end);
 	if (va_start == 0) {
 		return NULL;
 	}
 
-	struct vmpl_vma_t *vma = malloc(sizeof(struct vmpl_vma_t));
+	vma = malloc(sizeof(struct vmpl_vma_t));
 	vma->start = va_start;
 	vma->end = va_start + size;
 	vma->prot = 0;
@@ -188,7 +194,7 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	char *va_start, *va_end;
 	size_t size;
 	struct vmpl_vma_t *vma;
-	bool removed;
+	bool removed, inserted;
 
 	// VMPL Preserve Kernel Mapping
 	va_start = CONFIG_VMPL_VA_START;
@@ -224,6 +230,14 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	removed = remove_vma(vmpl_vm, vma);
 	assert(removed == true);
 
+	// Add the preserved mmaping to the VMA dictionary
+	vma = vmpl_vma_new("[pgtable]");
+	vma->start = PGTABLE_MMAP_BASE;
+	vma->end = PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE;
+	vma->prot = PROT_READ | PROT_WRITE;
+	inserted = insert_vma(vmpl_vm, vma);
+	assert(inserted == true);
+
 	return 0;
 }
 
@@ -237,8 +251,8 @@ int vmpl_vm_exit(struct vmpl_vm_t *vm)
 {
 	// VMPL VMA Management
 	pthread_spin_destroy(&vm->lock);
-	dict_clear(vm->vma_dict, free_vmpl_vma);
-	dict_free(vm->vma_dict, free_vmpl_vma);
+	dict_clear(vm->vma_dict, vmpl_vma_free);
+	dict_free(vm->vma_dict, vmpl_vma_free);
 	munmap(vm->va_start, vm->va_end - vm->va_start);
 
 	return 0;
@@ -309,7 +323,7 @@ void vmpl_vm_vma_test(struct vmpl_vm_t *vm, const char *algorithm)
 		assert(removed == true);
 		log_debug("removed = %s", removed ? "true" : "false");
 
-		free_vmpl_vma(vma);
+		vmpl_vma_free(vma);
 	}
 	log_success("VMPL-VM VMA Test [algorithm = %s] Passed", algorithm);
 }
@@ -329,4 +343,5 @@ void vmpl_vm_test(struct vmpl_vm_t *vm)
 	vmpl_vm_vma_test(vm, "worst_fit");
 	vmpl_vm_vma_test(vm, "random_fit");
 	log_success("VMPL-VM Test Passed");
+	vm->fit_algorithm = get_fit_algorithm(CONFIG_VMPL_FIT_ALGORITHM);
 }

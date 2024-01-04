@@ -25,6 +25,14 @@
 
 #define CR3_NOFLUSH	(1UL << 63)
 
+#define VMPL_VM_MAP_PHYS_FMT	"start = 0x%lx, end = 0x%lx, perm = 0x%lx"
+#define VMPL_VM_MAP_PAGES_FMT	"start = 0x%lx, end = 0x%lx, perm = 0x%lx"
+#define VMPL_VM_MMAP_FMT		"start = 0x%lx, end = 0x%lx, perm = 0x%lx, flags = 0x%lx, fd = %d, offset = 0x%lx"
+#define VMPL_VM_MREMAP_FMT		"old_start = 0x%lx, old_end = 0x%lx, new_start = 0x%lx, new_end = 0x%lx, perm = 0x%lx"
+#define VMPL_VM_MUNMAP_FMT		"start = 0x%lx, end = 0x%lx"
+#define VMPL_VM_MPROTECT_FMT	"start = 0x%lx, end = 0x%lx, prot = 0x%lx"
+#define VMPL_VM_CLONE_FMT		"start = 0x%lx, end = 0x%lx, prot = 0x%lx, path = 0x%lx"
+
 enum {
 	CREATE_NONE = 0,
 	CREATE_NORMAL = 1,
@@ -41,6 +49,15 @@ struct map_phys_data_t {
 	pte_t perm;
 	unsigned long va_base;
 	unsigned long pa_base;
+};
+
+struct mremap_arg_t {
+	pte_t *root;
+	void *old_address;
+	size_t old_size;
+	size_t new_size;
+	int flags;
+	void *new_address;
 };
 
 typedef uintptr_t phys_addr_t;
@@ -69,6 +86,7 @@ extern void vmpl_vm_free(pte_t *root);
 struct vmpl_mm_t {
 	pte_t *pgd;
 	struct vmpl_vm_t vmpl_vm;
+	bool initialized;
 };
 
 extern struct vmpl_mm_t vmpl_mm;

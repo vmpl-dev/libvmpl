@@ -31,8 +31,11 @@ extern struct vmpl_vma_t *find_vma_intersection(struct vmpl_vm_t *vm, uint64_t s
 extern bool remove_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma);
 extern size_t get_vma_size(struct vmpl_vma_t *vma);
 extern bool are_vmas_adjacent(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2);
-struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2);
-extern struct vmpl_vma_t *alloc_vma(struct vmpl_vm_t *vm, size_t size);
+extern struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2);
+extern struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size_t size);
+static inline struct vmpl_vma_t *alloc_vma(struct vmpl_vm_t *vm, size_t size) {
+	return alloc_vma_range(vm, vm->va_start, size);
+}
 
 // VMPL-VM High Level API
 extern int vmpl_vm_init(struct vmpl_vm_t *vm);

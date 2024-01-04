@@ -557,11 +557,9 @@ static int setup_ghcb(struct dune_percpu *percpu)
 
     // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
     log_debug("dune: GHCB at %p", ghcb);
-#ifdef CONFIG_VMPL_TEST
     ghcb->sw_exit_code = GHCB_NAE_RUN_VMPL;
     ghcb->sw_exit_info_1 = RUN_VMPL;
     ghcb->sw_exit_info_2 = 0;
-#endif
 
     percpu->ghcb = ghcb;
     return 0;
@@ -569,9 +567,13 @@ failed:
     return rc;
 }
 #else
-static int setup_ghcb(struct dune_percpu *percpu) { return 0; }
+static int setup_ghcb(struct dune_percpu *percpu) {
+    log_warn("setup ghcb not supported");
+    return 0;
+}
 #endif
 
+#ifdef CONFIG_VMPL_MM
 /**
  * @brief  Setup stack for VMPL library
  * @note   
@@ -630,7 +632,7 @@ failed:
 
 static void vmpl_default_pf_handler(struct dune_tf *tf)
 {
-    int rc = 0;
+    long rc = 0;
     uint64_t addr = read_cr2();
     rc = vmpl_mm_default_pgflt_handler(addr, tf->err);
     if (rc == 0) {
@@ -662,6 +664,12 @@ static int setup_mm(struct dune_percpu *percpu)
 
     return 0;
 }
+#else
+static int setup_mm(struct dune_percpu *percpu) {
+    log_warn("setup mm not supported");
+    return 0;
+}
+#endif
 
 #ifdef CONFIG_VMPL_XSAVE
 #define XSAVE_SIZE 4096
@@ -1059,6 +1067,14 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     return 0;
 }
 
+static void vmpl_init_exit(void)
+{
+    log_info("vmpl_init_exit");
+    vmpl_mm_exit(&vmpl_mm);
+    vmpl_free_percpu(percpu);
+    apic_cleanup();
+}
+
 static void vmpl_init_stats(void)
 {
     log_info("VMPL Stats:");
@@ -1074,6 +1090,10 @@ static void vmpl_init_stats(void)
 static int vmpl_init_test(void)
 {
     vmpl_mm_test(&vmpl_mm);
+}
+
+static void vmpl_init_banner(void)
+{
     log_success("**********************************************");
     log_success("*                                            *");
     log_success("*              Welcome to VMPL!              *");
@@ -1151,6 +1171,7 @@ int vmpl_enter(int argc, char *argv[])
     vmpl_init_post(__percpu);
     vmpl_init_stats();
     vmpl_init_test();
+    vmpl_init_banner();
 
     percpu = __percpu;
     return 0;

@@ -88,6 +88,7 @@ typedef uint64_t pte_t;
 #define PTE_G       BIT_64(8)    /* Global */
 #define PTE_AVAIL   GENMASK_ULL(11, 9) /* Available for software use */
 #define PTE_PAT_PS  BIT_64(12) /* Page size */
+#define PTE_C       BIT_64(51)   /* Encrypted page */
 #define PTE_AVAIL2  GENMASK_ULL(63, 52) /* Available for software use */
 #define PTE_NX      BIT_64(63)   /* No execute: only if NX feature present */
 
@@ -157,8 +158,8 @@ typedef uint64_t pte_t;
 
 #define padding(level) ((level)*4 + 4)
 
-#define PGTABLE_MMAP_BASE 0x200000000UL
-#define PGTABLE_MMAP_SIZE BIT(36)
+#define PGTABLE_MMAP_BASE 0x200000000UL /* 8GB */
+#define PGTABLE_MMAP_SIZE 0x180000000UL /* 6GB */
 #define PGTABLE_MMAP_END  (PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)
 
 #define PDADDR(n, i)	(((unsigned long) (i)) << PDSHIFT(n))

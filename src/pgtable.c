@@ -126,7 +126,7 @@ int pgtable_init(pte_t **pgd, int fd)
     }
 
     log_debug("dune: %lu page tables, %lu pages", pgtable_count, page_count);
-    *pgd = (uint64_t *)(PGTABLE_MMAP_BASE + cr3);
+    *pgd = pgtable_pa_to_va(cr3);
     pgroot = *pgd;
 
     return 0;
@@ -188,16 +188,18 @@ pte_t *pgtable_do_mapping(uint64_t phys)
 {
     pte_t *va;
     if (vmpl_page_isfrompool(phys)) {
+        log_debug("already mapped %lx", phys);
         return __va(phys);
     }
 
-    log_warn("pgtable_do_mapping: %lx", phys);
     va = do_mapping(dune_fd, phys, PAGE_SIZE);
     if (va == MAP_FAILED) {
         log_err("failed to map pgtable");
         goto failed;
     }
 
+    log_debug("newly mapped phys %lx to %p", phys, va);
+    log_debug("content: %lx", *va);
     vmpl_page_mark_addr(phys);
 failed:
     return va;
@@ -392,11 +394,7 @@ uint64_t pgtable_va_to_pa(uint64_t va)
         return virt_to_phys(va);
     }
 
-#ifdef CONFIG_VMPL_MM
     int rc = pgtable_lookup(pgroot, va, false, &ptep);
-#else
-    int rc = lookup_address(va, &level, &ptep);
-#endif
     if (rc == 0) {
         return pte_addr(*ptep);
     }

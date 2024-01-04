@@ -62,8 +62,23 @@ int parse_procmaps(procmaps_callback_t callback, void *arg)
 	return 0;
 }
 
+struct vmpl_vma_t *vmpl_vma_new(const char *path)
+{
+	struct vmpl_vma_t *vma = malloc(sizeof(struct vmpl_vma_t));
+	vma->start = 0;
+	vma->end = 0;
+	vma->prot = 0;
+	vma->flags = 0;
+	vma->minor = 0;
+	vma->major = 0;
+	vma->inode = 0;
+	vma->offset = 0;
+	vma->path = strdup(path);
+	return vma;
+}
+
 // Frea vma
-void free_vmpl_vma(struct vmpl_vma_t *vma)
+void vmpl_vma_free(struct vmpl_vma_t *vma)
 {
 	free(vma->path);
 	free(vma);
@@ -114,13 +129,40 @@ int free_block_cmp(const void *a, const void *b)
 	const struct free_block_t *fa = a;
 	const struct free_block_t *fb = b;
 
-	if (fa->start < fb->start) {
+	if (fa->size < fb->size) {
 		return -1;
-	} else if (fa->start > fb->start) {
+	} else if (fa->size > fb->size) {
 		return 1;
 	} else {
 		return 0;
 	}
+}
+
+// Function to find free areas
+dict *find_free_blocks(dict *vma_dict, uint64_t va_start, uint64_t va_end) {
+	dict *free_blocks = rb_dict_new(free_block_cmp);
+	struct free_block_t *free_block = NULL;
+	uint64_t last_end = va_start;
+	dict_itor *itor = dict_itor_new(vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *vma = dict_itor_key(itor);
+		if (vma->start >= last_end) {
+			if (vma->start < va_end) {
+				free_block = free_block_new(last_end, vma->start - last_end);
+				dict_insert(free_blocks, free_block);
+				last_end = vma->end;
+			} else {
+				// Out of range
+				break;
+			}
+		}
+	}
+	if (last_end < va_end) {
+		free_block = free_block_new(last_end, va_end - last_end);
+		dict_insert(free_blocks, free_block);
+	}
+	dict_itor_free(itor);
+	return free_blocks;
 }
 
 // First-Fit Algorithm
@@ -276,6 +318,7 @@ static uint64_t random_fit(dict *vma_dict, size_t size, uint64_t va_start, uint6
 	return random_start;
 }
 
+// Parse fit algorithm
 enum FitAlgorithm parse_fit_algorithm(const char *fit_algorithm, enum FitAlgorithm default_fit_algorithm) {
 	if (strcmp(fit_algorithm, "first_fit") == 0) {
 		return FIRST_FIT;

@@ -96,9 +96,14 @@ static inline void vmpl_vma_print(struct vmpl_vma_t *vma)
 			vma->path);
 }
 extern int get_vmpl_vma_type(const char *path);
-extern void free_vmpl_vma(struct vmpl_vma_t *vma);
+extern struct vmpl_vma_t *vmpl_vma_new(const char *path);
+extern void vmpl_vma_free(struct vmpl_vma_t *vma);
 extern int vmpl_vma_cmp(const void *a, const void *b);
 extern int vmpl_vma_eq(const void *a, const void *b);
+static inline bool range_in_vma(struct vmpl_vma_t *vma, uint64_t start, uint64_t end)
+{
+	return (vma->start <= start && end <= vma->end);
+}
 
 // free block
 struct free_block_t {
@@ -114,6 +119,7 @@ struct free_block_t {
 
 extern struct free_block_t *free_block_new(uint64_t start, size_t size);
 extern int free_block_cmp(const void *a, const void *b);
+extern dict *find_free_blocks(dict *vma_dict, uint64_t va_start, uint64_t va_end);
 
 // fit algorithm
 enum FitAlgorithm {
