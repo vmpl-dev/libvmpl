@@ -194,13 +194,12 @@ pte_t *pgtable_do_mapping(uint64_t phys)
     log_warn("pgtable_do_mapping: %lx", phys);
     va = do_mapping(dune_fd, phys, PAGE_SIZE);
     if (va == MAP_FAILED) {
-        perror("dune: failed to map pgtable");
+        log_err("failed to map pgtable");
         goto failed;
     }
 
     vmpl_page_mark_addr(phys);
 failed:
-    log_err("pgtable_do_mapping failed");
     return va;
 }
 
@@ -369,7 +368,7 @@ int lookup_address(uint64_t va, int *level, pte_t **ptep)
  */
 uint64_t pgtable_pa_to_va(uint64_t pa)
 {
-    assert((pa >= MEMORY_POOL_START) && (pa < MEMORY_POOL_END));
+    assert(pa >= PAGEBASE);
     return phys_to_virt(pa);
 }
 
@@ -393,10 +392,10 @@ uint64_t pgtable_va_to_pa(uint64_t va)
         return virt_to_phys(va);
     }
 
-#ifdef CONFIG_VMPL_PGTABLE
-    int rc = lookup_address(va, &level, &ptep);
-#else
+#ifdef CONFIG_VMPL_MM
     int rc = pgtable_lookup(pgroot, va, false, &ptep);
+#else
+    int rc = lookup_address(va, &level, &ptep);
 #endif
     if (rc == 0) {
         return pte_addr(*ptep);

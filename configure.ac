@@ -64,12 +64,6 @@ AC_ARG_WITH([dune-page-grow-size], [AS_HELP_STRING([--with-dune-page-grow-size],
             [with_dune_page_grow_size=0x200])
 AC_DEFINE_UNQUOTED([CONFIG_DUNE_PAGE_GROW_SIZE], [$with_dune_page_grow_size], [dune page grow size])
 
-AC_ARG_WITH([vmpl-pgtable-count], [AS_HELP_STRING([--with-vmpl-pgtable-count],
-                                                   [Set vmpl pgtable count])],
-            [with_vmpl_pgtable_count=$withval],
-            [with_vmpl_pgtable_count=512])
-AC_DEFINE_UNQUOTED([CONFIG_VMPL_PGTABLE_COUNT], [$with_vmpl_pgtable_count], [vmpl pgtable count])
-
 AC_ARG_ENABLE([vmpl-test], [AS_HELP_STRING([--enable-vmpl-test],
                                            [Enable vmpl test support])],
               [enable_vmpl_test=$enableval],
@@ -110,12 +104,11 @@ AC_ARG_ENABLE([vmpl-ghcb],
               [enable_vmpl_ghcb=yes])
 AM_CONDITIONAL([ENABLE_VMPL_GHCB], [test "x$enable_vmpl_ghcb" = "xyes"])
 
-AC_ARG_ENABLE([vmpl-pgtable],
-              [AS_HELP_STRING([--enable-vmpl-pgtable],
-                              [Enable pgtable support])],
-              [enable_vmpl_pgtable=$enableval],
-              [enable_vmpl_pgtable=yes])
-AM_CONDITIONAL([ENABLE_VMPL_PGTABLE], [test "x$enable_vmpl_pgtable" = "xyes"])
+AC_ARG_ENABLE([vmpl-mm], [AS_HELP_STRING([--enable-vmpl-mm],
+                                         [Enable mm support])],
+              [enable_vmpl_mm=$enableval],
+              [enable_vmpl_mm=yes])
+AM_CONDITIONAL([ENABLE_VMPL_MM], [test "x$enable_vmpl_mm" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-seimi],
               [AS_HELP_STRING([--enable-vmpl-seimi],
@@ -232,8 +225,8 @@ if test "x$enable_vmpl_ghcb" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_GHCB], [1], [Enable ghcb support])
 fi
 
-if test "x$enable_vmpl_pgtable" = "xyes"; then
-    AC_DEFINE([CONFIG_VMPL_PGTABLE], [1], [Enable pgtable support])
+if test "x$enable_vmpl_mm" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_MM], [1], [Enable mm support])
 fi
 
 if test "x$enable_vmpl_seimi" = "xyes"; then

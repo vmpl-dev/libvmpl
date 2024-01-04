@@ -573,12 +573,6 @@ static int setup_ghcb(struct dune_percpu *percpu) { return 0; }
 #endif
 
 /**
- * Sets up the page table.
- * 
- * @return void
- */
-#ifdef CONFIG_VMPL_PGTABLE
-/**
  * @brief  Setup stack for VMPL library
  * @note   
  * @retval None
@@ -668,9 +662,6 @@ static int setup_mm(struct dune_percpu *percpu)
 
     return 0;
 }
-#else
-static int setup_mm(struct dune_percpu *percpu) { return 0; }
-#endif
 
 #ifdef CONFIG_VMPL_XSAVE
 #define XSAVE_SIZE 4096
@@ -1158,8 +1149,8 @@ int vmpl_enter(int argc, char *argv[])
 
     dune_boot(__percpu);
     vmpl_init_post(__percpu);
-    vmpl_init_test();
     vmpl_init_stats();
+    vmpl_init_test();
 
     percpu = __percpu;
     return 0;

@@ -5,6 +5,7 @@
 #include "pgtable.h"
 #include "vm.h"
 
+#include <sys/mman.h>
 // virtual memory
 
 #define vmpl_va_to_pa(va)	pgtable_va_to_pa(va)
@@ -57,10 +58,10 @@ extern int vmpl_vm_page_walk(pte_t *root, void *start_va, void *end_va,
 
 extern void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
                   int fd, off_t offset);
-extern void vmpl_vm_unmap(pte_t *root, void *va, size_t len);
+extern int vmpl_vm_munmap(pte_t *root, void *addr, size_t length);
 extern void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 					 size_t new_size, int flags, void *new_address);
-extern int vmpl_vm_mprotect(pte_t *root, void *va, size_t len, int perm);
+extern int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot);
 
 extern pte_t * vmpl_vm_clone(pte_t *root);
 extern void vmpl_vm_free(pte_t *root);

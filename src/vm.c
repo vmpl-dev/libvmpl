@@ -24,20 +24,20 @@ bool insert_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
 }
 
 /**
- * @brief  Lookup the first VMA that satisfies addr <= vma->end, NULL if not found.
+ * @brief  Lookup the first VMA that satisfies end_addr <= vma->end, NULL if not found.
  * @note VMPL-VM Low Level API
  * @param vm The VMPL-VM to search.
- * @param addr The address to search for.
+ * @param end_addr The address to search for.
  * @return The VMA if found, NULL otherwise.
  */
-struct vmpl_vma_t *find_vma(struct vmpl_vm_t *vm, uint64_t addr) {
+struct vmpl_vma_t *find_vma(struct vmpl_vm_t *vm, uint64_t end_addr) {
 	struct vmpl_vma_t *vma = NULL;
 	assert(vm != NULL);
 	pthread_spin_lock(&vm->lock);
 	dict_itor *itor = dict_itor_new(vm->vma_dict);
 	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
 		vma = dict_itor_key(itor);
-		if (addr <= vma->end) {
+		if (end_addr <= vma->end) {
 			goto out;
 		}
 	}
@@ -124,10 +124,8 @@ struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2) 
 	struct vmpl_vma_t *merged_vma = malloc(sizeof(struct vmpl_vma_t));
 	merged_vma->start = vma1->start < vma2->start ? vma1->start : vma2->start;
 	merged_vma->end = vma1->end > vma2->end ? vma1->end : vma2->end;
-	merged_vma->flags = vma1->flags | vma2->flags;
 	merged_vma->prot = vma1->prot | vma2->prot;
 	merged_vma->offset = vma1->offset < vma2->offset ? vma1->offset : vma2->offset;
-	merged_vma->vmpl_vma_flags = vma1->vmpl_vma_flags | vma2->vmpl_vma_flags;
 	merged_vma->path = NULL; // TODO: Set the path if needed
 
 	return merged_vma;
@@ -142,6 +140,7 @@ struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2) 
  */
 struct vmpl_vma_t *alloc_vma(struct vmpl_vm_t *vm, size_t size) {
 	uint64_t va_start;
+	log_debug("va_start = 0x%lx, va_end = 0x%lx, size = 0x%lx", vm->va_start, vm->va_end, size);
 	va_start = vm->fit_algorithm(vm->vma_dict, size, vm->va_start, vm->va_end);
 	if (va_start == 0) {
 		return NULL;
@@ -150,10 +149,8 @@ struct vmpl_vma_t *alloc_vma(struct vmpl_vm_t *vm, size_t size) {
 	struct vmpl_vma_t *vma = malloc(sizeof(struct vmpl_vma_t));
 	vma->start = va_start;
 	vma->end = va_start + size;
-	vma->flags = 0;
 	vma->prot = 0;
 	vma->offset = 0;
-	vma->vmpl_vma_flags = 0;
 	vma->path = NULL;
 	return vma;
 }
@@ -169,10 +166,12 @@ static void insert_vma_callback(struct procmap_entry_t *entry, void *arg) {
 	struct vmpl_vma_t *new_vma = malloc(sizeof(struct vmpl_vma_t));
 	new_vma->start = entry->begin;
 	new_vma->end = entry->end;
-	new_vma->flags = entry->type;
 	new_vma->prot = entry->r | (entry->w << 1) | (entry->x << 2);
 	new_vma->offset = entry->offset;
-	new_vma->vmpl_vma_flags = 0;
+	new_vma->flags = entry->type;
+	new_vma->minor = entry->minor;
+	new_vma->major = entry->major;
+	new_vma->inode = entry->inode;
 	new_vma->path = strdup(entry->path);
 	insert_vma(vm, new_vma);
 }
@@ -192,7 +191,7 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	bool removed;
 
 	// VMPL Preserve Kernel Mapping
-	va_start = NULL;
+	va_start = CONFIG_VMPL_VA_START;
 	size = CONFIG_VMPL_VA_SIZE;
 	log_debug("va_start = 0x%lx, size = 0x%lx", va_start, size);
 	va_start = mmap(va_start, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
@@ -221,11 +220,9 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	// Remove the preserved mmaping from the VMA dictionary
 	vma = find_vma_intersection(vmpl_vm, vmpl_vm->va_start, vmpl_vm->va_end);
 	assert(vma != NULL);
-	assert(vma->start == vmpl_vm->va_start);
-	log_debug("va_start = 0x%lx, va_end = 0x%lx", vmpl_vm->va_start, vmpl_vm->va_end);
+	assert(vma->start == vmpl_vm->va_start && vma->end == vmpl_vm->va_end);
 	removed = remove_vma(vmpl_vm, vma);
 	assert(removed == true);
-	log_debug("removed = %s", removed ? "true" : "false");
 
 	return 0;
 }
@@ -266,6 +263,57 @@ void vmpl_vm_stats(struct vmpl_vm_t *vm)
 	pthread_spin_unlock(&vm->lock);
 }
 
+void vmpl_vm_vma_test(struct vmpl_vm_t *vm, const char *algorithm)
+{
+	enum FitAlgorithm fit_algorithm;
+	struct vmpl_vma_t *vma;
+	uint64_t va_start, va_end;
+
+	log_info("VMPL-VM VMA Test [algorithm = %s]", algorithm);
+	fit_algorithm = parse_fit_algorithm(algorithm, FIRST_FIT);
+	vm->fit_algorithm = get_fit_algorithm(fit_algorithm);
+	log_info("Inserting 10 VMAs into the VMPL-VM");
+	for (int i = 0; i < 10; i++) {
+		va_start = vm->va_start + i * 0x1000;
+		va_end = va_start + 0x1000;
+
+		vma = alloc_vma(vm, 0x1000);
+		assert(vma != NULL);
+		log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
+		assert(vma->start == va_start && vma->end == va_end);
+		bool inserted = insert_vma(vm, vma);
+		assert(inserted == true);
+		log_debug("inserted = %s", inserted ? "true" : "false");
+	}
+	log_info("Finding 10 VMAs from the VMPL-VM");
+	for (int i = 0; i < 10; i++) {
+		va_start = vm->va_start + i * 0x1000;
+		va_end = va_start + 0x1000;
+
+		vma = find_vma_intersection(vm, va_start, va_end);
+		assert(vma != NULL);
+		log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
+		assert(vma->start == va_start && vma->end == va_end);
+	}
+	log_info("Removing 10 VMAs from the VMPL-VM");
+	for (int i = 0; i < 10; i++) {
+		va_start = vm->va_start + i * 0x1000;
+		va_end = va_start + 0x1000;
+
+		vma = find_vma(vm, va_start);
+		assert(vma != NULL);
+		log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
+		assert(vma->start == va_start && vma->end == va_end);
+
+		bool removed = remove_vma(vm, vma);
+		assert(removed == true);
+		log_debug("removed = %s", removed ? "true" : "false");
+
+		free_vmpl_vma(vma);
+	}
+	log_success("VMPL-VM VMA Test [algorithm = %s] Passed", algorithm);
+}
+
 /**
  * @brief  Test the VMA dictionary of the VMPL-VM.
  * @note VMPL-VM High Level API
@@ -275,13 +323,10 @@ void vmpl_vm_stats(struct vmpl_vm_t *vm)
 void vmpl_vm_test(struct vmpl_vm_t *vm)
 {
 	log_info("VMPL-VM Test");
-	struct vmpl_vma_t *vma = alloc_vma(vm, 0x1000);
-	assert(vma != NULL);
-	log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
-	bool inserted = insert_vma(vm, vma);
-	assert(inserted == true);
-	bool removed = remove_vma(vm, vma);
-	assert(removed == true);
-    free_vmpl_vma(vma);
+	vmpl_vm_vma_test(vm, "first_fit");
+	vmpl_vm_vma_test(vm, "next_fit");
+	vmpl_vm_vma_test(vm, "best_fit");
+	vmpl_vm_vma_test(vm, "worst_fit");
+	vmpl_vm_vma_test(vm, "random_fit");
 	log_success("VMPL-VM Test Passed");
 }

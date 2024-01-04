@@ -60,13 +60,12 @@ int parse_procmaps(procmaps_callback_t callback, void *arg);
 struct vmpl_vma_t {
 	uint64_t start;
 	uint64_t end;
-	uint64_t flags;
-	uint64_t prot;
 	uint32_t offset;
+	uint64_t prot;
+	uint64_t flags;
 	uint32_t minor;  // New field for device
 	uint32_t major;  // New field for device
 	uint32_t inode;  // New field for inode
-	uint64_t vmpl_vma_flags;
 	char *path;
 };
 
@@ -101,6 +100,21 @@ extern void free_vmpl_vma(struct vmpl_vma_t *vma);
 extern int vmpl_vma_cmp(const void *a, const void *b);
 extern int vmpl_vma_eq(const void *a, const void *b);
 
+// free block
+struct free_block_t {
+	uint64_t start;
+	size_t size;
+};
+
+#define FREE_BLOCK_INIT(start, size) \
+	struct free_block_t { \
+		.start = start, \
+		.size = size, \
+	}
+
+extern struct free_block_t *free_block_new(uint64_t start, size_t size);
+extern int free_block_cmp(const void *a, const void *b);
+
 // fit algorithm
 enum FitAlgorithm {
 	FIRST_FIT,
@@ -111,6 +125,7 @@ enum FitAlgorithm {
 };
 
 typedef uint64_t (*fit_algorithm_t)(dict *vma_dict, size_t size, uint64_t va_start, uint64_t va_end);
+extern enum FitAlgorithm parse_fit_algorithm(const char *fit_algorithm, enum FitAlgorithm default_fit_algorithm);
 extern fit_algorithm_t get_fit_algorithm(enum FitAlgorithm fit_algorithm);
 
 #endif // __VMPL_VMA_H__

@@ -31,6 +31,7 @@ typedef uint64_t pte_t;
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
 #define PAGE_OFFSET(addr) ((addr) & (PAGE_SIZE - 1))
 #define PAGE_ALIGN(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
+#define PAGE_ALIGN_UP(x) PAGE_ALIGN(x)
 #define PAGE_ALIGN_DOWN(x) ((x) & ~(PAGE_SIZE - 1))
 #define PAGE_MASK(x) ((x) & (PAGE_SIZE - 1))
 

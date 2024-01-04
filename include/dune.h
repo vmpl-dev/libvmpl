@@ -16,7 +16,7 @@
 #define dune_vm_mprotect	vmpl_vm_mprotect
 #define dune_vm_map_phys	vmpl_vm_map_phys
 #define dune_vm_map_pages	vmpl_vm_map_pages
-#define dune_vm_unmap 		vmpl_vm_unmap
+#define dune_vm_unmap 		vmpl_vm_munmap
 #define dune_vm_lookup		vmpl_vm_lookup
 
 #define dune_vm_insert_page	vmpl_vm_insert_page

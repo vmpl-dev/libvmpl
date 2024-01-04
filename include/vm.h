@@ -19,8 +19,8 @@
 struct vmpl_vm_t {
 	dict *vma_dict;
 	fit_algorithm_t fit_algorithm;
-	uintptr_t va_start;
-	uintptr_t va_end;
+	uint64_t va_start;
+	uint64_t va_end;
 	pthread_spinlock_t lock;
 };
 
