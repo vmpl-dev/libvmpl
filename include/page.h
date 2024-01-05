@@ -30,7 +30,7 @@ extern int num_vmpl_pages;
 #define MAX_PAGES	(1ul << 20) /* 4 GB of memory */
 
 extern void *do_mapping(int fd, uint64_t phys, size_t len);
-static inline struct page * __get_page(struct page *pg)
+static inline void __get_page(struct page *pg)
 {
 	assert(pg >= pages);
 	assert(pg < (pages + MAX_PAGES));
@@ -71,9 +71,9 @@ static inline void vmpl_page_mark_addr(physaddr_t pa)
 	if (pa >= PAGEBASE)
 		vmpl_page_mark(vmpl_pa2page(pa));
 }
-static inline struct page * vmpl_page_get(struct page *pg)
+static inline void vmpl_page_get(struct page *pg)
 {
-	return __get_page(pg);
+	__get_page(pg);
 }
 static inline struct page * vmpl_page_get_addr(physaddr_t pa)
 {

@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 /*
  * mm.c - Virtual memory management routines
  * 堆内存分配主要区分mmap和异常处理两种情况；
@@ -13,6 +14,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <sys/mman.h>
 
@@ -261,6 +263,27 @@ static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 	else
 		perm = PTE_P | PTE_W | PTE_U | PTE_C | PTE_NX;
 
+	// Support MAP_POPULATE flags.
+	if (vma->flags & MAP_POPULATE) {
+		log_debug("MAP_POPULATE is set");
+		// If the page is already present, purely update the permissions.
+		if (pte_present(*pte)) {
+			log_debug("Page is already present");
+			goto out;
+		}
+
+		log_debug("Allocating a physical page, va = 0x%lx", va);
+		// Allocate a physical page for the virtual page.
+		physaddr_t pa = alloc_phys_page();
+		if (!pa)
+			return -ENOMEM;
+
+		log_debug("Allocated a physical page, va = 0x%lx, pa = 0x%lx", va, pa);
+		// Map the physical page to the virtual page.
+		*pte |= PTE_ADDR(pa);
+	}
+
+out:
 	log_debug("va = 0x%lx, perm = 0x%lx", va, perm);
 	*pte |= perm;
 	log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
@@ -285,9 +308,13 @@ static int __vmpl_vm_mremap_helper(const void *arg, pte_t *pte, void *va)
 	log_debug("va = 0x%lx, offset = 0x%lx", va, offset);
 	// These are the pages that are not present in the old mapping.
 	if (offset >= mremap_arg->old_size) {
+		if (mremap_arg->prot & PROT_EXEC)
+			perm = PTE_P | PTE_W | PTE_U | PTE_C;
+		else
+			perm = PTE_P | PTE_W | PTE_U | PTE_C | PTE_NX;
 		// Simply popluate the new page table entry.
 		log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
-		*pte = PTE_DEF_FLAGS & ~PTE_P;
+		*pte |= perm;
 		log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
 		return 0;
 	}
@@ -302,7 +329,14 @@ static int __vmpl_vm_mremap_helper(const void *arg, pte_t *pte, void *va)
 	// Copy the old page table entry to the new one, and invalidate the old one.
 	log_debug("va = 0x%lx, pte = 0x%lx, old_pte = 0x%lx", va, *pte, *old_pte);
 	*pte = *old_pte;
+
+	// Support MREMAP_DONTUNMAP flags.
+	if (mremap_arg->flags & MREMAP_DONTUNMAP) {
+		goto out;
+	}
+
 	*old_pte = 0;
+out:
 	log_debug("va = 0x%lx, pte = 0x%lx, old_pte = 0x%lx", va, *pte, *old_pte);
 
 	return 0;
@@ -512,7 +546,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	}
 
 	// Filter out unsupported flags
-	if (flags & (MAP_SHARED | MAP_FIXED | MAP_GROWSDOWN | MAP_STACK | MAP_HUGETLB)) {
+	if (flags & (MAP_SHARED | MAP_GROWSDOWN | MAP_STACK | MAP_HUGETLB)) {
 		log_warn("Unsupported flags");
 		errno = ENOTSUP;
 		return MAP_FAILED;
@@ -535,8 +569,21 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 		vma = find_vma_intersection(vm, va_start, va_end);
 		if (vma != NULL) {
 			log_warn("The address range is already mapped");
-			errno = EEXIST;
-			return MAP_FAILED;
+
+			// Support MAP_FIXED_NOREPLACE (since Linux 4.17)
+			if (flags & MAP_FIXED_NOREPLACE) {
+				log_warn("MAP_FIXED_NOREPLACE is set");
+				errno = EEXIST;
+				return MAP_FAILED;
+			}
+
+			// If MAP_FIXED is set, discard any overlapping mappings
+			if (flags & MAP_FIXED) {
+				log_warn("MAP_FIXED is set, discarding overlapping mappings");
+				discard_overlapping_vmas(vm, va_start, va_end);
+
+				// TODO: Support MAP_FIXED, munmap the overlapping mappings
+			}
 		}
 
 		// Allocate new VMA for the new address range
@@ -563,7 +610,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	vma->inode	= 0;
 	vma->major	= 0;
 	vma->minor	= 0;
-	vma->path = strdup("anon");
+	vma->path = strdup("[vmpl]");
 
 	// Allocate page table entries for the new VMA
 	rc = __vmpl_vm_page_walk(vmpl_mm.pgd, vma->start, vma->end - 1,
@@ -594,14 +641,15 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
  * a valid address in the VMPL-VM virtual address space.
  * @param old_size The old size, must be a multiple of PGSIZE.
  * @param new_size The new size, must be a multiple of PGSIZE.
- * @param flags The flags to set.
+ * @param flags The flags to set (MREMAP_MAYMOVE, MREMAP_FIXED, MREMAP_DONTUNMAP).
  * @param new_address The new address, must be a multiple of PGSIZE, and must be
  * in the range of the VMPL-VM virtual address space.
  * @return 0 on success, non-zero on failure.
  */
 void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
-					 size_t new_size, int flags, void *new_address)
+					 size_t new_size, int flags, ... /* void *new_address */)
 {
+	void *new_address = NULL;
 	struct vmpl_vma_t *old_vma, *new_vma;
 	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
 	void *ret;
@@ -616,18 +664,11 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 
 	// Align old address and size
 	old_address = (void *)PAGE_ALIGN_DOWN((uintptr_t)old_address);
-	new_address = (void *)PAGE_ALIGN_DOWN((uintptr_t)new_address);
 	old_size = PAGE_ALIGN_UP(old_size);
 	new_size = new_size ? PAGE_ALIGN_UP(new_size) : old_size;
-	log_debug(VMPL_VM_MREMAP_FMT, old_address, old_address + old_size,
-			new_address, new_address + new_size, flags);
 
-	// Unsupported flags, (FIXME: Support these flags)
-	if (flags & (MAP_FIXED | MAP_GROWSDOWN | MAP_STACK | MAP_HUGETLB)) {
-		log_warn("Unsupported flags");
-		errno = ENOTSUP;
-		return MAP_FAILED;
-	}
+	// Default flags to MREMAP_MAYMOVE
+	flags = flags ? flags : MREMAP_MAYMOVE;
 
 	// Check that the old address range is mapped
 	old_vma = find_vma_intersection(vm, old_address, old_address + old_size);
@@ -645,18 +686,20 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 		return MAP_FAILED;
 	}
 
-	// Align new address and size
+	// Support MREMAP_FIXED (since Linux 2.3.31)
+	if (flags & MREMAP_FIXED) {
+		// Obtain the new address from the variadic arguments
+		va_list ap;
+		va_start(ap, flags);
+		new_address = va_arg(ap, void *);
+		va_end(ap);
+	}
+
 	if (new_address != NULL) {
+		// Align new address and size (if MREMAP_FIXED is set)
+		new_address = (void *)PAGE_ALIGN_DOWN((uintptr_t)new_address);
 		log_debug(VMPL_VM_MREMAP_FMT, old_address, old_address + old_size,
 				new_address, new_address + new_size, flags);
-		
-		// Check that the new address range is not already mapped
-		new_vma = find_vma_intersection(vm, new_address, new_address + new_size);
-		if (new_vma != NULL) {
-			log_warn("The new address range is already mapped");
-			errno = EEXIST;
-			return MAP_FAILED;
-		}
 
 		// Check that the new address range belongs to the VMPL VM
 		if ((new_address + new_size) <= vm->va_start ||
@@ -664,6 +707,23 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 			log_warn("The new address range does not belong to the VMPL VM");
 			errno = ENOMEM;
 			return MAP_FAILED;
+		}
+
+		// Check that the new address range is not already mapped
+		new_vma = find_vma_intersection(vm, new_address, new_address + new_size);
+		if (new_vma != NULL) {
+			log_warn("The address range is already mapped");
+
+			// If MAP_FIXED is set, discard any overlapping mappings
+			if (flags & MREMAP_FIXED) {
+				log_warn("MAP_FIXED is set, discarding overlapping mappings");
+				discard_overlapping_vmas(vm, new_address, new_address + new_size);
+
+				// TODO: Support MREMAP_FIXED, munmap the overlapping mappings
+			} else {
+				errno = EEXIST;
+				return MAP_FAILED;
+			}
 		}
 
 		// Allocate new VMA for the new address range
@@ -674,19 +734,31 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 			return MAP_FAILED;
 		}
 	} else {
-		// Allocate new VMA for the new address range
-		new_vma = alloc_vma(vm, new_size);
-		if (new_vma == NULL) {
-			log_warn("Failed to allocate new VMA");
-			errno = ENOMEM;
-			return MAP_FAILED;
+		// Check that there is enough space for expanding the VMA in-place (if MREMAP_FIXED is not set).
+		new_vma = find_next_vma(vm, old_vma);
+		if (((new_vma == NULL) && (old_address + new_size <= vm->va_end))
+			|| ((new_vma != NULL) && (old_address + new_size <= new_vma->start))) {
+			// Expand the VMA in-place (if there is enough space)
+			new_vma = alloc_vma_range(vm, old_address, new_size);
+		} else {
+			// Allocate new VMA for the new address range
+			new_vma = alloc_vma(vm, new_size);
+			if (new_vma == NULL) {
+				log_warn("Failed to allocate new VMA");
+				errno = ENOMEM;
+				return MAP_FAILED;
+			}
 		}
 
 		new_address = (void *)new_vma->start;
 	}
 
+	log_debug(VMPL_VM_MREMAP_FMT, old_address, old_address + old_size,
+			new_address, new_address + new_size, flags);
+
 	// Populate the new VMA
 	struct mremap_arg_t mremap_arg = {
+		.prot = old_vma->prot,
 		.flags = flags,
 		.new_address = new_address,
 		.new_size = new_size,
@@ -708,7 +780,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	}
 
 	// Copy the old VMA to the new VMA
-	new_vma->flags = flags ? flags : old_vma->flags;
+	new_vma->flags = flags;
 	new_vma->prot = old_vma->prot;
 	new_vma->offset = old_vma->offset;
 	new_vma->major = old_vma->major;
@@ -724,6 +796,13 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 		return MAP_FAILED;
 	}
 
+	// Support MREMAP_DONTUNMAP flags.
+	if (flags & MREMAP_DONTUNMAP) {
+		goto out;
+	}
+
+	// TODO: Unmap the old VMA (if MREMAP_DONTUNMAP is not set).
+
 	// Remove old VMA from VMPL-VM
 	bool removed = remove_vma(vm, old_vma);
 	if (!removed) {
@@ -734,6 +813,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 
 	vmpl_vma_free(old_vma);
 
+out:
 	return (void *)new_vma->start;
 }
 
@@ -833,6 +913,27 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 	if (addr == NULL) {
 		log_warn("addr is NULL");
 		errno = ENOMEM;
+		return MAP_FAILED;
+	}
+
+	// EINVAL addr is not a valid pointer, or not a multiple of the system page size.
+	if ((uintptr_t)addr % PGSIZE) {
+		log_warn("addr is not a multiple of the system page size");
+		errno = EINVAL;
+		return MAP_FAILED;
+	}
+
+	// EINVAL Both PROT_GROWSUP and PROT_GROWSDOWN were specified in prot.
+	if (prot & (PROT_GROWSUP | PROT_GROWSDOWN)) {
+		log_warn("PROT_GROWSUP and PROT_GROWSDOWN are not supported");
+		errno = EINVAL;
+		return MAP_FAILED;
+	}
+
+	// EINVAL Invalid flags specified in prot.
+	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC | PROT_NONE)) {
+		log_warn("Invalid flags specified in prot");
+		errno = EINVAL;
 		return MAP_FAILED;
 	}
 
@@ -1122,7 +1223,7 @@ void vmpl_mm_stats(struct vmpl_mm_t *vmpl_mm)
 void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 {
 	int rc;
-	void *addr;
+	void *addr, *tmp_addr;
 	pte_t *new_root;
 	struct vmpl_vma_t *vma;
 	struct vmpl_vm_t *vm = &vmpl_mm->vmpl_vm;
@@ -1130,13 +1231,13 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	// Test mmap
 	log_info("Test mmap");
 	addr = vmpl_vm_mmap(vmpl_mm->pgd, NULL, PGSIZE, PROT_READ | PROT_WRITE,
-						MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+						MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
 	assert(addr != MAP_FAILED);
 	assert(addr == vmpl_mm->vmpl_vm.va_start);
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE);
 	assert(vma != NULL);
 	assert(vma->prot == (PROT_READ | PROT_WRITE));
-	assert(vma->flags == (MAP_PRIVATE | MAP_ANONYMOUS));
+	assert(vma->flags == (MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE));
 	assert(vma->end - vma->start == PGSIZE);
 	log_success("Test mmap passed");
 
@@ -1147,6 +1248,32 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	assert(*(int *)addr == 0xdeadbeef);
 	log_success("Test access to the page passed");
 #endif
+
+	// Test mmap at a specific address
+	log_info("Test mmap at a specific address");
+	tmp_addr = (void *)vmpl_mm->vmpl_vm.va_start + PGSIZE;
+	addr = vmpl_vm_mmap(vmpl_mm->pgd, tmp_addr,
+						PGSIZE, PROT_READ | PROT_WRITE,
+						MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+	assert(addr != MAP_FAILED);
+	assert(addr == tmp_addr);
+	log_success("Test mmap at a specific address passed");
+
+	// Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE.
+	log_info("Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE");
+	addr = vmpl_vm_mmap(vmpl_mm->pgd, tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
+						MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+	assert(addr == MAP_FAILED);
+	assert(errno == EEXIST);
+	log_success("Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE passed");
+
+	// Test mmap at a specific address that is already mapped with MAP_FIXED.
+	log_info("Test mmap at a specific address that is already mapped with MAP_FIXED");
+	addr = vmpl_vm_mmap(vmpl_mm->pgd, tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
+						MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+	assert(addr != MAP_FAILED);
+	assert(addr == tmp_addr);
+	log_success("Test mmap at a specific address that is already mapped with MAP_FIXED passed");
 
 	// Test mprotect
 	log_info("Test mprotect");
@@ -1159,14 +1286,26 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test mremap
 	log_info("Test mremap");
-	addr = vmpl_vm_mremap(vmpl_mm->pgd, addr, PGSIZE, PGSIZE * 2, 0, NULL);
+	addr = vmpl_vm_mremap(vmpl_mm->pgd, addr, PGSIZE, PGSIZE * 2, MREMAP_MAYMOVE, NULL);
 	assert(addr != MAP_FAILED);
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE * 2);
 	assert(vma != NULL);
 	assert(vma->prot == PROT_READ);
-	assert(vma->flags == (MAP_PRIVATE | MAP_ANONYMOUS));
+	assert(vma->flags == MREMAP_MAYMOVE);
 	assert(vma->end - vma->start == PGSIZE * 2);
 	log_success("Test mremap passed");
+
+	// Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP.
+	log_info("Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP");
+	tmp_addr = (void *)vmpl_mm->vmpl_vm.va_start + PGSIZE * 8;
+	addr = vmpl_vm_mremap(vmpl_mm->pgd, addr, PGSIZE * 2, PGSIZE * 2,
+						  MREMAP_FIXED | MREMAP_DONTUNMAP, tmp_addr);
+	assert(addr != MAP_FAILED);
+	assert(addr == tmp_addr);
+	vma = find_vma_intersection(vm, tmp_addr, tmp_addr + PGSIZE * 2);
+	assert(vma->prot == PROT_READ);
+	assert(vma->flags == MREMAP_FIXED | MREMAP_DONTUNMAP);
+	log_success("Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP passed");
 
 	// Test munmap
 	log_info("Test munmap");

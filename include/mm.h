@@ -45,6 +45,11 @@ struct perm_map_t {
 		pte_t pte_flag;
 };
 
+struct prot_map_t {
+		int prot_flag;
+		pte_t pte_flag;
+};
+
 struct map_phys_data_t {
 	pte_t perm;
 	unsigned long va_base;
@@ -56,6 +61,7 @@ struct mremap_arg_t {
 	void *old_address;
 	size_t old_size;
 	size_t new_size;
+	int prot;
 	int flags;
 	void *new_address;
 };
@@ -77,7 +83,7 @@ extern void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int 
                   int fd, off_t offset);
 extern int vmpl_vm_munmap(pte_t *root, void *addr, size_t length);
 extern void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
-					 size_t new_size, int flags, void *new_address);
+							size_t new_size, int flags, ...);
 extern int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot);
 
 extern pte_t * vmpl_vm_clone(pte_t *root);

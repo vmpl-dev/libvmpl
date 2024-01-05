@@ -37,12 +37,12 @@ struct vmpl_vma_t *find_vma(struct vmpl_vm_t *vm, uint64_t end_addr) {
 	pthread_spin_lock(&vm->lock);
 	dict_itor *itor = dict_itor_new(vm->vma_dict);
 	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
-		vma = dict_itor_key(itor);
-		if (end_addr <= vma->end) {
-			goto out;
+		struct vmpl_vma_t *current_vma = dict_itor_key(itor);
+		if (end_addr <= current_vma->end) {
+			vma = current_vma;
+			break;
 		}
 	}
-out:
 	dict_itor_free(itor);
 	pthread_spin_unlock(&vm->lock);
 	return vma;
@@ -71,6 +71,32 @@ struct vmpl_vma_t *find_vma_intersection(struct vmpl_vm_t *vm, uint64_t start_ad
 }
 
 /**
+ * @brief Find the next VMA in the VMA dictionary of the VMPL-VM.
+ * @note VMPL-VM Low Level API
+ * @note This function is used by the next_fit algorithm.
+ * @param vm The VMPL-VM to search.
+ * @param vma The VMA to search for.
+ * @return The next VMA if found, NULL otherwise.
+ */
+struct vmpl_vma_t *find_next_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
+	struct vmpl_vma_t *next_vma = NULL;
+	assert(vm != NULL);
+	assert(vma != NULL);
+	pthread_spin_lock(&vm->lock);
+	dict_itor *itor = dict_itor_new(vm->vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *current_vma = dict_itor_key(itor);
+		if (current_vma->start >= vma->end) {
+			next_vma = current_vma;
+			break;
+		}
+	}
+	dict_itor_free(itor);
+	pthread_spin_unlock(&vm->lock);
+	return next_vma;
+}
+
+/**
  * @brief  Remove a VMA from the VMA dictionary of the VMPL-VM.
  * @note VMPL-VM Low Level API
  * @param vm The VMPL-VM to remove from.
@@ -85,6 +111,26 @@ bool remove_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
 	result = dict_remove(vm->vma_dict, vma);
 	pthread_spin_unlock(&vm->lock);
 	return result.removed;
+}
+
+/**
+ * @brief Discard all VMAs that intersect with the given range.
+ * @note VMPL-VM Low Level API
+ * @param vm The VMPL-VM to remove from.
+ * @param va_start The start address of the range.
+ * @param va_end The end address of the range.
+ * @return None.
+ */
+void discard_overlapping_vmas(struct vmpl_vm_t *vm, uint64_t va_start, uint64_t va_end)
+{
+	struct vmpl_vma_t *vma;
+	bool removed;
+
+	while ((vma = find_vma_intersection(vm, va_start, va_end)) != NULL) {
+		removed = remove_vma(vm, vma);
+		assert(removed == true);
+		vmpl_vma_free(vma);
+	}
 }
 
 /**
@@ -259,6 +305,27 @@ int vmpl_vm_exit(struct vmpl_vm_t *vm)
 	munmap(vm->va_start, vm->va_end - vm->va_start);
 
 	return 0;
+}
+
+/**
+ * @brief Print the VMA dictionary of the VMPL-VM.
+ * @note VMPL-VM High Level API
+ * @param vm The VMPL-VM to print.
+ */
+void vmpl_vm_print(struct vmpl_vm_t *vm)
+{
+	printf("VMPL-VM:\n");
+	printf("va_start = 0x%lx, va_end = 0x%lx\n", vm->va_start, vm->va_end);
+	pthread_spin_lock(&vm->lock);
+	dict_itor *itor = dict_itor_new(vm->vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *vma = dict_itor_key(itor);
+		if (strcmp(vma->path, "[vmpl]") == 0) {
+			vmpl_vma_print(dict_itor_key(itor));
+		}
+	}
+	dict_itor_free(itor);
+	pthread_spin_unlock(&vm->lock);
 }
 
 /**

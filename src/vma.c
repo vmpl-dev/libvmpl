@@ -77,6 +77,22 @@ struct vmpl_vma_t *vmpl_vma_new(const char *path)
 	return vma;
 }
 
+struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, uint64_t va_end, uint64_t prot,
+								   uint64_t flags, uint64_t offset)
+{
+	struct vmpl_vma_t *vma = malloc(sizeof(struct vmpl_vma_t));
+	vma->start = va_start;
+	vma->end = va_end;
+	vma->prot = prot;
+	vma->flags = flags;
+	vma->minor = 0;
+	vma->major = 0;
+	vma->inode = 0;
+	vma->offset = offset;
+	vma->path = NULL;
+	return vma;
+}
+
 // Frea vma
 void vmpl_vma_free(struct vmpl_vma_t *vma)
 {

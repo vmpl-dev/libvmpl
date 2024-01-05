@@ -28,7 +28,9 @@ struct vmpl_vm_t {
 extern bool insert_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma);
 extern struct vmpl_vma_t *find_vma(struct vmpl_vm_t *vm, uint64_t addr);
 extern struct vmpl_vma_t *find_vma_intersection(struct vmpl_vm_t *vm, uint64_t start_addr, uint64_t end_addr);
+extern struct vmpl_vma_t *find_next_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma);
 extern bool remove_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma);
+extern void discard_overlapping_vmas(struct vmpl_vm_t *vm, uint64_t va_start, uint64_t va_end);
 extern size_t get_vma_size(struct vmpl_vma_t *vma);
 extern bool are_vmas_adjacent(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2);
 extern struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2);
