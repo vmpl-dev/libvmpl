@@ -318,12 +318,12 @@ static int __vmpl_vm_mremap_helper(const void *arg, pte_t *pte, void *va)
 static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 {
 	int ret;
-	pte_t *newRoot = (pte_t *)arg;
-	pte_t *newPte;
+	pte_t *new_root = (pte_t *)arg;
+	pte_t *new_pte;
 
 	log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
 	// Create new page table entry for the new page table root
-	ret = pgtable_lookup(newRoot, va, true, &newPte);
+	ret = pgtable_lookup(new_root, va, true, &new_pte);
 	if (ret < 0)
 		return ret;
 
@@ -331,7 +331,7 @@ static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 	vmpl_page_get_addr(pte_addr(*pte));
 
 	// Copy the page table entry
-	*newPte = *pte;
+	*new_pte = *pte;
 
 	return 0;
 }
@@ -708,7 +708,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	}
 
 	// Copy the old VMA to the new VMA
-	new_vma->flags = flags;
+	new_vma->flags = flags ? flags : old_vma->flags;
 	new_vma->prot = old_vma->prot;
 	new_vma->offset = old_vma->offset;
 	new_vma->major = old_vma->major;
@@ -882,32 +882,22 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 pte_t *vmpl_vm_clone(pte_t *root)
 {
 	int ret;
-	pte_t *newRoot;
+	pte_t *new_root;
 	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
 
-	log_debug("root = 0x%lx", root);
-	newRoot = alloc_virt_page();
-	log_debug("newRoot = 0x%lx", newRoot);
-	memset(newRoot, 0, PGSIZE);
+	new_root = alloc_virt_page();
+	memset(new_root, 0, PGSIZE);
+	log_debug("root = %lx, new_root = %lx", root, new_root);
 
-	log_debug("newRoot = 0x%lx", newRoot);
-	// for each vma, walk the page table and clone the pages
-	dict_itor *itor = dict_itor_new(vm->vma_dict);
-	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
-		struct vmpl_vma_t *vma = dict_itor_key(itor);
-		log_debug(VMPL_VM_CLONE_FMT, vma->start, vma->end, vma->prot, vma->path);
-		ret = __vmpl_vm_page_walk(root, vma->start, vma->end - 1,
-								&__vmpl_vm_clone_helper, newRoot,
-								3, CREATE_NONE);
-		if (ret < 0) {
-			goto failed;
-		}
+	ret = __vmpl_vm_page_walk(root, VA_START, VA_END,
+							&__vmpl_vm_clone_helper, new_root,
+							3, CREATE_NONE);
+	if (ret < 0) {
+		vmpl_vm_free(new_root);
+		return NULL;
 	}
 
-	return newRoot;
-failed:
-	vmpl_vm_free(newRoot);
-	return NULL;
+	return new_root;
 }
 
 /**
@@ -939,25 +929,28 @@ void vmpl_vm_free(pte_t *root)
 /**
  * @brief Handle page fault on lazily allocated virtual memory area.
  * @note This function should be called from the page fault handler.
+ * If this page is not present, then we need to allocate a new page.
  * @param addr The address that caused the page fault.
  * @param fec The fault error code.
  * @return 0 on success, non-zero on failure.
  */
 long handle_anonymous_fault(uintptr_t addr, uint64_t fec, pte_t *pte)
 {
-	// Allocate a new page
-	void *newPage = alloc_virt_page();
-	if (!newPage) {
-		log_err("alloc_virt_page");
+	// Check if the page is already allocated.
+	if (pte_present(*pte)) {
 		return -1;
 	}
 
-	// Map the new page
-	physaddr_t pa = pgtable_va_to_pa(newPage);
-	*pte = PTE_ADDR(pa) | PTE_W | PTE_U | PTE_P;
+	// Allocate a new page
+	phys_addr_t pa = alloc_phys_page();
+	assert(pa != NULL);
 
-	// Invalidate
+	// Map the new page
+	*pte |= PTE_ADDR(pa) | PTE_P;
+
+	// Invalidate TLB
 	vmpl_flush_tlb_one(addr);
+
 	return 0;
 }
 
@@ -977,7 +970,8 @@ long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
 	 */
 	assert(!(fec & (FEC_P | FEC_RSV)));
 	if ((fec & FEC_W) && (*pte & PTE_COW)) {
-		struct page *pg = vmpl_pa2page(PTE_ADDR(*pte));
+		physaddr_t pa = PTE_ADDR(*pte);
+		struct page *pg = vmpl_pa2page(pa);
 		pte_t perm = PTE_FLAGS(*pte);
 
 		// Compute new permissions
@@ -985,20 +979,20 @@ long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
 		perm |= PTE_W;
 
 		// Check if we can just change permissions
-		if (vmpl_page_isfrompool(PTE_ADDR(*pte)) && pg->ref == 1) {
-			*pte = PTE_ADDR(*pte) | perm;
+		if (vmpl_page_isfrompool(pa) && pg->ref == 1) {
+			*pte = pa | perm;
 			return;
 		}
 
 		// Duplicate page
-		void *newPage = alloc_virt_page();
-		memcpy(newPage, (void *)PGADDR(addr), PGSIZE);
+		void *new_page = alloc_virt_page();
+		memcpy(new_page, (void *)PGADDR(addr), PGSIZE);
 
 		// Decrement ref count on old page
-		vmpl_page_put_addr(PTE_ADDR(*pte));
+		vmpl_page_put_addr(pa);
 
 		// Map page
-		physaddr_t pa = pgtable_va_to_pa(newPage);
+		pa = pgtable_va_to_pa(new_page);
 		*pte = PTE_ADDR(pa) | perm;
 
 		// Invalidate
@@ -1020,32 +1014,39 @@ long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
 long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 {
 	int rc;
-	void *va_addr;
+	void *va_start, *va_end;
 	struct vmpl_vma_t *vma = NULL;
 	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
 	pte_t *pte = NULL;
 
 	// Align address
-	va_addr = (void *)PAGE_ALIGN_DOWN(addr);
+	va_start = (void *)PAGE_ALIGN_DOWN(addr);
+	va_end = (void *)PAGE_ALIGN_UP(addr + PAGE_SIZE);
 
 	// Check if the faulting address is in the VMPL VM
-	if (va_addr < vm->va_start || va_addr >= vm->va_end) {
+	if (va_start < vm->va_start || va_start >= vm->va_end) {
 		return -1;
 	}
 
 	// Find the page table entry for the faulting address
-	rc = pgtable_lookup(vmpl_mm.pgd, (void *)va_addr, false, &pte);
-	if (rc != 0) {
-		return -1;
-	}
+	rc = pgtable_lookup(vmpl_mm.pgd, (void *)va_start, false, &pte);
+	assert(rc == 0);
 
 	// Find the VMA that contains the faulting address 
-	vma = find_vma_intersection(vm, va_addr, va_addr + PAGE_SIZE);
-	if (!vma) {
-		return -1;
-	}
+	vma = find_vma_intersection(vm, va_start, va_end);
+	assert(vma != NULL);
 
+	// If the page is an anonymous page, then we need to allocate a new page.
+	if (vma->flags & MAP_ANONYMOUS) {
+		rc = handle_anonymous_fault(addr, fec, pte);
+		if (!rc)
+			return rc;
+	}
+	
+	// If the page is a COW page, then we need to duplicate the page.
 	rc = handle_cow_pgflt(addr, fec, pte);
+	if (!rc)
+		return rc;
 
 	return -1;
 }
@@ -1122,43 +1123,69 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 {
 	int rc;
 	void *addr;
+	pte_t *new_root;
+	struct vmpl_vma_t *vma;
+	struct vmpl_vm_t *vm = &vmpl_mm->vmpl_vm;
+
 	// Test mmap
 	log_info("Test mmap");
 	addr = vmpl_vm_mmap(vmpl_mm->pgd, NULL, PGSIZE, PROT_READ | PROT_WRITE,
 						MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	assert(addr != MAP_FAILED);
 	assert(addr == vmpl_mm->vmpl_vm.va_start);
+	vma = find_vma_intersection(vm, addr, addr + PGSIZE);
+	assert(vma != NULL);
+	assert(vma->prot == (PROT_READ | PROT_WRITE));
+	assert(vma->flags == (MAP_PRIVATE | MAP_ANONYMOUS));
+	assert(vma->end - vma->start == PGSIZE);
 	log_success("Test mmap passed");
 
-	// Test vmpl_mm_stats
-	vmpl_mm_stats(vmpl_mm);
+#ifdef CONFIG_DUNE_DEPRECATED
+	// Test access to the page
+	log_info("Test access to the page");
+	*(int *)addr = 0xdeadbeef;
+	assert(*(int *)addr == 0xdeadbeef);
+	log_success("Test access to the page passed");
+#endif
 
 	// Test mprotect
 	log_info("Test mprotect");
 	rc = vmpl_vm_mprotect(vmpl_mm->pgd, addr, PGSIZE, PROT_READ);
 	assert(rc == 0);
+	vma = find_vma_intersection(vm, addr, addr + PGSIZE);
+	assert(vma != NULL);
+	assert(vma->prot == PROT_READ);
 	log_success("Test mprotect passed");
-
-	// Test vmpl_mm_stats
-	vmpl_mm_stats(vmpl_mm);
 
 	// Test mremap
 	log_info("Test mremap");
 	addr = vmpl_vm_mremap(vmpl_mm->pgd, addr, PGSIZE, PGSIZE * 2, 0, NULL);
 	assert(addr != MAP_FAILED);
+	vma = find_vma_intersection(vm, addr, addr + PGSIZE * 2);
+	assert(vma != NULL);
+	assert(vma->prot == PROT_READ);
+	assert(vma->flags == (MAP_PRIVATE | MAP_ANONYMOUS));
+	assert(vma->end - vma->start == PGSIZE * 2);
 	log_success("Test mremap passed");
-
-	// Test vmpl_mm_stats
-	vmpl_mm_stats(vmpl_mm);
 
 	// Test munmap
 	log_info("Test munmap");
 	rc = vmpl_vm_munmap(vmpl_mm->pgd, addr, PGSIZE * 2);
 	assert(rc == 0);
+	vma = find_vma_intersection(vm, addr, addr + PGSIZE * 2);
+	assert(vma == NULL);
 	log_success("Test munmap passed");
 
-	// Test vmpl_mm_stats
-	vmpl_mm_stats(vmpl_mm);
+	// Test clone
+	log_info("Test clone");
+	new_root = vmpl_vm_clone(vmpl_mm->pgd);
+	assert(new_root != NULL);
+	log_success("Test clone passed");
+
+	// Test free
+	log_info("Test free");
+	vmpl_vm_free(new_root);
+	log_success("Test free passed");
 }
 
 /**

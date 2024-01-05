@@ -149,6 +149,7 @@ struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size
 	log_debug("va_start = 0x%lx, va_end = 0x%lx, size = 0x%lx", va_start, vm->va_end, size);
 	va_start = vm->fit_algorithm(vm->vma_dict, size, va_start, vm->va_end);
 	if (va_start == 0) {
+		log_warn("Failed to allocate VMA");
 		return NULL;
 	}
 
@@ -158,6 +159,7 @@ struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size
 	vma->prot = 0;
 	vma->offset = 0;
 	vma->path = NULL;
+	log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
 	return vma;
 }
 
@@ -179,7 +181,8 @@ static void insert_vma_callback(struct procmap_entry_t *entry, void *arg) {
 	new_vma->major = entry->major;
 	new_vma->inode = entry->inode;
 	new_vma->path = strdup(entry->path);
-	insert_vma(vm, new_vma);
+	bool inserted = insert_vma(vm, new_vma);
+	log_debug("inserted = %s", inserted ? "true" : "false");
 }
 
 /**
