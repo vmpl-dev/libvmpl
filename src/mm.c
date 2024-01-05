@@ -450,6 +450,37 @@ int vmpl_vm_page_walk(pte_t *root, void *start_va, void *end_va,
 }
 
 /**
+ * @brief Dune VM Page Walk
+ * @param root The root of the page table.
+ * @param vm The VMPL VM to walk.
+ * @param cb The callback function to call for each page.
+ * @param arg An argument to pass to the callback function.
+ * @param level The level of the page table.
+ * @return 0 on success, non-zero on failure.
+ */
+int vmpl_vm_vma_walk(pte_t *root, struct vmpl_vm_t *vm, page_walk_cb cb, const void *arg, int level)
+{
+	int ret = 0;
+	struct vmpl_vma_t *vma;
+	// For each vmpl-vma, walk the page table and call the callback function.
+	dict_itor *itor = dict_itor_new(vm->vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		vma = dict_itor_key(itor);
+		log_debug("start = 0x%lx, end = 0x%lx, level = %d, path = %s",
+				  vma->start, vma->end, level, vma->path);
+		// Skip reserved PGTABLE VMAs
+		if (strcmp(vma->path, "[pgtable]") == 0)
+			continue;
+		ret = __vmpl_vm_page_walk(root, vma->start, vma->end - 1,
+								  cb, arg, level, CREATE_NONE);
+		if (ret)
+			break;
+	}
+	dict_itor_free(itor);
+	return ret;
+}
+
+/**
  * Map a virtual memory page to a physical memory page, with the given
  * permissions and flags.
  * @param root The root of the page table.
@@ -974,6 +1005,7 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 	return 0;
 }
 
+#ifdef CONFIG_DUNE_BOOT
 /**
  * @brief Clone a page table.
  * @note  This function is not implemented.
@@ -984,7 +1016,6 @@ pte_t *vmpl_vm_clone(pte_t *root)
 {
 	int ret;
 	pte_t *new_root;
-	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
 
 	new_root = alloc_virt_page();
 	memset(new_root, 0, PGSIZE);
@@ -1026,6 +1057,53 @@ void vmpl_vm_free(pte_t *root)
 
 	put_page(root);
 }
+#else
+/**
+ * @brief Clone a page table.
+ * @note  This function is not implemented.
+ * @param root The root of the page table.
+ * @return The new page table root on success, NULL on failure.
+ */
+pte_t *vmpl_vm_clone(pte_t *root)
+{
+	int ret;
+	pte_t *new_root;
+	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
+
+	new_root = alloc_virt_page();
+	memset(new_root, 0, PGSIZE);
+	log_debug("root = %lx, new_root = %lx", root, new_root);
+
+	ret = vmpl_vm_vma_walk(root, vm, &__vmpl_vm_clone_helper, new_root, 3);
+	if (ret < 0) {
+		vmpl_vm_free(new_root);
+		return NULL;
+	}
+
+	return new_root;
+}
+
+/**
+ * Free the page table and decrement the reference count on any pages.
+ * @param root The root of the page table.
+ */
+void vmpl_vm_free(pte_t *root)
+{
+	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
+
+	log_debug("root = 0x%lx", root);
+	// XXX: Should only need one page walk
+	// XXX: Hacky - Until I fix ref counting
+#ifdef CONFIG_DUNE_DEPRECATED
+	vmpl_vm_vma_walk(root, vm, &__vmpl_vm_free_helper, NULL, 3);
+#endif
+
+	vmpl_vm_vma_walk(root, vm, &__vmpl_vm_free_helper, NULL, 2);
+	vmpl_vm_vma_walk(root, vm, &__vmpl_vm_free_helper, NULL, 1);
+
+	put_page(root);
+}
+#endif
 
 /**
  * @brief Handle page fault on lazily allocated virtual memory area.

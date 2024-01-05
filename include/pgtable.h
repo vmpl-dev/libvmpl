@@ -98,8 +98,7 @@ typedef uint64_t pte_t;
 #define PTE_BAD   (1UL << 1)
 
 #define page_address(page) ((page) << 12)
-#define pte_addr(pte) ((pte) & 0x0000fffffffff000UL)
-
+#define pte_addr(pte) ((pte) & 0x0007fffffffff000UL)
 #define pfn2page(pfn) ((pfn) << 12)
 #define page2pfn(page) ((page) >> 12)
 
