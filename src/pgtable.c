@@ -45,7 +45,10 @@ static inline virtaddr_t pgtable_alloc(void)
 
     pa = dune_page2pa(pg);
     va = pgtable_pa_to_va(pa);
+    log_debug("pg = %p, pa = %lx, va = %p", pg, pa, va);
 	memset((void *) va, 0, PGSIZE);
+    assert(va - pa == PGTABLE_MMAP_BASE);
+    log_debug("done");
 	return va;
 }
 
@@ -228,7 +231,7 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 	k = PDX(1, va);
 	l = PDX(0, va);
 
-    log_debug("pgtable_lookup: %p, %d, %d, %d, %d", va, i, j, k, l);
+    log_debug("%p, %d, %d, %d, %d", va, i, j, k, l);
     log_debug("pml4[%d] = %lx", i, pml4[i]);
 	if (!pte_present(pml4[i])) {
         if (!create)
@@ -303,7 +306,7 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
  */
 int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
-    log_debug("lookup_address_in_pgd: %p", va);
+    log_debug("%p", va);
     pml4e_t *pml4e = pml4_offset(pgd, va);
     if (pml4e_none(*pml4e) || pml4e_bad(*pml4e)) {
         return -EINVAL;
@@ -387,7 +390,6 @@ uint64_t pgtable_pa_to_va(uint64_t pa)
 uint64_t pgtable_va_to_pa(uint64_t va)
 {
     pte_t *ptep;
-    int level;
 
     // XXX: Using PA + PGTABLE_MMAP_BASE == VA
     if ((va >= PGTABLE_MMAP_BASE) && (va < PGTABLE_MMAP_END)) {

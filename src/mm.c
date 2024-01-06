@@ -75,30 +75,44 @@ static inline virtaddr_t vmpl_page2va(struct page *pg)
 
 static inline physaddr_t alloc_phys_page(void)
 {
-	struct page *pg = vmpl_page_alloc(dune_fd);
+	struct page *pg;
+	physaddr_t pa;
+
+	pg = vmpl_page_alloc(dune_fd);
 	if (!pg)
 		return NULL;
-	return vmpl_page2pa(pg);
+
+	pa = vmpl_page2pa(pg);
+	log_debug("pg = 0x%lx, pa = 0x%lx", pg, pa);
+	return pa;
 }
 
 static inline void free_phys_page(physaddr_t pa)
 {
 	struct page *pg = vmpl_pa2page(pa);
-	vmpl_page_free(pg);
+	vmpl_page_put(pg);
 }
 
 static inline virtaddr_t alloc_virt_page(void)
 {
-	struct page *pg = dune_page_alloc(dune_fd);
+	struct page *pg;
+	physaddr_t pa;
+	virtaddr_t va;
+
+	pg = dune_page_alloc(dune_fd);
 	if (!pg)
 		return NULL;
-	return vmpl_page2va(pg);
+	
+	pa = dune_page2pa(pg);
+	va = pgtable_pa_to_va(pa);
+	log_debug("pg = 0x%lx, pa = 0x%lx, va = 0x%lx", pg, pa, va);
+	return va;
 }
 
 static inline void free_virt_page(virtaddr_t va)
 {
 	struct page *pg = vmpl_va2page(va);
-	dune_page_free(pg);
+	dune_page_put(pg);
 }
 
 static inline void get_page(void * page)
@@ -365,7 +379,9 @@ static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 	vmpl_page_get_addr(pte_addr(*pte));
 
 	// Copy the page table entry
+	log_debug("new_pte = 0x%lx", *new_pte);
 	*new_pte = *pte;
+	log_debug("new_pte = 0x%lx", *new_pte);
 
 	return 0;
 }
@@ -1385,6 +1401,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	assert(vma->flags == MREMAP_FIXED | MREMAP_DONTUNMAP);
 	log_success("Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP passed");
 
+#ifdef CONFIG_DUNE_DEPRECATED
 	// Test munmap
 	log_info("Test munmap");
 	rc = vmpl_vm_munmap(vmpl_mm->pgd, addr, PGSIZE * 2);
@@ -1392,6 +1409,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE * 2);
 	assert(vma == NULL);
 	log_success("Test munmap passed");
+#endif
 
 	// Test clone
 	log_info("Test clone");

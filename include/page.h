@@ -43,6 +43,7 @@ static inline void __put_page(struct page *pg)
 	assert(pg >= pages);
 	assert(pg < (pages + MAX_PAGES));
 	assert(pg->vmpl == 1);
+	assert(pg->ref > 0);
 
 	pg->ref--;
 }
@@ -54,10 +55,12 @@ extern void vmpl_page_stats(void);
 
 static inline struct page * vmpl_pa2page(physaddr_t pa)
 {
+	assert(pa >= PAGEBASE);
 	return &pages[PPN(pa - PAGEBASE)];
 }
 static inline physaddr_t vmpl_page2pa(struct page *pg)
 {
+	assert(pg >= pages);
 	return PAGEBASE + ((pg - pages) << PGSHIFT);
 }
 extern bool vmpl_page_isfrompool(physaddr_t pa);

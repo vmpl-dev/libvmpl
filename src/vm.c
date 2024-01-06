@@ -192,7 +192,7 @@ struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size
 	assert(va_start < vm->va_end);
 	assert(va_start + size <= vm->va_end);
 
-	log_debug("va_start = 0x%lx, va_end = 0x%lx, size = 0x%lx", va_start, vm->va_end, size);
+	log_trace("va_start = 0x%lx, va_end = 0x%lx, size = 0x%lx", va_start, vm->va_end, size);
 	va_start = vm->fit_algorithm(vm->vma_dict, size, va_start, vm->va_end);
 	if (va_start == 0) {
 		log_warn("Failed to allocate VMA");
@@ -205,7 +205,7 @@ struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size
 	vma->prot = 0;
 	vma->offset = 0;
 	vma->path = NULL;
-	log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
+	log_trace("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
 	return vma;
 }
 
@@ -228,7 +228,7 @@ static void insert_vma_callback(struct procmap_entry_t *entry, void *arg) {
 	new_vma->inode = entry->inode;
 	new_vma->path = strdup(entry->path);
 	bool inserted = insert_vma(vm, new_vma);
-	log_debug("inserted = %s", inserted ? "true" : "false");
+	log_trace("inserted = %s", inserted ? "true" : "false");
 }
 
 /**
@@ -367,7 +367,6 @@ void vmpl_vm_vma_test(struct vmpl_vm_t *vm, const char *algorithm)
 		assert(vma->start == va_start && vma->end == va_end);
 		bool inserted = insert_vma(vm, vma);
 		assert(inserted == true);
-		log_debug("inserted = %s", inserted ? "true" : "false");
 	}
 	log_info("Finding 10 VMAs from the VMPL-VM");
 	for (int i = 0; i < 10; i++) {
@@ -391,7 +390,6 @@ void vmpl_vm_vma_test(struct vmpl_vm_t *vm, const char *algorithm)
 
 		bool removed = remove_vma(vm, vma);
 		assert(removed == true);
-		log_debug("removed = %s", removed ? "true" : "false");
 
 		vmpl_vma_free(vma);
 	}

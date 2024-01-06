@@ -162,7 +162,6 @@ static void vmpl_page_test(int vmpl_fd)
 	assert(pg->vmpl == Vmpl1);
 
 	vmpl_page_put(pg);
-	vmpl_page_free(pg);
 	assert(pg->ref == 0);
 	assert(pg->vmpl == Vmpl1);
 	log_success("VMPL Pages Test Passed");
@@ -241,7 +240,6 @@ static void dune_page_test(int vmpl_fd)
 	assert(pg->vmpl == Vmpl1);
 
 	dune_page_put(pg);
-	dune_page_free(pg);
 	assert(pg->ref == 0);
 	assert(pg->vmpl == Vmpl1);
 	log_success("Dune Page Test Passed");
