@@ -97,8 +97,8 @@ static inline void vmpl_vma_print(struct vmpl_vma_t *vma)
 }
 extern int get_vmpl_vma_type(const char *path);
 extern struct vmpl_vma_t *vmpl_vma_new(const char *path);
-extern struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, uint64_t va_end, uint64_t prot,
-								   uint64_t flags, uint64_t offset);
+extern struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, size_t len, uint64_t prot,
+										  uint64_t flags, int fd, uint64_t offset);
 extern void vmpl_vma_free(struct vmpl_vma_t *vma);
 extern int vmpl_vma_cmp(const void *a, const void *b);
 extern int vmpl_vma_eq(const void *a, const void *b);

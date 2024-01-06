@@ -56,6 +56,7 @@ extern void vmpl_page_stats(void);
 static inline struct page * vmpl_pa2page(physaddr_t pa)
 {
 	assert(pa >= PAGEBASE);
+	assert(pa < (PAGEBASE + (MAX_PAGES << PGSHIFT)));
 	return &pages[PPN(pa - PAGEBASE)];
 }
 static inline physaddr_t vmpl_page2pa(struct page *pg)
@@ -63,7 +64,8 @@ static inline physaddr_t vmpl_page2pa(struct page *pg)
 	assert(pg >= pages);
 	return PAGEBASE + ((pg - pages) << PGSHIFT);
 }
-extern bool vmpl_page_isfrompool(physaddr_t pa);
+extern bool vmpl_page_is_from_pool(physaddr_t pa);
+extern bool vmpl_page_is_maped(physaddr_t pa);
 static inline void vmpl_page_mark(struct page *pg)
 {
 	pg->vmpl = 1;
@@ -81,7 +83,7 @@ static inline void vmpl_page_get(struct page *pg)
 static inline struct page * vmpl_page_get_addr(physaddr_t pa)
 {
 	struct page *pg = vmpl_pa2page(pa);
-	if (vmpl_page_isfrompool(pa))
+	if (vmpl_page_is_from_pool(pa))
 		vmpl_page_get(pg);
 	return pg;
 }
@@ -95,7 +97,7 @@ static inline void vmpl_page_put(struct page *pg)
 static inline void vmpl_page_put_addr(physaddr_t pa)
 {
 	struct page *pg = vmpl_pa2page(pa);
-	if (vmpl_page_isfrompool(pa))
+	if (vmpl_page_is_from_pool(pa))
 		vmpl_page_put(pg);
 }
 
@@ -113,7 +115,7 @@ static inline void dune_page_put(struct page *pg)
 
 #define dune_pa2page			vmpl_pa2page
 #define dune_page2pa			vmpl_page2pa
-#define dune_page_isfrompool	vmpl_page_isfrompool
+#define dune_page_isfrompool	vmpl_page_is_from_pool
 #define dune_page_get			vmpl_page_get
 
 // -----------------------PAGE MANAGEMENT-----------------------

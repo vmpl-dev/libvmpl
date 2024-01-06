@@ -895,7 +895,8 @@ static void vmpl_free_percpu(struct dune_percpu *percpu)
     munmap(percpu, PGSIZE);
 }
 
-static bool vmpl_initialized = false;
+bool vmpl_initialized = false;
+bool vmpl_booted = false;
 
 /**
  * @brief  Initializes the VMPL library.
@@ -1064,6 +1065,8 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     // Setup vsyscall handler
     setup_vsyscall(percpu);
 
+    // Finish setup
+    vmpl_booted = true;
     return 0;
 }
 

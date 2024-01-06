@@ -77,12 +77,12 @@ struct vmpl_vma_t *vmpl_vma_new(const char *path)
 	return vma;
 }
 
-struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, uint64_t va_end, uint64_t prot,
-								   uint64_t flags, uint64_t offset)
+struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, size_t len, uint64_t prot,
+								   uint64_t flags, int fd, uint64_t offset)
 {
 	struct vmpl_vma_t *vma = malloc(sizeof(struct vmpl_vma_t));
 	vma->start = va_start;
-	vma->end = va_end;
+	vma->end = va_start + len;
 	vma->prot = prot;
 	vma->flags = flags;
 	vma->minor = 0;

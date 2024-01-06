@@ -279,14 +279,6 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	removed = remove_vma(vmpl_vm, vma);
 	assert(removed == true);
 
-	// Add the preserved mmaping to the VMA dictionary
-	vma = vmpl_vma_new("[pgtable]");
-	vma->start = PGTABLE_MMAP_BASE;
-	vma->end = PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE;
-	vma->prot = PROT_READ | PROT_WRITE;
-	inserted = insert_vma(vmpl_vm, vma);
-	assert(inserted == true);
-
 	return 0;
 }
 

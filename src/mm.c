@@ -705,7 +705,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	// Check that the address is not NULL
 	if (old_address == NULL) {
 		log_warn("old_address is NULL");
-		errno = ENOMEM;
+		errno = EINVAL;
 		return MAP_FAILED;
 	}
 
@@ -951,15 +951,17 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 
 	// Check permissions are valid (must have at least one of R, W, X)
 	if (!(prot & PROT_READ)) {
-		if (prot & PROT_WRITE)
-			return -EINVAL;
+		if (prot & PROT_WRITE) {
+			errno = EINVAL;
+			return MAP_FAILED;
+		}
 		prot = PROT_NONE;
 	}
 
 	// Check that the address is not NULL
 	if (addr == NULL) {
 		log_warn("addr is NULL");
-		errno = ENOMEM;
+		errno = EINVAL;
 		return MAP_FAILED;
 	}
 
@@ -973,12 +975,12 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 	// EINVAL Both PROT_GROWSUP and PROT_GROWSDOWN were specified in prot.
 	if (prot & (PROT_GROWSUP | PROT_GROWSDOWN)) {
 		log_warn("PROT_GROWSUP and PROT_GROWSDOWN are not supported");
-		errno = EINVAL;
+		errno = ENOTSUP;
 		return MAP_FAILED;
 	}
 
 	// EINVAL Invalid flags specified in prot.
-	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC | PROT_NONE)) {
+	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC | PROT_NONE | PROT_GROWSUP | PROT_GROWSDOWN)) {
 		log_warn("Invalid flags specified in prot");
 		errno = EINVAL;
 		return MAP_FAILED;
@@ -1013,7 +1015,8 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 							  3, CREATE_NONE);
 	if (ret) {
 		log_warn("Failed to walk the page table");
-		return ret;
+		errno = ENOMEM;
+		return MAP_FAILED;
 	}
 
 	vmpl_flush_tlb();
@@ -1174,7 +1177,7 @@ long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
 		perm |= PTE_W;
 
 		// Check if we can just change permissions
-		if (vmpl_page_isfrompool(pa) && pg->ref == 1) {
+		if (vmpl_page_is_from_pool(pa) && pg->ref == 1) {
 			*pte = pa | perm;
 			return;
 		}
@@ -1324,8 +1327,8 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test mmap
 	log_info("Test mmap");
-	addr = vmpl_vm_mmap(vmpl_mm->pgd, NULL, PGSIZE, PROT_READ | PROT_WRITE,
-						MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+	addr = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
+				MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
 	assert(addr != MAP_FAILED);
 	assert(addr == vmpl_mm->vmpl_vm.va_start);
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE);
@@ -1346,24 +1349,23 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	// Test mmap at a specific address
 	log_info("Test mmap at a specific address");
 	tmp_addr = (void *)vmpl_mm->vmpl_vm.va_start + PGSIZE;
-	addr = vmpl_vm_mmap(vmpl_mm->pgd, tmp_addr,
-						PGSIZE, PROT_READ | PROT_WRITE,
-						MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+	addr = mmap(tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
+				MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 	assert(addr != MAP_FAILED);
 	assert(addr == tmp_addr);
 	log_success("Test mmap at a specific address passed");
 
 	// Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE.
 	log_info("Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE");
-	addr = vmpl_vm_mmap(vmpl_mm->pgd, tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
-						MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+	addr = mmap(tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
+				MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
 	assert(addr == MAP_FAILED);
 	assert(errno == EEXIST);
 	log_success("Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE passed");
 
 	// Test mmap at a specific address that is already mapped with MAP_FIXED.
 	log_info("Test mmap at a specific address that is already mapped with MAP_FIXED");
-	addr = vmpl_vm_mmap(vmpl_mm->pgd, tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
+	addr = mmap(tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
 						MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 	assert(addr != MAP_FAILED);
 	assert(addr == tmp_addr);
@@ -1371,7 +1373,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test mprotect
 	log_info("Test mprotect");
-	rc = vmpl_vm_mprotect(vmpl_mm->pgd, addr, PGSIZE, PROT_READ);
+	rc = mprotect(addr, PGSIZE, PROT_READ);
 	assert(rc == 0);
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE);
 	assert(vma != NULL);
@@ -1380,7 +1382,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test mremap
 	log_info("Test mremap");
-	addr = vmpl_vm_mremap(vmpl_mm->pgd, addr, PGSIZE, PGSIZE * 2, MREMAP_MAYMOVE, NULL);
+	addr = mremap(addr, PGSIZE, PGSIZE * 2, MREMAP_MAYMOVE, NULL);
 	assert(addr != MAP_FAILED);
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE * 2);
 	assert(vma != NULL);
@@ -1392,7 +1394,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	// Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP.
 	log_info("Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP");
 	tmp_addr = (void *)vmpl_mm->vmpl_vm.va_start + PGSIZE * 8;
-	addr = vmpl_vm_mremap(vmpl_mm->pgd, addr, PGSIZE * 2, PGSIZE * 2,
+	addr = mremap(addr, PGSIZE * 2, PGSIZE * 2,
 						  MREMAP_FIXED | MREMAP_DONTUNMAP, tmp_addr);
 	assert(addr != MAP_FAILED);
 	assert(addr == tmp_addr);
@@ -1401,15 +1403,13 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	assert(vma->flags == MREMAP_FIXED | MREMAP_DONTUNMAP);
 	log_success("Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP passed");
 
-#ifdef CONFIG_DUNE_DEPRECATED
 	// Test munmap
 	log_info("Test munmap");
-	rc = vmpl_vm_munmap(vmpl_mm->pgd, addr, PGSIZE * 2);
+	rc = munmap(addr, PGSIZE * 2);
 	assert(rc == 0);
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE * 2);
 	assert(vma == NULL);
 	log_success("Test munmap passed");
-#endif
 
 	// Test clone
 	log_info("Test clone");

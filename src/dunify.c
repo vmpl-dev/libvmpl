@@ -13,6 +13,7 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <pthread.h>
 #include <hotcalls/hotcalls.h>
 
@@ -192,7 +193,9 @@ int pthread_create(pthread_t *restrict res,
 	return rc;
 }
 
-#ifdef CONFIG_VMPL_ALLOC
+#ifdef CONFIG_VMPL_MM
+#define need_intercept(vmpl_mm) (vmpl_booted && vmpl_mm.initialized)
+
 int brk(void *addr)
 {
 	static typeof(&brk) brk_orig = NULL;
@@ -223,36 +226,35 @@ void *sbrk(intptr_t increment)
 	return sbrk_orig(increment);
 }
 
-void *mmap(void *addr, size_t length, int prot, int flags,
-                  int fd, off_t offset)
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	// Call original mmap
 	static typeof(&mmap) mmap_orig = NULL;
 	if (!mmap_orig)
 		mmap_orig = dlsym(RTLD_NEXT, "mmap");
 	
-	if (!getenv("RUN_IN_VMPL_MMAP")) {
+	if (!need_intercept(vmpl_mm)) {
 		return mmap_orig(addr, length, prot, flags, fd, offset);
 	}
 
-	// Intercept mmap calls when running in VMPL, such that we can handle the memory allocation
-	// in the guest process.
-	if (addr == NULL) {
-		if (flags & MAP_FIXED) {
-			// Allocate memory in the guest process
-			void *guest_addr = vmpl_alloc(length);
-			if (guest_addr == NULL) {
-				log_err("failed to allocate memory in guest process");
-				return -1;
+	// Map in VMPL-VM
+	log_warn("mmap intercepted");
+	void *ret = vmpl_vm_mmap(vmpl_mm.pgd, addr, length, prot, flags, fd, offset);
+	if (MAP_FAILED == ret) {
+		// The page is not mapped in VMPL-VM. Call original mmap.
+		if (ENOMEM == errno || ENOTSUP == errno) {
+			log_warn("fall back to original mmap");
+			ret = mmap_orig(addr, length, prot, flags, fd, offset);
+			// Insert vma in VMPL-VM
+			if (MAP_FAILED != ret) {
+				struct vmpl_vma_t *vma;
+				vma = vmpl_vma_create(ret, length, prot, flags, fd, offset);
+				insert_vma(&vmpl_mm.vmpl_vm, vma);
 			}
-
-			return (int)guest_addr;
 		}
 	}
 
-	// TODO: Handle mmap
-
-	return vmpl_mmap(addr, length, prot, flags, fd, offset);
+	return ret;
 }
 
 void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ... /* void *new_address */)
@@ -262,16 +264,70 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 	if (!mremap_orig)
 		mremap_orig = dlsym(RTLD_NEXT, "mremap");
 	
-	if (!getenv("RUN_IN_VMPL_MMAP")) {
+	if (!need_intercept(vmpl_mm)) {
 		return mremap_orig(old_address, old_size, new_size, flags);
 	}
 
-	// Intercept mremap calls when running in VMPL, such that we can handle the memory allocation
-	// in the guest process.
+	// Get new_address if MREMAP_FIXED is set
+	log_warn("mremap intercepted");
+	void *new_address = NULL;
+	if (flags | MREMAP_FIXED) {
+		va_list ap;
+		va_start(ap, flags);
+		new_address = va_arg(ap, void *);
+	}
 
-	// TODO: Handle mremap
+	// Remap in VMPL-VM
+	void *ret = vmpl_vm_mremap(vmpl_mm.pgd, old_address, old_size, new_size, flags, new_address);
+	if (MAP_FAILED == ret) {
+		// The page is not mapped in VMPL-VM. Call original mremap.
+		if (ENOMEM == errno || ENOTSUP == errno) {
+			log_warn("fall back to original mremap");
+			ret = mremap_orig(old_address, old_size, new_size, flags);
+			// Update vma in VMPL-VM
+			if (MAP_FAILED != ret) {
+				struct vmpl_vma_t *old_vma, *new_vma;
+				old_vma = find_vma_intersection(&vmpl_mm.vmpl_vm, old_address, old_size);
+				remove_vma(&vmpl_mm.vmpl_vm, old_vma);
+				new_vma = vmpl_vma_create(ret, new_size, old_vma->flags, flags, -1, 0);
+				insert_vma(&vmpl_mm.vmpl_vm, new_vma);
+				vmpl_vma_free(old_vma);
+			}
+		}
+	}
 
-	return vmpl_mremap(old_address, old_size, new_size, flags);
+	return ret;
+}
+
+int mprotect(void *addr, size_t len, int prot)
+{
+	// Call original mprotect
+	static typeof(&mprotect) mprotect_orig = NULL;
+	if (!mprotect_orig)
+		mprotect_orig = dlsym(RTLD_NEXT, "mprotect");
+	
+	if (!need_intercept(vmpl_mm)) {
+		return mprotect_orig(addr, len, prot);
+	}
+
+	// Protect in VMPL-VM
+	log_warn("mremap intercepted");
+	int ret = vmpl_vm_mprotect(vmpl_mm.pgd, addr, len, prot);
+	if (0 != ret) {
+		// The VMPL-VM cannot protect the page. Call original mprotect.
+		if (ENOTSUP == errno || ENOMEM == errno) {
+			log_warn("fall back to original mprotect");
+			ret = mprotect_orig(addr, len, prot);
+			// Update vma in VMPL-VM
+			if (0 == ret) {
+				struct vmpl_vma_t *vma;
+				vma = find_vma_intersection(&vmpl_mm.vmpl_vm, addr, len);
+				vma->prot = prot;
+			}
+		}
+	}
+
+	return ret;
 }
 
 int munmap(void *addr, size_t length)
@@ -281,15 +337,28 @@ int munmap(void *addr, size_t length)
 	if (!munmap_orig)
 		munmap_orig = dlsym(RTLD_NEXT, "munmap");
 	
-	if (!getenv("RUN_IN_VMPL_MMAP")) {
+	if (!need_intercept(vmpl_mm)) {
 		return munmap_orig(addr, length);
 	}
 
-	// Intercept munmap calls when running in VMPL, such that we can handle the memory allocation
-	// in the guest process.
+	// Unmap in VMPL-VM
+	log_warn("munmap intercepted");
+	int ret = vmpl_vm_munmap(vmpl_mm.pgd, addr, length);
+	if (0 != ret) {
+		// The VMPL-VM cannot unmap the page. Call original munmap.
+		if (ENOTSUP == errno || ENOMEM == errno) {
+			log_warn("fall back to original munmap");
+			ret = munmap_orig(addr, length);
+			// Remove vma from VMPL-VM
+			if (0 == ret) {
+				struct vmpl_vma_t *vma;
+				vma = find_vma_intersection(&vmpl_mm.vmpl_vm, addr, length);
+				remove_vma(&vmpl_mm.vmpl_vm, vma);
+				vmpl_vma_free(vma);
+			}
+		} 
+	}
 
-	// TODO: Handle munmap
-
-	return vmpl_munmap(addr, length);
+	return ret;
 }
 #endif

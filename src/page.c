@@ -33,12 +33,18 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
 {
     void *addr;
     addr = mmap((void *)(PGTABLE_MMAP_BASE + phys), len,
-                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, phys);
+                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_POPULATE, fd, phys);
     if (addr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
     }
-	
-    return addr;
+
+	// Mark as mapped in VMPL-VM
+	for (size_t i = 0; i < len; i += PGSIZE) {
+		struct page *pg = vmpl_pa2page(phys + i);
+		pg->flags = 1;
+	}
+
+	return addr;
 }
 
 static int grow_pages(int fd, struct page_head *head, size_t num_pages, bool mapping)
@@ -140,7 +146,7 @@ void vmpl_page_stats(void) {
 	printf("VMPL Pages: %d/%ld\n", num_vmpl_pages, MAX_PAGES);
 }
 
-bool vmpl_page_isfrompool(physaddr_t pa)
+bool vmpl_page_is_from_pool(physaddr_t pa)
 {
 	struct page *pg;
 	if (pa < PAGEBASE)
@@ -148,6 +154,16 @@ bool vmpl_page_isfrompool(physaddr_t pa)
 
 	pg = vmpl_pa2page(pa);
 	return pg->vmpl == Vmpl1 ? true : false;
+}
+
+bool vmpl_page_is_maped(physaddr_t pa)
+{
+	struct page *pg;
+	if (pa < PAGEBASE)
+		return false;
+
+	pg = vmpl_pa2page(pa);
+	return pg->flags == 1 ? true : false;
 }
 
 static void vmpl_page_test(int vmpl_fd)

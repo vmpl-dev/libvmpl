@@ -37,18 +37,23 @@ pte_t *pgroot;
 static inline virtaddr_t pgtable_alloc(void)
 {
 	struct page *pg;
-    physaddr_t pa;
+	physaddr_t pa;
 	virtaddr_t va;
+
 	pg = dune_page_alloc(dune_fd);
 	if (!pg)
 		return NULL;
-
-    pa = dune_page2pa(pg);
-    va = pgtable_pa_to_va(pa);
-    log_debug("pg = %p, pa = %lx, va = %p", pg, pa, va);
-	memset((void *) va, 0, PGSIZE);
-    assert(va - pa == PGTABLE_MMAP_BASE);
-    log_debug("done");
+	
+	pa = dune_page2pa(pg);
+	va = pgtable_pa_to_va(pa);
+	log_debug("pg = 0x%lx, pa = 0x%lx, va = 0x%lx", pg, pa, va);
+    assert(pa >= PAGEBASE);
+    assert(va >= PGTABLE_MMAP_BASE);
+    assert(va < PGTABLE_MMAP_END);
+    assert(pa == (va - PGTABLE_MMAP_BASE));
+    assert(pg == vmpl_pa2page(pa));
+    assert(pg->flags == 1);
+    log_debug("pg->ref = %d", pg->ref);
 	return va;
 }
 
@@ -190,11 +195,17 @@ void pgtable_test(pte_t *pgd, uint64_t va)
 pte_t *pgtable_do_mapping(uint64_t phys)
 {
     pte_t *va;
-    if (vmpl_page_isfrompool(phys)) {
+
+    // Check if the page is already mapped
+    if (vmpl_page_is_maped(phys)) {
         log_debug("already mapped %lx", phys);
         return __va(phys);
     }
 
+    // Mark the page as vmpl page
+    vmpl_page_mark_addr(phys);
+
+    // Map the page to the virtual address space of the process.
     va = do_mapping(dune_fd, phys, PAGE_SIZE);
     if (va == MAP_FAILED) {
         log_err("failed to map pgtable");
@@ -203,7 +214,7 @@ pte_t *pgtable_do_mapping(uint64_t phys)
 
     log_debug("newly mapped phys %lx to %p", phys, va);
     log_debug("content: %lx", *va);
-    vmpl_page_mark_addr(phys);
+    
 failed:
     return va;
 }
@@ -237,11 +248,14 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
         if (!create)
             return -ENOENT;
         pdpte = pgtable_alloc();
+        log_debug("pdpte = %p", pdpte);
         pml4[i] = pte_addr(__pa(pdpte)) | PTE_DEF_FLAGS;
+        log_debug("pml4[%d] = %lx", i, pml4[i]);
     } else {
         pdpte = pgtable_do_mapping(pte_addr(pml4[i]));
     }
 
+    // TODO: Check if the page has write permission.
     log_debug("pdpte[%d] = %lx", j, pdpte[j]);
 	if (!pte_present(pdpte[j])) {
         if (!create)

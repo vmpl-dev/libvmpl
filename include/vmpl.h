@@ -122,6 +122,8 @@ extern void dune_syscall_handler(struct dune_tf *tf);
 extern void dune_trap_handler(int num, struct dune_tf *tf);
 
 // vmpl initialization
+extern bool vmpl_initialized;
+extern bool vmpl_booted;
 extern int vmpl_enter(int argc, char *argv[]);
 #ifdef __cplusplus
 }

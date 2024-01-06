@@ -28,6 +28,7 @@ void log_message(int level, const char *format, ...);
 
 #ifndef pr_fmt(fmt)
 #define pr_fmt(fmt) "%s: " fmt, __func__
+#define pr_fmt(fmt) "vmpl-process: %s:%d %s: " fmt, __FILE__, __LINE__, __func__
 #endif
 
 #if defined(__clang__)
