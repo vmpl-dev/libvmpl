@@ -196,36 +196,6 @@ int pthread_create(pthread_t *restrict res,
 #ifdef CONFIG_VMPL_MM
 #define need_intercept(vmpl_mm) (vmpl_booted && vmpl_mm.initialized)
 
-int brk(void *addr)
-{
-	static typeof(&brk) brk_orig = NULL;
-	if (!brk_orig)
-		brk_orig = dlsym(RTLD_NEXT, "sbrk");
-
-	if (!getenv("RUN_IN_VMPL_MMAP")) {
-		return brk_orig(addr);
-	}
-
-	// TODO: Intercept sbrk
-
-	return brk_orig(addr);
-}
-
-void *sbrk(intptr_t increment)
-{
-	static typeof(&sbrk) sbrk_orig = NULL;
-	if (!sbrk_orig)
-		sbrk_orig = dlsym(RTLD_NEXT, "sbrk");
-
-	if (!getenv("RUN_IN_VMPL_MMAP")) {
-		return sbrk_orig(increment);
-	}
-
-	// TODO: Intercept sbrk
-
-	return sbrk_orig(increment);
-}
-
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	// Call original mmap

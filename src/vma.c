@@ -93,6 +93,21 @@ struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, size_t len, uint64_t prot,
 	return vma;
 }
 
+struct vmpl_vma_t *vmpl_vma_clone(struct vmpl_vma_t *vma)
+{
+	struct vmpl_vma_t *new_vma = malloc(sizeof(struct vmpl_vma_t));
+	new_vma->start = vma->start;
+	new_vma->end = vma->end;
+	new_vma->prot = vma->prot;
+	new_vma->flags = vma->flags;
+	new_vma->minor = vma->minor;
+	new_vma->major = vma->major;
+	new_vma->inode = vma->inode;
+	new_vma->offset = vma->offset;
+	new_vma->path = strdup(vma->path);
+	return new_vma;
+}
+
 // Frea vma
 void vmpl_vma_free(struct vmpl_vma_t *vma)
 {
@@ -122,6 +137,85 @@ int vmpl_vma_eq(const void *a, const void *b)
 	const struct vmpl_vma_t *vb = b;
 
 	return (va->start == vb->start) && (va->end == vb->end);
+}
+
+/**
+ * @brief  Check if two VMAs overlap.
+ * @note VMPL-VM Helper API
+ * @param a The first VMA.
+ * @param b The second VMA.
+ * @return 1 if the VMAs overlap, 0 otherwise.
+ */
+bool vmpl_vma_overlap(const void *a, const void *b)
+{
+	const struct vmpl_vma_t *va = a;
+	const struct vmpl_vma_t *vb = b;
+
+	return (va->start < vb->end) && (vb->start < va->end);
+}
+
+/**
+ * @brief  Check if two VMAs are adjacent.
+ * @note VMPL-VM Helper API
+ * @param vma1 The first VMA.
+ * @param vma2 The second VMA.
+ * @return 1 if the VMAs are adjacent, 0 otherwise.
+ */
+bool are_vmas_adjacent(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2)
+{
+	return vma1->end == vma2->start || vma2->end == vma1->start;
+}
+
+/**
+ * @brief  Merge two adjacent VMAs into a single VMA.
+ * @note VMPL-VM Helper API
+ * @param vma1 The first VMA.
+ * @param vma2 The second VMA.
+ * @return The merged VMA if successful, NULL otherwise.
+ */
+struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2)
+{
+	if (!are_vmas_adjacent(vma1, vma2)) {
+		return NULL;
+	}
+
+	struct vmpl_vma_t *merged_vma = malloc(sizeof(struct vmpl_vma_t));
+	merged_vma->start = vma1->start < vma2->start ? vma1->start : vma2->start;
+	merged_vma->end = vma1->end > vma2->end ? vma1->end : vma2->end;
+	merged_vma->prot = vma1->prot | vma2->prot;
+	merged_vma->offset = vma1->offset < vma2->offset ? vma1->offset : vma2->offset;
+	merged_vma->path = NULL; // TODO: Set the path if needed
+
+	return merged_vma;
+}
+
+struct vmpl_vma_t *split_vma(struct vmpl_vma_t *vma, uint64_t addr)
+{
+	if (addr <= vma->start || addr >= vma->end) {
+		return NULL;
+	}
+
+	struct vmpl_vma_t *split_vma = malloc(sizeof(struct vmpl_vma_t));
+	split_vma->start = vma->start;
+	split_vma->end = addr;
+	split_vma->prot = vma->prot;
+	split_vma->offset = vma->offset;
+	split_vma->path = NULL; // TODO: Set the path if needed
+
+	vma->start = addr;
+
+	return split_vma;
+}
+
+void dump_vmpl_vma(struct vmpl_vma_t *vma)
+{
+	printf(VMPL_VMA_FORMAT, 
+			vma->start, vma->end, 
+			vma->prot & PROT_READ? 'r' : '-',
+			vma->prot & PROT_WRITE? 'w' : '-',
+			vma->prot & PROT_EXEC? 'x' : '-',
+			vma->offset, vma->minor, vma->major, vma->inode,
+			vma->path);
 }
 
 // Allocate a new free block

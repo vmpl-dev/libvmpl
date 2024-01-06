@@ -85,6 +85,9 @@ static inline uint64_t get_vmpl_vma_len(struct vmpl_vma_t *vma)
 {
 	return vma->end - vma->start;
 }
+static inline size_t get_vma_size(struct vmpl_vma_t *vma) {
+	return vma->end - vma->start;
+}
 static inline void vmpl_vma_print(struct vmpl_vma_t *vma)
 {
 	printf(VMPL_VMA_FORMAT, 
@@ -99,9 +102,15 @@ extern int get_vmpl_vma_type(const char *path);
 extern struct vmpl_vma_t *vmpl_vma_new(const char *path);
 extern struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, size_t len, uint64_t prot,
 										  uint64_t flags, int fd, uint64_t offset);
+extern struct vmpl_vma_t *vmpl_vma_clone(struct vmpl_vma_t *vma);
 extern void vmpl_vma_free(struct vmpl_vma_t *vma);
 extern int vmpl_vma_cmp(const void *a, const void *b);
 extern int vmpl_vma_eq(const void *a, const void *b);
+extern bool vmpl_vma_overlap(const void *a, const void *b);
+extern bool are_vmas_adjacent(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2);
+extern struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2);
+extern struct vmpl_vma_t *split_vma(struct vmpl_vma_t *vma, uint64_t addr);
+extern void dump_vmpl_vma(struct vmpl_vma_t *vma);
 static inline bool range_in_vma(struct vmpl_vma_t *vma, uint64_t start, uint64_t end)
 {
 	return (vma->start <= start && end <= vma->end);

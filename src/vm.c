@@ -48,6 +48,30 @@ struct vmpl_vma_t *find_vma(struct vmpl_vm_t *vm, uint64_t end_addr) {
 	return vma;
 }
 
+/** 
+ * @brief  Lookup the first VMA that satisfies vma->start <= addr < vma->end, NULL if not found.
+ * @note VMPL-VM Low Level API
+ * @param vm The VMPL-VM to search.
+ * @param addr The address to search for.
+ * @return The VMA if found, NULL otherwise.
+ */
+struct vmpl_vma_t *find_vma_exact(struct vmpl_vm_t *vm, uint64_t addr) {
+	struct vmpl_vma_t *vma = NULL;
+	assert(vm != NULL);
+	pthread_spin_lock(&vm->lock);
+	dict_itor *itor = dict_itor_new(vm->vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *current_vma = dict_itor_key(itor);
+		if (addr >= current_vma->start && addr < current_vma->end) {
+			vma = current_vma;
+			break;
+		}
+	}
+	dict_itor_free(itor);
+	pthread_spin_unlock(&vm->lock);
+	return vma;
+}
+
 /**
  * @brief Lookup the first VMA that intersects with the given range.
  * @note VMPL-VM Low Level API
@@ -131,49 +155,6 @@ void discard_overlapping_vmas(struct vmpl_vm_t *vm, uint64_t va_start, uint64_t 
 		assert(removed == true);
 		vmpl_vma_free(vma);
 	}
-}
-
-/**
- * @brief  Get the size of a VMA.
- * @note VMPL-VM Helper API
- * @param vma The VMA to get the size of.
- * @return The size of the VMA.
- */
-size_t get_vma_size(struct vmpl_vma_t *vma) {
-	return vma->end - vma->start;
-}
-
-/**
- * @brief  Check if two VMAs are adjacent.
- * @note VMPL-VM Helper API
- * @param vma1 The first VMA.
- * @param vma2 The second VMA.
- * @return 1 if the VMAs are adjacent, 0 otherwise.
- */
-bool are_vmas_adjacent(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2) {
-	return vma1->end == vma2->start || vma2->end == vma1->start;
-}
-
-/**
- * @brief  Merge two adjacent VMAs into a single VMA.
- * @note VMPL-VM Helper API
- * @param vma1 The first VMA.
- * @param vma2 The second VMA.
- * @return The merged VMA if successful, NULL otherwise.
- */
-struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2) {
-	if (!are_vmas_adjacent(vma1, vma2)) {
-		return NULL;
-	}
-
-	struct vmpl_vma_t *merged_vma = malloc(sizeof(struct vmpl_vma_t));
-	merged_vma->start = vma1->start < vma2->start ? vma1->start : vma2->start;
-	merged_vma->end = vma1->end > vma2->end ? vma1->end : vma2->end;
-	merged_vma->prot = vma1->prot | vma2->prot;
-	merged_vma->offset = vma1->offset < vma2->offset ? vma1->offset : vma2->offset;
-	merged_vma->path = NULL; // TODO: Set the path if needed
-
-	return merged_vma;
 }
 
 /**

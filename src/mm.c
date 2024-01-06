@@ -140,20 +140,6 @@ static inline void put_page(void * page)
  * @param create Whether to create pages if they don't exist.
  * @retval 0 on success, non-zero on failure.
  */
-
-/**
- * @brief Dune VM Page Walk
- * @note  XXX: Using PA == VA - PGTABLE_MMAP_BASE
- * The page walk callback function takes a page table entry and a virtual address.
- * @param dir The root of the page table.
- * @param start_va The start of the virtual address range to walk.
- * @param end_va The end of the virtual address range to walk.
- * @param cb The callback function to call for each page.
- * @param arg An argument to pass to the callback function.
- * @param level The level of the page table.
- * @param create Whether to create pages if they don't exist.
- * @retval 0 on success, non-zero on failure.
- */
 int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
 			page_walk_cb cb, const void *arg, int level,
 			int create)
@@ -1402,6 +1388,8 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	assert(vma->prot == PROT_READ);
 	assert(vma->flags == MREMAP_FIXED | MREMAP_DONTUNMAP);
 	log_success("Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP passed");
+
+	vmpl_mm_stats(vmpl_mm);
 
 	// Test munmap
 	log_info("Test munmap");
