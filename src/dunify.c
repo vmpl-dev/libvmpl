@@ -204,14 +204,14 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	}
 
 	// Map in VMPL-VM
-	log_warn("mmap intercepted");
+	log_debug("mmap intercepted");
 	void *ret = vmpl_vm_mmap(vmpl_mm.pgd, addr, length, prot, flags, fd, offset);
 	if (MAP_FAILED == ret) {
 		// The page is not mapped in VMPL-VM. Call original mmap.
 		if (ENOMEM == errno || ENOTSUP == errno) {
-			log_warn("fall back to hotcalls mmap");
+			log_debug("fall back to hotcalls mmap");
 			ret = mmap_orig(addr, length, prot, flags, fd, offset);
-			log_warn("mmap_orig returned %p", ret);
+			log_debug("mmap_orig returned %p", ret);
 			// Insert vma in VMPL-VM
 			if (MAP_FAILED != ret) {
 				struct vmpl_vma_t *vma;
@@ -232,7 +232,7 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 	}
 
 	// Get new_address if MREMAP_FIXED is set
-	log_warn("mremap intercepted");
+	log_debug("mremap intercepted");
 	void *new_address = NULL;
 	if (flags | MREMAP_FIXED) {
 		va_list ap;
@@ -246,7 +246,7 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 	if (MAP_FAILED == ret) {
 		// The page is not mapped in VMPL-VM. Call original mremap.
 		if (ENOMEM == errno || ENOTSUP == errno) {
-			log_warn("fall back to hotcalls mremap");
+			log_debug("fall back to hotcalls mremap");
 			ret = mremap_orig(old_address, old_size, new_size, flags, new_address);
 			// Update vma in VMPL-VM
 			if (MAP_FAILED != ret) {
@@ -271,12 +271,12 @@ int mprotect(void *addr, size_t len, int prot)
 	}
 
 	// Protect in VMPL-VM
-	log_warn("mprotect intercepted");
+	log_debug("mprotect intercepted");
 	int ret = vmpl_vm_mprotect(vmpl_mm.pgd, addr, len, prot);
 	if (0 != ret) {
 		// The VMPL-VM cannot protect the page. Call original mprotect.
 		if (ENOTSUP == errno || ENOMEM == errno) {
-			log_warn("fall back to hotcalls mprotect");
+			log_debug("fall back to hotcalls mprotect");
 			ret = mprotect_orig(addr, len, prot);
 			// Update vma in VMPL-VM
 			if (0 == ret) {
@@ -298,12 +298,12 @@ int munmap(void *addr, size_t length)
 	}
 
 	// Unmap in VMPL-VM
-	log_warn("munmap intercepted");
+	log_debug("munmap intercepted");
 	int ret = vmpl_vm_munmap(vmpl_mm.pgd, addr, length);
 	if (0 != ret) {
 		// The VMPL-VM cannot unmap the page. Call original munmap.
 		if (ENOTSUP == errno || ENOMEM == errno) {
-			log_warn("fall back to hotcalls munmap");
+			log_debug("fall back to hotcalls munmap");
 			ret = munmap_orig(addr, length);
 			// Remove vma from VMPL-VM
 			if (0 == ret) {

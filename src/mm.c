@@ -590,7 +590,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	log_debug(VMPL_VM_MMAP_FMT, addr, addr + length, prot, flags, fd, offset);
 	// Filter out unsupported file-backed mappings
 	if (fd != -1) {
-		log_warn("File-backed mappings are not supported");
+		log_debug("File-backed mappings are not supported");
 		errno = ENOTSUP;
 		return MAP_FAILED;
 	}
@@ -598,7 +598,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	// Filter out unsupported flags
 	if (flags & (MAP_SHARED | MAP_GROWSDOWN | MAP_STACK | MAP_HUGETLB
 		| MAP_LOCKED | MAP_NONBLOCK)) {
-		log_warn("Unsupported flags");
+		log_debug("Unsupported flags");
 		errno = ENOTSUP;
 		return MAP_FAILED;
 	}
@@ -611,7 +611,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 
 		// Check that the address range belongs to the VMPL VM
 		if (va_end <= vm->va_start || va_start >= vm->va_end) {
-			log_warn("The address range does not belong to the VMPL VM");
+			log_debug("The address range does not belong to the VMPL VM");
 			errno = ENOMEM;
 			return MAP_FAILED;
 		}
@@ -619,18 +619,18 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 		// Check that the address range is not already mapped
 		vma = find_vma_intersection(vm, va_start, va_end);
 		if (vma != NULL) {
-			log_warn("The address range is already mapped");
+			log_debug("The address range is already mapped");
 
 			// Support MAP_FIXED_NOREPLACE (since Linux 4.17)
 			if (flags & MAP_FIXED_NOREPLACE) {
-				log_warn("MAP_FIXED_NOREPLACE is set");
+				log_debug("MAP_FIXED_NOREPLACE is set");
 				errno = EEXIST;
 				return MAP_FAILED;
 			}
 
 			// If MAP_FIXED is set, discard any overlapping mappings
 			if (flags & MAP_FIXED) {
-				log_warn("MAP_FIXED is set, discarding overlapping mappings");
+				log_debug("MAP_FIXED is set, discarding overlapping mappings");
 				discard_overlapping_vmas(vm, va_start, va_end);
 
 				// TODO: Support MAP_FIXED, munmap the overlapping mappings
@@ -640,7 +640,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 		// Allocate new VMA for the new address range
 		vma = alloc_vma_range(vm, va_start, length);
 		if (vma == NULL) {
-			log_warn("Failed to allocate new VMA");
+			log_debug("Failed to allocate new VMA");
 			errno = ENOMEM;
 			return MAP_FAILED;
 		}
@@ -648,7 +648,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 		// Find unused virtual memory area
 		vma = alloc_vma(vm, length);
 		if (vma == NULL) {
-			log_warn("Failed to allocate new VMA");
+			log_debug("Failed to allocate new VMA");
 			errno = ENOMEM;
 			return MAP_FAILED;
 		}
@@ -669,7 +669,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 							 3, CREATE_NORMAL);
 
 	if (rc != 0) {
-		log_warn("Failed to walk the page table");
+		log_debug("Failed to walk the page table");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -677,7 +677,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	// Insert new VMA into VMPL-VM
 	bool inserted = insert_vma(vm, vma);
 	if (!inserted) {
-		log_warn("Failed to insert VMA into VMPL-VM");
+		log_debug("Failed to insert VMA into VMPL-VM");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -712,7 +712,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 
 	// Check that the address is not NULL
 	if (old_address == NULL) {
-		log_warn("old_address is NULL");
+		log_debug("old_address is NULL");
 		errno = EINVAL;
 		return MAP_FAILED;
 	}
@@ -728,7 +728,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	// Check that the old address range is mapped
 	old_vma = find_vma_intersection(vm, old_address, old_address + old_size);
 	if (old_vma == NULL) {
-		log_warn("The old address range is not mapped");
+		log_debug("The old address range is not mapped");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -736,7 +736,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	// Check that the old address range belongs to the VMPL VM
 	if ((old_address + old_size) <= vm->va_start ||
 		 old_address >= vm->va_end) {
-		log_warn("The old address range does not belong to the VMPL VM");
+		log_debug("The old address range does not belong to the VMPL VM");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -759,7 +759,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 		// Check that the new address range belongs to the VMPL VM
 		if ((new_address + new_size) <= vm->va_start ||
 			 new_address >= vm->va_end) {
-			log_warn("The new address range does not belong to the VMPL VM");
+			log_debug("The new address range does not belong to the VMPL VM");
 			errno = ENOMEM;
 			return MAP_FAILED;
 		}
@@ -767,11 +767,11 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 		// Check that the new address range is not already mapped
 		new_vma = find_vma_intersection(vm, new_address, new_address + new_size);
 		if (new_vma != NULL) {
-			log_warn("The address range is already mapped");
+			log_debug("The address range is already mapped");
 
 			// If MAP_FIXED is set, discard any overlapping mappings
 			if (flags & MREMAP_FIXED) {
-				log_warn("MAP_FIXED is set, discarding overlapping mappings");
+				log_debug("MAP_FIXED is set, discarding overlapping mappings");
 				discard_overlapping_vmas(vm, new_address, new_address + new_size);
 
 				// Support MREMAP_FIXED, munmap the overlapping mappings
@@ -792,7 +792,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 		// Allocate new VMA for the new address range
 		new_vma = alloc_vma_range(vm, new_address, new_size);
 		if (new_vma == NULL) {
-			log_warn("Failed to allocate new VMA");
+			log_debug("Failed to allocate new VMA");
 			errno = ENOMEM;
 			return MAP_FAILED;
 		}
@@ -816,7 +816,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 			// Allocate new VMA for the new address range
 			new_vma = alloc_vma(vm, new_size);
 			if (new_vma == NULL) {
-				log_warn("Failed to allocate new VMA");
+				log_debug("Failed to allocate new VMA");
 				errno = ENOMEM;
 				return MAP_FAILED;
 			}
@@ -846,7 +846,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 
 	// Remove old VMA from VMPL-VM, and insert new VMA into VMPL-VM
 	if (ret != 0) {
-		log_warn("Failed to walk the page table");
+		log_debug("Failed to walk the page table");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -863,7 +863,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	// Insert new VMA into VMPL-VM
 	bool inserted = insert_vma(vm, new_vma);
 	if (!inserted) {
-		log_warn("Failed to insert VMA into VMPL-VM");
+		log_debug("Failed to insert VMA into VMPL-VM");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -878,7 +878,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 							 &__vmpl_vm_munmap_helper, old_vma,
 							 3, CREATE_NONE);
 	if (rc != 0) {
-		log_warn("Failed to walk the page table");
+		log_debug("Failed to walk the page table");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -886,7 +886,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	// Remove old VMA from VMPL-VM
 	bool removed = remove_vma(vm, old_vma);
 	if (!removed) {
-		log_warn("Failed to remove VMA from VMPL-VM");
+		log_debug("Failed to remove VMA from VMPL-VM");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -915,7 +915,7 @@ int vmpl_vm_munmap(pte_t *root, void *addr, size_t length)
 
 	// Check that the address is not NULL
 	if (addr == NULL) {
-		log_warn("addr is NULL");
+		log_debug("addr is NULL");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -927,7 +927,7 @@ int vmpl_vm_munmap(pte_t *root, void *addr, size_t length)
 
 	// Check that the address range belongs to the VMPL VM
 	if (va_end <= vm->va_start || va_start >= vm->va_end) {
-		log_warn("The address range does not belong to the VMPL VM");
+		log_debug("The address range does not belong to the VMPL VM");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -935,7 +935,7 @@ int vmpl_vm_munmap(pte_t *root, void *addr, size_t length)
 	// Check that the address range is mapped
 	vma = find_vma_intersection(vm, va_start, va_end);
 	if (vma == NULL) {
-		log_warn("The address range is not mapped");
+		log_debug("The address range is not mapped");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -946,7 +946,7 @@ int vmpl_vm_munmap(pte_t *root, void *addr, size_t length)
 						3, CREATE_NONE);
 
 	if (ret != 0) {
-		log_warn("Failed to walk the page table");
+		log_debug("Failed to walk the page table");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -954,7 +954,7 @@ int vmpl_vm_munmap(pte_t *root, void *addr, size_t length)
 	// Remove VMA from VMPL-VM
 	bool removed = remove_vma(vm, vma);
 	if (!removed) {
-		log_warn("Failed to remove VMA from VMPL-VM");
+		log_debug("Failed to remove VMA from VMPL-VM");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -994,28 +994,28 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 
 	// Check that the address is not NULL
 	if (addr == NULL) {
-		log_warn("addr is NULL");
+		log_debug("addr is NULL");
 		errno = EINVAL;
 		return MAP_FAILED;
 	}
 
 	// EINVAL addr is not a valid pointer, or not a multiple of the system page size.
 	if ((uintptr_t)addr % PGSIZE) {
-		log_warn("addr is not a multiple of the system page size");
+		log_debug("addr is not a multiple of the system page size");
 		errno = EINVAL;
 		return MAP_FAILED;
 	}
 
 	// EINVAL Both PROT_GROWSUP and PROT_GROWSDOWN were specified in prot.
 	if (prot & (PROT_GROWSUP | PROT_GROWSDOWN)) {
-		log_warn("PROT_GROWSUP and PROT_GROWSDOWN are not supported");
+		log_debug("PROT_GROWSUP and PROT_GROWSDOWN are not supported");
 		errno = ENOTSUP;
 		return MAP_FAILED;
 	}
 
 	// EINVAL Invalid flags specified in prot.
 	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC | PROT_NONE | PROT_GROWSUP | PROT_GROWSDOWN)) {
-		log_warn("Invalid flags specified in prot");
+		log_debug("Invalid flags specified in prot");
 		errno = EINVAL;
 		return MAP_FAILED;
 	}
@@ -1027,7 +1027,7 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 
 	// Check that the address range belongs to the VMPL VM
 	if (va_end <= vm->va_start || va_start >= vm->va_end) {
-		log_warn("The address range does not belong to the VMPL VM");
+		log_debug("The address range does not belong to the VMPL VM");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -1035,7 +1035,7 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 	// Check that the address range is mapped
 	vma = find_vma_intersection(vm, va_start, va_end);
 	if (vma == NULL) {
-		log_warn("The address range is not mapped");
+		log_debug("The address range is not mapped");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
@@ -1048,7 +1048,7 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 							  &__vmpl_vm_mprotect_helper, (void *)vma,
 							  3, CREATE_NONE);
 	if (ret) {
-		log_warn("Failed to walk the page table");
+		log_debug("Failed to walk the page table");
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
