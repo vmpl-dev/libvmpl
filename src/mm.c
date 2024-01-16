@@ -1357,6 +1357,7 @@ void vmpl_mm_stats(struct vmpl_mm_t *vmpl_mm)
 	vmpl_vm_stats(&vmpl_mm->vmpl_vm);
 }
 
+#ifdef CONFIG_VMPL_TEST
 void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 {
 	int rc;
@@ -1486,3 +1487,4 @@ void vmpl_mm_test(struct vmpl_mm_t *vmpl_mm)
 	vmpl_mm_test_mmap(vmpl_mm);
 	log_success("VMPL-MM Test Passed");
 }
+#endif

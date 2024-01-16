@@ -185,7 +185,11 @@ int pgtable_init(pte_t **pgd, int fd);
 int pgtable_exit(pte_t *pgd);
 int pgtable_free(pte_t *pgd);
 void pgtable_stats(pte_t *pgd);
+#ifdef CONFIG_VMPL_TEST
 void pgtable_test(pte_t *pgd, uint64_t va);
+#else
+static inline void pgtable_test(pte_t *pgd, uint64_t va) {}
+#endif
 pte_t *pgtable_do_mapping(uint64_t phys);
 int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out);
 int pgtable_create(pte_t *root, void *va, pte_t **pte_out);

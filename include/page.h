@@ -130,6 +130,10 @@ static inline void dune_page_put(struct page *pg)
 int page_init(int fd);
 int page_exit(void);
 void page_stats(void);
+#ifdef CONFIG_VMPL_TEST
 void page_test(int vmpl_fd);
+#else
+static inline void page_test(int vmpl_fd) {}
+#endif
 
 #endif

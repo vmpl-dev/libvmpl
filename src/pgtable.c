@@ -157,6 +157,7 @@ void pgtable_stats(pte_t *pgd)
     printf("Page Table Stats:\n");
 }
 
+#ifdef CONFIG_VMPL_TEST
 /**
  * @brief  Test the page table.
  * @param pgd: The page table of the process.
@@ -182,6 +183,7 @@ void pgtable_test(pte_t *pgd, uint64_t va)
 
     return 0;
 }
+#endif
 
 /**
  * @brief Map a physical page in the page table.

@@ -100,6 +100,10 @@ extern long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec);
 extern int vmpl_mm_init(struct vmpl_mm_t *mm);
 extern int vmpl_mm_exit(struct vmpl_mm_t *mm);
 extern void vmpl_mm_stats(struct vmpl_mm_t *mm);
+#ifdef CONFIG_VMPL_TEST
 extern void vmpl_mm_test(struct vmpl_mm_t *mm);
+#else
+static inline void vmpl_mm_test(struct vmpl_mm_t *mm) {}
+#endif
 
 #endif

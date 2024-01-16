@@ -399,6 +399,7 @@ void vmpl_vm_stats(struct vmpl_vm_t *vm)
 	pthread_spin_unlock(&vm->lock);
 }
 
+#ifdef CONFIG_VMPL_TEST
 void vmpl_vm_vma_test(struct vmpl_vm_t *vm, const char *algorithm)
 {
 	enum FitAlgorithm fit_algorithm;
@@ -465,3 +466,4 @@ void vmpl_vm_test(struct vmpl_vm_t *vm)
 	log_success("VMPL-VM Test Passed");
 	vm->fit_algorithm = get_fit_algorithm(CONFIG_VMPL_FIT_ALGORITHM);
 }
+#endif

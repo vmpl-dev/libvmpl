@@ -1,6 +1,6 @@
 ## Build:
 ```bash
-./configure --enable-vmpl-signal --with-vmpl-va-size=0x8000000UL --with-vmpl-fit-algorithm=0
+./configure --enable-vmpl-signal --enable-vmpl-test --with-vmpl-va-size=0x8000000UL --with-vmpl-fit-algorithm=0
 ```
 
 ## Install:
