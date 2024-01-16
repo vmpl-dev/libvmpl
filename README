@@ -1,6 +1,6 @@
 ## Build:
 ```bash
-./configure --enable-dune-boot --enable-pgtable-selftest --enable-vmpl-pgtable --enable-vmpl-signal
+./configure --enable-vmpl-signal --with-vmpl-va-size=0x8000000UL --with-vmpl-fit-algorithm=0
 ```
 
 ## Install:

@@ -24,7 +24,49 @@ bool insert_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
 	return result.inserted;
 }
 
-/**
+bool expand_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma, uint64_t new_end)
+{
+	bool removed, inserted;
+	struct vmpl_vma_t *next_vma;
+
+	assert(vm != NULL);
+	assert(vma != NULL);
+	assert(vma->start < vma->end);
+	assert(new_end > vma->end);
+
+	// Remove the VMA from the VMA dictionary
+	removed = remove_vma(vm, vma);
+	assert(removed == true);
+
+	// Expand the VMA
+	vma->end = new_end;
+
+	// Insert the VMA into the VMA dictionary
+	inserted = insert_vma(vm, vma);
+	assert(inserted == true);
+
+	// Merge with the next VMA if possible
+	next_vma = find_next_vma(vm, vma);
+	if (next_vma && next_vma->start == vma->end) {
+		// Remove the next VMA from the VMA dictionary
+		removed = remove_vma(vm, next_vma);
+		assert(removed == true);
+
+		// Expand the VMA
+		vma->end = next_vma->end;
+
+		// Free the next VMA
+		vmpl_vma_free(next_vma);
+
+		// Insert the VMA into the VMA dictionary
+		inserted = insert_vma(vm, vma);
+		assert(inserted == true);
+	}
+
+	return true;
+}
+
+/** 
  * @brief  Lookup the first VMA that satisfies end_addr <= vma->end, NULL if not found.
  * @note VMPL-VM Low Level API
  * @param vm The VMPL-VM to search.
@@ -92,6 +134,24 @@ struct vmpl_vma_t *find_vma_intersection(struct vmpl_vm_t *vm, uint64_t start_ad
 	}
 
 	return vma;
+}
+
+struct vmpl_vma_t *find_prev_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma)
+{
+	struct vmpl_vma_t *prev_vma = NULL;
+	assert(vm != NULL);
+	assert(vma != NULL);
+	pthread_spin_lock(&vm->lock);
+	dict_itor *itor = dict_itor_new(vm->vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *current_vma = dict_itor_key(itor);
+		if (current_vma->end <= vma->start) {
+			prev_vma = current_vma;
+		}
+	}
+	dict_itor_free(itor);
+	pthread_spin_unlock(&vm->lock);
+	return prev_vma;
 }
 
 /**
@@ -278,6 +338,25 @@ int vmpl_vm_exit(struct vmpl_vm_t *vm)
 	munmap(vm->va_start, vm->va_end - vm->va_start);
 
 	return 0;
+}
+
+/**
+ * @brief Dump the VMA dictionary of the VMPL-VM.
+ * @note VMPL-VM High Level API
+ * @param vm The VMPL-VM to dump.
+ */
+void vmpl_vm_dump(struct vmpl_vm_t *vm)
+{
+	pthread_spin_lock(&vm->lock);
+	dict_itor *itor = dict_itor_new(vm->vma_dict);
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *vma = dict_itor_key(itor);
+		if (strcmp(vma->path, "[vmpl]") == 0) {
+			vmpl_vma_dump(dict_itor_key(itor));
+		}
+	}
+	dict_itor_free(itor);
+	pthread_spin_unlock(&vm->lock);
 }
 
 /**

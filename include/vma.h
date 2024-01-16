@@ -98,6 +98,16 @@ static inline void vmpl_vma_print(struct vmpl_vma_t *vma)
 			vma->offset, vma->minor, vma->major, vma->inode,
 			vma->path);
 }
+static inline void vmpl_vma_dump(struct vmpl_vma_t *vma)
+{
+	printf(VMPL_VMA_FORMAT, 
+			vma->start, vma->end, 
+			vma->prot & PROT_READ? 'r' : '-',
+			vma->prot & PROT_WRITE? 'w' : '-',
+			vma->prot & PROT_EXEC? 'x' : '-',
+			vma->offset, vma->minor, vma->major, vma->inode,
+			vma->path);
+}
 extern int get_vmpl_vma_type(const char *path);
 extern struct vmpl_vma_t *vmpl_vma_new(const char *path);
 extern struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, size_t len, uint64_t prot,
@@ -115,6 +125,13 @@ static inline bool range_in_vma(struct vmpl_vma_t *vma, uint64_t start, uint64_t
 {
 	return (vma->start <= start && end <= vma->end);
 }
+
+// vma cache
+extern dict *get_vma_cache(void);
+extern void vma_cache_add(struct vmpl_vma_t *vma);
+extern void vma_cache_remove(struct vmpl_vma_t *vma);
+extern struct vmpl_vma_t *vma_cache_lookup(uint64_t addr);
+extern void vma_cache_dump(void);
 
 // free block
 struct free_block_t {

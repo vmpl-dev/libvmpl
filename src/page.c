@@ -33,7 +33,7 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
 {
     void *addr;
     addr = mmap((void *)(PGTABLE_MMAP_BASE + phys), len,
-                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_POPULATE, fd, phys);
+                PROT_READ | PROT_WRITE, MAP_SHARED, fd, phys);
     if (addr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
     }
@@ -41,7 +41,7 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
 	// Mark as mapped in VMPL-VM
 	for (size_t i = 0; i < len; i += PGSIZE) {
 		struct page *pg = vmpl_pa2page(phys + i);
-		pg->flags = 1;
+		pg->flags = PAGE_FLAG_MAPPED;
 	}
 
 	return addr;

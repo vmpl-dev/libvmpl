@@ -14,8 +14,11 @@ int get_vmpl_vma_type(const char *path)
 		return VMPL_VMA_TYPE_ANONYMOUS;
 	if (strcmp(path, "[heap]") == 0)
 		return VMPL_VMA_TYPE_HEAP;
-	if (strncmp(path, "[stack", 6) == 0)
-		return VMPL_VMA_TYPE_STACK;
+	if (strncmp(path, "[stack", 6) == 0) {
+		// Check if the path is exactly "[stack]" or starts with "[stack:"
+		if (path[6] == '\0' || (path[6] == ':' && path[strlen(path) - 1] == ']'))
+			return VMPL_VMA_TYPE_STACK;
+	}
 	if (strcmp(path, "[vsyscall]") == 0)
 		return VMPL_VMA_TYPE_VSYSCALL;
 	if (strcmp(path, "[vdso]") == 0)
@@ -108,7 +111,7 @@ struct vmpl_vma_t *vmpl_vma_clone(struct vmpl_vma_t *vma)
 	return new_vma;
 }
 
-// Frea vma
+// Free vma
 void vmpl_vma_free(struct vmpl_vma_t *vma)
 {
 	free(vma->path);
@@ -179,10 +182,15 @@ struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2)
 		return NULL;
 	}
 
+	// Only merge VMAs if their protection flags are the same
+	if (vma1->prot != vma2->prot) {
+		return NULL;
+	}
+
 	struct vmpl_vma_t *merged_vma = malloc(sizeof(struct vmpl_vma_t));
 	merged_vma->start = vma1->start < vma2->start ? vma1->start : vma2->start;
 	merged_vma->end = vma1->end > vma2->end ? vma1->end : vma2->end;
-	merged_vma->prot = vma1->prot | vma2->prot;
+	merged_vma->prot = vma1->prot; // Since vma1->prot == vma2->prot, we can use either
 	merged_vma->offset = vma1->offset < vma2->offset ? vma1->offset : vma2->offset;
 	merged_vma->path = NULL; // TODO: Set the path if needed
 
@@ -209,13 +217,56 @@ struct vmpl_vma_t *split_vma(struct vmpl_vma_t *vma, uint64_t addr)
 
 void dump_vmpl_vma(struct vmpl_vma_t *vma)
 {
-	printf(VMPL_VMA_FORMAT, 
-			vma->start, vma->end, 
+	printf(VMPL_VMA_FORMAT,
+			vma->start, vma->end,
 			vma->prot & PROT_READ? 'r' : '-',
 			vma->prot & PROT_WRITE? 'w' : '-',
 			vma->prot & PROT_EXEC? 'x' : '-',
 			vma->offset, vma->minor, vma->major, vma->inode,
 			vma->path);
+}
+
+dict *get_vma_cache(void)
+{
+	static dict *vma_cache = NULL;
+	if (!vma_cache) {
+		vma_cache = rb_dict_new(vmpl_vma_cmp);
+	}
+	return vma_cache;
+}
+
+void vma_cache_add(struct vmpl_vma_t *vma)
+{
+	dict_insert(get_vma_cache(), vma);
+}
+
+void vma_cache_remove(struct vmpl_vma_t *vma)
+{
+	dict_remove(get_vma_cache(), vma);
+}
+
+struct vmpl_vma_t *vma_cache_lookup(uint64_t addr)
+{
+	struct vmpl_vma_t *vma = NULL;
+	dict_itor *itor = dict_itor_new(get_vma_cache());
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		vma = dict_itor_key(itor);
+		if (vma->start <= addr && addr < vma->end) {
+			break;
+		}
+	}
+	dict_itor_free(itor);
+	return vma;
+}
+
+void vma_cache_dump(void)
+{
+	dict_itor *itor = dict_itor_new(get_vma_cache());
+	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
+		struct vmpl_vma_t *vma = dict_itor_key(itor);
+		dump_vmpl_vma(vma);
+	}
+	dict_itor_free(itor);
 }
 
 // Allocate a new free block
@@ -333,8 +384,9 @@ static uint64_t next_fit(dict *vma_dict, size_t size, uint64_t va_start, uint64_
 	}
 	// If no suitable vma is found, allocate in the range [va_start, va_end)
 	if (last_end == original_last_end && va_end - last_end >= size) {
+		uint64_t result = last_end;
 		last_end += size; // Update last_end to the end of the newly allocated block
-		return original_last_end;
+		return result;
 	}
 	return 0;
 }

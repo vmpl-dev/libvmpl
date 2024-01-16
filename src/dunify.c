@@ -15,13 +15,13 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <pthread.h>
-#include <hotcalls/hotcalls.h>
 
 #include "config.h"
 #include "vc.h"
 #include "vmpl.h"
 #include "mm.h"
 #include "log.h"
+#include "vmpl-hotcalls.h"
 #include "dunify.h"
 
 // environment variables
@@ -58,7 +58,7 @@ static int (*main_orig)(int, char **, char **);
 
 static void cleanup()
 {
-	if (getenv("HOTCALLS_ENABLED")) {
+	if (hotcalls_enabled) {
 		hotcalls_teardown();
 	}
 }
@@ -198,11 +198,7 @@ int pthread_create(pthread_t *restrict res,
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	// Call original mmap
-	static typeof(&mmap) mmap_orig = NULL;
-	if (!mmap_orig)
-		mmap_orig = dlsym(RTLD_NEXT, "mmap");
-	
+	init_hook(mmap);
 	if (!need_intercept(vmpl_mm)) {
 		return mmap_orig(addr, length, prot, flags, fd, offset);
 	}
@@ -213,8 +209,9 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	if (MAP_FAILED == ret) {
 		// The page is not mapped in VMPL-VM. Call original mmap.
 		if (ENOMEM == errno || ENOTSUP == errno) {
-			log_warn("fall back to original mmap");
+			log_warn("fall back to hotcalls mmap");
 			ret = mmap_orig(addr, length, prot, flags, fd, offset);
+			log_warn("mmap_orig returned %p", ret);
 			// Insert vma in VMPL-VM
 			if (MAP_FAILED != ret) {
 				struct vmpl_vma_t *vma;
@@ -229,11 +226,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
 void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ... /* void *new_address */)
 {
-	// Call original mremap
-	static typeof(&mremap) mremap_orig = NULL;
-	if (!mremap_orig)
-		mremap_orig = dlsym(RTLD_NEXT, "mremap");
-	
+	init_hook(mremap);
 	if (!need_intercept(vmpl_mm)) {
 		return mremap_orig(old_address, old_size, new_size, flags);
 	}
@@ -245,6 +238,7 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 		va_list ap;
 		va_start(ap, flags);
 		new_address = va_arg(ap, void *);
+		va_end(ap);
 	}
 
 	// Remap in VMPL-VM
@@ -252,12 +246,12 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 	if (MAP_FAILED == ret) {
 		// The page is not mapped in VMPL-VM. Call original mremap.
 		if (ENOMEM == errno || ENOTSUP == errno) {
-			log_warn("fall back to original mremap");
-			ret = mremap_orig(old_address, old_size, new_size, flags);
+			log_warn("fall back to hotcalls mremap");
+			ret = mremap_orig(old_address, old_size, new_size, flags, new_address);
 			// Update vma in VMPL-VM
 			if (MAP_FAILED != ret) {
 				struct vmpl_vma_t *old_vma, *new_vma;
-				old_vma = find_vma_intersection(&vmpl_mm.vmpl_vm, old_address, old_size);
+				old_vma = find_vma_exact(&vmpl_mm.vmpl_vm, old_address);
 				remove_vma(&vmpl_mm.vmpl_vm, old_vma);
 				new_vma = vmpl_vma_create(ret, new_size, old_vma->flags, flags, -1, 0);
 				insert_vma(&vmpl_mm.vmpl_vm, new_vma);
@@ -271,27 +265,23 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 
 int mprotect(void *addr, size_t len, int prot)
 {
-	// Call original mprotect
-	static typeof(&mprotect) mprotect_orig = NULL;
-	if (!mprotect_orig)
-		mprotect_orig = dlsym(RTLD_NEXT, "mprotect");
-	
+	init_hook(mprotect);
 	if (!need_intercept(vmpl_mm)) {
 		return mprotect_orig(addr, len, prot);
 	}
 
 	// Protect in VMPL-VM
-	log_warn("mremap intercepted");
+	log_warn("mprotect intercepted");
 	int ret = vmpl_vm_mprotect(vmpl_mm.pgd, addr, len, prot);
 	if (0 != ret) {
 		// The VMPL-VM cannot protect the page. Call original mprotect.
 		if (ENOTSUP == errno || ENOMEM == errno) {
-			log_warn("fall back to original mprotect");
+			log_warn("fall back to hotcalls mprotect");
 			ret = mprotect_orig(addr, len, prot);
 			// Update vma in VMPL-VM
 			if (0 == ret) {
 				struct vmpl_vma_t *vma;
-				vma = find_vma_intersection(&vmpl_mm.vmpl_vm, addr, len);
+				vma = find_vma_exact(&vmpl_mm.vmpl_vm, addr);
 				vma->prot = prot;
 			}
 		}
@@ -302,11 +292,7 @@ int mprotect(void *addr, size_t len, int prot)
 
 int munmap(void *addr, size_t length)
 {
-	// Call original munmap
-	static typeof(&munmap) munmap_orig = NULL;
-	if (!munmap_orig)
-		munmap_orig = dlsym(RTLD_NEXT, "munmap");
-	
+	init_hook(munmap);
 	if (!need_intercept(vmpl_mm)) {
 		return munmap_orig(addr, length);
 	}
@@ -317,16 +303,16 @@ int munmap(void *addr, size_t length)
 	if (0 != ret) {
 		// The VMPL-VM cannot unmap the page. Call original munmap.
 		if (ENOTSUP == errno || ENOMEM == errno) {
-			log_warn("fall back to original munmap");
+			log_warn("fall back to hotcalls munmap");
 			ret = munmap_orig(addr, length);
 			// Remove vma from VMPL-VM
 			if (0 == ret) {
 				struct vmpl_vma_t *vma;
-				vma = find_vma_intersection(&vmpl_mm.vmpl_vm, addr, length);
+				vma = find_vma_exact(&vmpl_mm.vmpl_vm, addr);
 				remove_vma(&vmpl_mm.vmpl_vm, vma);
 				vmpl_vma_free(vma);
 			}
-		} 
+		}
 	}
 
 	return ret;

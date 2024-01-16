@@ -145,6 +145,12 @@ AC_ARG_ENABLE([vmpl-xsave],
               [enable_vmpl_xsave=yes])
 AM_CONDITIONAL([ENABLE_VMPL_XSAVE], [test "x$enable_vmpl_xsave" = "xyes"])
 
+AC_ARG_ENABLE([vmpl-hotcalls], [AS_HELP_STRING([--enable-vmpl-hotcalls],
+                                               [Enable hotcalls support])],
+              [enable_vmpl_hotcalls=$enableval],
+              [enable_vmpl_hotcalls=no])
+AM_CONDITIONAL([ENABLE_VMPL_HOTCALLS], [test "x$enable_vmpl_hotcalls" = "xyes"])
+
 AC_ARG_ENABLE([dune-boot],
               [AS_HELP_STRING([--enable-dune-boot],
                               [Enable dune boot support])],
@@ -247,6 +253,10 @@ fi
 
 if test "x$enable_vmpl_xsave" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_XSAVE], [1], [Enable xsave support])
+fi
+
+if test "x$enable_vmpl_hotcalls" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_HOTCALLS], [1], [Enable hotcalls support])
 fi
 
 if test "x$enable_dune_boot" = "xyes"; then

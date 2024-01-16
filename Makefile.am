@@ -5,6 +5,8 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I../vmpl-dev -include config.h
 AM_CFLAGS = -Wall -g -O3 -MD
 AM_LDFLAGS = -L. -lvmpl -lhotcalls -ldict
 
+# Specify programs to be built
+
 # Specify shared libraries to be built
 lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \

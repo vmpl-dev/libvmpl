@@ -5,11 +5,16 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/queue.h>
+#include <assert.h>
 
 #include "config.h"
 #include "types.h"
 #include "mmu-x86.h"
-#include <assert.h>
+
+typedef uint64_t physaddr_t;
+typedef uintptr_t virtaddr_t;
+
+#define PAGE_FLAG_MAPPED	0x1
 
 // -----------------------VMPL COMMON-----------------------
 SLIST_HEAD(page_head, page);
@@ -82,7 +87,10 @@ static inline void vmpl_page_get(struct page *pg)
 }
 static inline struct page * vmpl_page_get_addr(physaddr_t pa)
 {
-	struct page *pg = vmpl_pa2page(pa);
+	struct page *pg;
+	if (pa < PAGEBASE)
+		return NULL;
+	pg = vmpl_pa2page(pa);
 	if (vmpl_page_is_from_pool(pa))
 		vmpl_page_get(pg);
 	return pg;

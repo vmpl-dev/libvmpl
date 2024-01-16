@@ -46,14 +46,13 @@ static inline virtaddr_t pgtable_alloc(void)
 	
 	pa = dune_page2pa(pg);
 	va = pgtable_pa_to_va(pa);
-	log_debug("pg = 0x%lx, pa = 0x%lx, va = 0x%lx", pg, pa, va);
     assert(pa >= PAGEBASE);
     assert(va >= PGTABLE_MMAP_BASE);
     assert(va < PGTABLE_MMAP_END);
     assert(pa == (va - PGTABLE_MMAP_BASE));
     assert(pg == vmpl_pa2page(pa));
     assert(pg->flags == 1);
-    log_debug("pg->ref = %d", pg->ref);
+	log_debug("pg = 0x%lx, pa = 0x%lx, va = 0x%lx, ref = %d", pg, pa, va, pg->ref);
 	return va;
 }
 
@@ -229,8 +228,13 @@ failed:
  */
 int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 {
-	int i, j, k, l;
-	pte_t *pml4 = root, *pdpte, *pde, *pte;
+#ifdef CONFIG_PGTABLE_LA57
+    int m, i, j, k, l;
+    pte_t *pml5 = root, *pml4, *pdpte, *pde, *pte;
+#else
+	int m, i, j, k, l;
+    pte_t *pgd = root, *pml4, *pdpte, *pde, *pte;
+#endif
     uint64_t pa;
 
     assert(root != NULL);
@@ -242,20 +246,35 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 	k = PDX(1, va);
 	l = PDX(0, va);
 
+#ifdef CONFIG_PGTABLE_LA57
+    m = PDX(4, va);
+    log_debug("%p, %d, %d, %d, %d, %d", va, m, i, j, k, l);
+    log_debug("pgd[%d] = %lx", m, pgd[m]);
+    if (!pte_present(pgd[m])) {
+        if (!create)
+            return -ENOENT;
+        pml4 = pgtable_alloc();
+        log_debug("pml4 = %p", pml4);
+        pgd[m] = pte_addr(__pa(pml4)) | PTE_DEF_FLAGS;
+        log_debug("pgd[%d] = %lx", m, pgd[m]);
+    } else {
+        pml4 = pgtable_do_mapping(pte_addr(pgd[m]));
+    }
+#else
+    pml4 = pgd;
+#endif
+
     log_debug("%p, %d, %d, %d, %d", va, i, j, k, l);
-    log_debug("pml4[%d] = %lx", i, pml4[i]);
+    log_debug("pml4e[%d] = %lx", i, pml4[i]);
 	if (!pte_present(pml4[i])) {
         if (!create)
             return -ENOENT;
         pdpte = pgtable_alloc();
-        log_debug("pdpte = %p", pdpte);
         pml4[i] = pte_addr(__pa(pdpte)) | PTE_DEF_FLAGS;
-        log_debug("pml4[%d] = %lx", i, pml4[i]);
     } else {
         pdpte = pgtable_do_mapping(pte_addr(pml4[i]));
     }
 
-    // TODO: Check if the page has write permission.
     log_debug("pdpte[%d] = %lx", j, pdpte[j]);
 	if (!pte_present(pdpte[j])) {
         if (!create)
@@ -320,8 +339,27 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
  */
 int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
 {
+#ifdef CONFIG_PGTABLE_LA57
+    int m, i, j, k, l;
+    pte_t *pml5 = pgd;
+
     log_debug("%p", va);
-    pml4e_t *pml4e = pml4_offset(pgd, va);
+    pml5e_t *pml5e = pml5_offset(pml5, va);
+    if (pml5e_none(*pml5e) || pml5e_bad(*pml5e)) {
+        return -EINVAL;
+    }
+
+    if (level)
+        *level = 5;
+
+    log_debug("pml5e: %lx", *pml5e);
+    pml4e_t *pml4 = pml4_offset(pml5e, va);
+#else
+    int i, j, k, l;
+    pte_t *pml4 = pgd;
+#endif
+
+    pml4e_t *pml4e = pml4_offset(pml4, va);
     if (pml4e_none(*pml4e) || pml4e_bad(*pml4e)) {
         return -EINVAL;
     }
@@ -430,17 +468,29 @@ long remap_pfn_range(uint64_t vstart, uint64_t vend, uint64_t pstart)
 {
     int rc;
     uint64_t va = vstart, pa = pstart;
+    long num_pages = 0;
+
     while (va < vend) {
-        rc = pgtable_update_leaf_pte(pgroot, va, pa);
+        pte_t *ptep;
+        rc = pgtable_lookup(pgroot, va, true, &ptep);
         if (rc) {
-            log_err("Failed to update leaf pte");
+            log_err("Failed to lookup page table entry");
             return rc;
         }
 
-        va += PAGE_SIZE, pa += PAGE_SIZE;
+        if (pte_present(*ptep)) {
+            log_err("Page table entry already present");
+            return -EEXIST;
+        }
+
+        *ptep = pfn_pte(pa >> PAGE_SHIFT, PAGE_KERNEL);
+
+        va += PAGE_SIZE;
+        pa += PAGE_SIZE;
+        num_pages++;
     }
 
-    return (vend - vstart) / PAGE_SIZE;
+    return num_pages;
 }
 
 /**
