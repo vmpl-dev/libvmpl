@@ -210,7 +210,11 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 		// The page is not mapped in VMPL-VM. Call original mmap.
 		if (ENOMEM == errno || ENOTSUP == errno) {
 			log_debug("fall back to hotcalls mmap");
-			ret = mmap_orig(addr, length, prot, flags, fd, offset);
+			if (unlikely(!hotcalls_initialized())) {
+				ret = mmap_orig(addr, length, prot, flags, fd, offset);
+			} else {
+				ret = hotcalls_mmap(addr, length, prot, flags, fd, offset);
+			}
 			log_debug("mmap_orig returned %p", ret);
 			// Insert vma in VMPL-VM
 			if (MAP_FAILED != ret) {
@@ -247,7 +251,11 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 		// The page is not mapped in VMPL-VM. Call original mremap.
 		if (ENOMEM == errno || ENOTSUP == errno) {
 			log_debug("fall back to hotcalls mremap");
-			ret = mremap_orig(old_address, old_size, new_size, flags, new_address);
+			if (unlikely(!hotcalls_initialized())) {
+				ret = mremap_orig(old_address, old_size, new_size, flags, new_address);
+			} else {
+				ret = hotcalls_mremap(old_address, old_size, new_size, flags, new_address);
+			}
 			// Update vma in VMPL-VM
 			if (MAP_FAILED != ret) {
 				struct vmpl_vma_t *old_vma, *new_vma;
@@ -277,7 +285,11 @@ int mprotect(void *addr, size_t len, int prot)
 		// The VMPL-VM cannot protect the page. Call original mprotect.
 		if (ENOTSUP == errno || ENOMEM == errno) {
 			log_debug("fall back to hotcalls mprotect");
-			ret = mprotect_orig(addr, len, prot);
+			if (unlikely(!hotcalls_initialized())) {
+				ret = mprotect_orig(addr, len, prot);
+			} else {
+				ret = hotcalls_mprotect(addr, len, prot);
+			}
 			// Update vma in VMPL-VM
 			if (0 == ret) {
 				struct vmpl_vma_t *vma;
@@ -304,7 +316,11 @@ int munmap(void *addr, size_t length)
 		// The VMPL-VM cannot unmap the page. Call original munmap.
 		if (ENOTSUP == errno || ENOMEM == errno) {
 			log_debug("fall back to hotcalls munmap");
-			ret = munmap_orig(addr, length);
+			if (unlikely(!hotcalls_initialized())) {
+				ret = munmap_orig(addr, length);
+			} else {
+				ret = hotcalls_munmap(addr, length);
+			}
 			// Remove vma from VMPL-VM
 			if (0 == ret) {
 				struct vmpl_vma_t *vma;
