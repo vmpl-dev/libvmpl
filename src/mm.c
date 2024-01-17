@@ -281,7 +281,7 @@ static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 
 		log_debug("Allocated a physical page, va = 0x%lx, pa = 0x%lx", va, pa);
 		// Map the physical page to the virtual page.
-		*pte = pte_addr(pa) | pte_flags(*pte);
+		*pte = pte_addr(pa);
 	} else {
 		// Clear the page table entry.
 		*pte = 0;
@@ -1256,7 +1256,7 @@ long handle_anonymous_fault(uintptr_t addr, uint64_t fec, pte_t *pte)
 	}
 
 	// Map the new page
-	*pte |= PTE_ADDR(pa) | PTE_P;
+	*pte |= pte_addr(pa) | PTE_P;
 
 	// Invalidate TLB
 	vmpl_flush_tlb_one(addr);
@@ -1339,23 +1339,23 @@ long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 	}
 
 	// Find the page table entry for the faulting address
-	log_debug("Find the page table entry for the faulting address");
+	// log_debug("Find the page table entry for the faulting address %d", addr);
 	rc = pgtable_lookup(vmpl_mm.pgd, (void *)va_start, false, &pte);
 	assert(rc == 0);
 
 	// Find the VMA that contains the faulting address 
-	log_debug("Find the VMA that contains the faulting address");
+	// log_debug("Find the VMA that contains the faulting address");
 	vma = find_vma_intersection(vm, va_start, va_end);
 	assert(vma != NULL);
 
 	// If the page is an anonymous page, then we need to allocate a new page.
-	log_debug("If the page is an anonymous page, then we need to allocate a new page.");
+	// log_debug("If the page is an anonymous page, then we need to allocate a new page.");
 	if (vma->flags & MAP_ANONYMOUS) {
 		rc = handle_anonymous_fault(addr, fec, pte);
 		if (!rc)
 			return rc;
 	}
-	
+
 	// If the page is a COW page, then we need to duplicate the page.
 	log_debug("If the page is a COW page, then we need to duplicate the page.");
 	rc = handle_cow_pgflt(addr, fec, pte);
@@ -1478,6 +1478,15 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	assert(addr == tmp_addr);
 	log_success("Test mmap at a specific address passed");
 
+	// Test access to the mapped page at a specific address
+	pgtable_lookup(vmpl_mm->pgd, addr, false, &ptep);
+	log_info("Test access to the mapped page at a specific address");
+	assert(!pte_present(*ptep));
+	*(uint64_t *)(addr) = 0xdeadbeef;
+	assert(*(uint64_t *)addr == 0xdeadbeef);
+	assert(pte_present(*ptep));
+	log_success("Test access to the mapped page at a specific address passed");
+
 	// Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE.
 	log_info("Test mmap at a specific address that is already mapped with MAP_FIXED_NOREPLACE");
 	addr = mmap(tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
@@ -1489,7 +1498,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	// Test mmap at a specific address that is already mapped with MAP_FIXED.
 	log_info("Test mmap at a specific address that is already mapped with MAP_FIXED");
 	addr = mmap(tmp_addr, PGSIZE, PROT_READ | PROT_WRITE,
-						MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+				MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 	assert(addr != MAP_FAILED);
 	assert(addr == tmp_addr);
 	log_success("Test mmap at a specific address that is already mapped with MAP_FIXED passed");

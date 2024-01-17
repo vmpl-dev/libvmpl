@@ -1172,9 +1172,9 @@ int vmpl_enter(int argc, char *argv[])
 
     dune_boot(__percpu);
     vmpl_init_post(__percpu);
-    vmpl_init_stats();
     vmpl_init_test();
     vmpl_init_banner();
+    vmpl_init_stats();
 
     percpu = __percpu;
     return 0;

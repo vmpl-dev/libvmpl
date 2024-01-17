@@ -129,6 +129,7 @@ struct page * vmpl_page_alloc(int fd) {
 	pthread_mutex_unlock(&vmpl_page_mutex);
 
 	vmpl_page_get(pg);
+	num_vmpl_pages--;
 
 	return pg;
 }
@@ -139,6 +140,7 @@ void vmpl_page_free(struct page *pg)
 	pthread_mutex_lock(&vmpl_page_mutex);
 	SLIST_INSERT_HEAD(&vmpl_pages_free, pg, link);
 	pthread_mutex_unlock(&vmpl_page_mutex);
+	num_vmpl_pages++;
 }
 
 void vmpl_page_stats(void) {
@@ -225,6 +227,7 @@ struct page * dune_page_alloc(int fd)
 	pthread_mutex_unlock(&page_mutex);
 
 	dune_page_get(pg);
+	num_dune_pages--;
 
 	return pg;
 }
@@ -235,6 +238,7 @@ void dune_page_free(struct page *pg)
 	pthread_mutex_lock(&page_mutex);
 	SLIST_INSERT_HEAD(&dune_pages_free, pg, link);
 	pthread_mutex_unlock(&page_mutex);
+	num_dune_pages++;
 }
 
 void dune_page_stats(void)
