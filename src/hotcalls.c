@@ -12,11 +12,22 @@
 #include "vmpl-hotcalls.h"
 
 #ifdef CONFIG_VMPL_HOTCALLS
+static inline bool need_hotcalls(void)
+{
+	unsigned short cs;
+	__asm__ __volatile__("movw %%cs, %0" : "=r"(cs));
+	if ((cs & 0x3) == 0) {
+		return hotcalls_initialized();
+	} else {
+		return false;
+	}
+}
+
 /* Process */
 ssize_t read(int fd, void *buf, size_t count)
 {
 	init_hook(read)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return read_orig(fd, buf, count);
 	}
 
@@ -26,7 +37,7 @@ ssize_t read(int fd, void *buf, size_t count)
 ssize_t write(int fd, const void *buf, size_t count)
 {
 	init_hook(write)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return write_orig(fd, buf, count);
 	}
 
@@ -41,7 +52,7 @@ int open(const char *pathname, int flags, ...)
 	va_end(ap);
 
 	init_hook(open)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return open_orig(pathname, flags, mode);
 	}
 
@@ -56,7 +67,7 @@ int openat(int dirfd, const char *pathname, int flags, ...)
 	va_end(ap);
 
 	init_hook(openat)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return openat_orig(dirfd, pathname, flags, mode);
 	}
 
@@ -66,7 +77,7 @@ int openat(int dirfd, const char *pathname, int flags, ...)
 int close(int fd)
 {
 	init_hook(close)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return close_orig(fd);
 	}
 
@@ -81,7 +92,7 @@ int ioctl(int fd, int request, ...)
 	va_end(ap);
 
 	init_hook(ioctl)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return ioctl_orig(fd, request, argp);
 	}
 
@@ -96,7 +107,7 @@ int fcntl(int fd, int cmd, ... /* arg */)
 	va_end(ap);
 
 	init_hook(fcntl)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return fcntl_orig(fd, cmd, arg);
 	}
 
@@ -107,7 +118,7 @@ int fcntl(int fd, int cmd, ... /* arg */)
 int pkey_alloc(unsigned long flags, unsigned long init_val)
 {
 	init_hook(pkey_alloc)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return pkey_alloc_orig(flags, init_val);
 	}
 
@@ -117,7 +128,7 @@ int pkey_alloc(unsigned long flags, unsigned long init_val)
 int pkey_free(int pkey)
 {
 	init_hook(pkey_free)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return pkey_free_orig(pkey);
 	}
 
@@ -128,7 +139,7 @@ int pkey_free(int pkey)
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
 	init_hook(readv)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return readv_orig(fd, iov, iovcnt);
 	}
 
@@ -139,7 +150,7 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
 	init_hook(writev)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return writev_orig(fd, iov, iovcnt);
 	}
 
@@ -149,7 +160,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 ssize_t preadv(int fd, const struct iovec *buf, int count, off_t offset)
 {
 	init_hook(preadv)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return preadv_orig(fd, buf, count, offset);
 	}
 
@@ -159,7 +170,7 @@ ssize_t preadv(int fd, const struct iovec *buf, int count, off_t offset)
 ssize_t pwritev(int fd, const struct iovec *buf, int count, off_t offset)
 {
 	init_hook(pwritev)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return pwritev_orig(fd, buf, count, offset);
 	}
 
@@ -169,7 +180,7 @@ ssize_t pwritev(int fd, const struct iovec *buf, int count, off_t offset)
 ssize_t preadv2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
 	init_hook(preadv2)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return preadv2_orig(fd, iov, iovcnt, offset);
 	}
 
@@ -179,7 +190,7 @@ ssize_t preadv2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 ssize_t pwritev2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
 	init_hook(pwritev2)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return pwritev2_orig(fd, iov, iovcnt, offset);
 	}
 
@@ -190,7 +201,7 @@ ssize_t pwritev2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	init_hook(bind)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return bind_orig(sockfd, addr, addrlen);
 	}
 
@@ -200,7 +211,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 int listen(int sockfd, int backlog)
 {
 	init_hook(listen)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return listen_orig(sockfd, backlog);
 	}
 
@@ -210,7 +221,7 @@ int listen(int sockfd, int backlog)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
 	init_hook(accept)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return accept_orig(sockfd, addr, addrlen);
 	}
 
@@ -220,7 +231,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	init_hook(connect)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return connect_orig(sockfd, addr, addrlen);
 	}
 
@@ -230,7 +241,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 int socket(int domain, int type, int protocol)
 {
 	init_hook(socket)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return socket_orig(domain, type, protocol);
 	}
 
@@ -240,7 +251,7 @@ int socket(int domain, int type, int protocol)
 int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
 {
 	init_hook(getsockopt)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return getsockopt_orig(sockfd, level, optname, optval, optlen);
 	}
 
@@ -250,7 +261,7 @@ int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optl
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen)
 {
 	init_hook(setsockopt)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return setsockopt_orig(sockfd, level, optname, optval, optlen);
 	}
 
@@ -262,7 +273,7 @@ int epoll_wait(int epfd, struct epoll_event *events,
                 int maxevents, int timeout)
 {
 	init_hook(epoll_wait)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return epoll_wait_orig(epfd, events, maxevents, timeout);
 	}
 
@@ -274,7 +285,7 @@ int epoll_pwait(int epfd, struct epoll_event *events,
                 const sigset_t *sigmask)
 {
 	init_hook(epoll_pwait)
-	if (unlikely(!hotcalls_initialized())) {
+	if (unlikely(!need_hotcalls())) {
 		return epoll_pwait_orig(epfd, events, maxevents, timeout, sigmask);
 	}
 

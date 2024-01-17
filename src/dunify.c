@@ -194,12 +194,21 @@ int pthread_create(pthread_t *restrict res,
 }
 
 #ifdef CONFIG_VMPL_MM
-#define need_intercept(vmpl_mm) (vmpl_booted && vmpl_mm.initialized)
+static inline bool need_intercept(struct vmpl_mm_t *vmpl_mm)
+{
+	unsigned short cs;
+	__asm__ __volatile__("movw %%cs, %0" : "=r"(cs));
+	if ((cs & 0x3) == 0) {
+		return vmpl_booted && vmpl_mm->initialized;
+	} else {
+		return false;
+	}
+}
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	init_hook(mmap);
-	if (!need_intercept(vmpl_mm)) {
+	if (!need_intercept(&vmpl_mm)) {
 		return mmap_orig(addr, length, prot, flags, fd, offset);
 	}
 
@@ -231,7 +240,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ... /* void *new_address */)
 {
 	init_hook(mremap);
-	if (!need_intercept(vmpl_mm)) {
+	if (!need_intercept(&vmpl_mm)) {
 		return mremap_orig(old_address, old_size, new_size, flags);
 	}
 
@@ -274,7 +283,7 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 int mprotect(void *addr, size_t len, int prot)
 {
 	init_hook(mprotect);
-	if (!need_intercept(vmpl_mm)) {
+	if (!need_intercept(&vmpl_mm)) {
 		return mprotect_orig(addr, len, prot);
 	}
 
@@ -305,7 +314,7 @@ int mprotect(void *addr, size_t len, int prot)
 int pkey_mprotect(void *addr, size_t len, int prot, int pkey)
 {
 	init_hook(pkey_mprotect);
-	if (!need_intercept(vmpl_mm)) {
+	if (!need_intercept(&vmpl_mm)) {
 		return pkey_mprotect_orig(addr, len, prot, pkey);
 	}
 
@@ -336,7 +345,7 @@ int pkey_mprotect(void *addr, size_t len, int prot, int pkey)
 int munmap(void *addr, size_t length)
 {
 	init_hook(munmap);
-	if (!need_intercept(vmpl_mm)) {
+	if (!need_intercept(&vmpl_mm)) {
 		return munmap_orig(addr, length);
 	}
 
