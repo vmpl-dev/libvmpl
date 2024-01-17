@@ -32,6 +32,7 @@
 #define VMPL_VM_MUNMAP_FMT		"start = 0x%lx, end = 0x%lx"
 #define VMPL_VM_MPROTECT_FMT	"start = 0x%lx, end = 0x%lx, prot = 0x%lx"
 #define VMPL_VM_CLONE_FMT		"start = 0x%lx, end = 0x%lx, prot = 0x%lx, path = 0x%lx"
+#define VMPL_VM_PKEY_MPROTECT_FMT	"start = 0x%lx, end = 0x%lx, prot = 0x%lx, pkey = %d"
 
 enum {
 	CREATE_NONE = 0,
@@ -85,6 +86,7 @@ extern int vmpl_vm_munmap(pte_t *root, void *addr, size_t length);
 extern void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 							size_t new_size, int flags, ...);
 extern int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot);
+extern int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pkey);
 
 extern pte_t * vmpl_vm_clone(pte_t *root);
 extern void vmpl_vm_free(pte_t *root);

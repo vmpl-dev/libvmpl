@@ -302,6 +302,37 @@ int mprotect(void *addr, size_t len, int prot)
 	return ret;
 }
 
+int pkey_mprotect(void *addr, size_t len, int prot, int pkey)
+{
+	init_hook(pkey_mprotect);
+	if (!need_intercept(vmpl_mm)) {
+		return pkey_mprotect_orig(addr, len, prot, pkey);
+	}
+
+	// Protect in VMPL-VM
+	log_debug("pkey_mprotect intercepted");
+	int ret = vmpl_vm_pkey_mprotect(vmpl_mm.pgd, addr, len, prot, pkey);
+	if (0 != ret) {
+		// The VMPL-VM cannot protect the page. Call original pkey_mprotect.
+		if (ENOTSUP == errno || ENOMEM == errno) {
+			log_debug("fall back to hotcalls pkey_mprotect");
+			if (unlikely(!hotcalls_initialized())) {
+				ret = pkey_mprotect_orig(addr, len, prot, pkey);
+			} else {
+				ret = hotcalls_pkey_mprotect(addr, len, prot, pkey);
+			}
+			// Update vma in VMPL-VM
+			if (0 == ret) {
+				struct vmpl_vma_t *vma;
+				vma = find_vma_exact(&vmpl_mm.vmpl_vm, addr);
+				vma->prot = prot;
+			}
+		}
+	}
+
+	return ret;
+}
+
 int munmap(void *addr, size_t length)
 {
 	init_hook(munmap);

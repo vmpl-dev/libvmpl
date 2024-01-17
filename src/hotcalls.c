@@ -104,16 +104,6 @@ int fcntl(int fd, int cmd, ... /* arg */)
 }
 
 /* Memory */
-int pkey_mprotect(void *addr, size_t len, int prot, int pkey)
-{
-	init_hook(pkey_mprotect)
-	if (unlikely(!hotcalls_initialized())) {
-		return pkey_mprotect_orig(addr, len, prot, pkey);
-	}
-
-	return hotcalls_pkey_mprotect(addr, len, prot, pkey);
-}
-
 int pkey_alloc(unsigned long flags, unsigned long init_val)
 {
 	init_hook(pkey_alloc)

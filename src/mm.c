@@ -430,6 +430,30 @@ static int __vmpl_vm_mprotect_helper(const void *arg, pte_t *pte, void *va)
 }
 
 /**
+ * Change the permissions of a virtual memory page.
+ * @param arg A pointer to a pte_t structure.
+ * @param pte The page table entry to set.
+ * @param va The virtual address to change.
+ * @return int 0 on success, non-zero on failure.
+ */
+static int __vmpl_vm_pkey_mprotect_helper(const void *arg, pte_t *pte, void *va)
+{
+	pte_t *perm = (pte_t *)arg;
+
+	log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
+#ifdef CONFIG_DUNE_DEPRECATED
+	// If the page is not present, we can't change the permissions?
+	if (!(PTE_FLAGS(*pte) & PTE_P))
+		return -ENOMEM;
+#endif
+
+	// Set the protection key on the page table entry.
+	*pte |= (*perm);
+
+	return 0;
+}
+
+/**
  * Free a page table entry.
  * @param arg A pointer to a pte_t structure.
  * @param pte The page table entry to set.
@@ -1058,6 +1082,58 @@ int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot)
 	return 0;
 }
 
+/**
+ * @brief Change the permissions of virtual memory pages.
+ * @note Note: len must be a multiple of PGSIZE.
+ * @param root The root of the page table.
+ * @param addr The virtual address to change.
+ * @param len The length of the mapping.
+ * @param prot The permissions to set.
+ * @param pkey The protection key to set.
+ * @return int 0 on success, non-zero on failure.
+ */
+int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pkey)
+{
+	int ret = 0;
+	void *va_start, *va_end;
+	pte_t perm;
+
+	// Perform the same checks as vmpl_vm_mprotect
+	ret = vmpl_vm_mprotect(root, addr, len, prot);
+	if (ret) {
+		log_debug("vmpl_vm_mprotect failed");
+		return ret;
+	}
+
+	// Check that the protection key is valid
+	if (pkey < 0 || pkey >= 16) {
+		log_debug("Invalid protection key");
+		errno = EINVAL;
+		return MAP_FAILED;
+	}
+
+	// Align address and length
+	va_start = (void *)PAGE_ALIGN_DOWN((uintptr_t)addr);
+	va_end = (void *)PAGE_ALIGN_UP((uintptr_t)addr + len);
+	perm = pkey << PTE_PKEY_SHIFT;
+
+	// Call the pkey_mprotect_helper for each page in the range [addr, addr + len)
+	log_debug(VMPL_VM_PKEY_MPROTECT_FMT, va_start, va_end, prot, pkey);
+	ret = __vmpl_vm_page_walk(root, va_start, va_end - 1,
+							  &__vmpl_vm_pkey_mprotect_helper, (void *)perm,
+							  3, CREATE_NONE);
+	if (ret) {
+		log_debug("Failed to walk the page table");
+		errno = ENOMEM;
+		return MAP_FAILED;
+	}
+
+	// Flush TLB Entries
+	vmpl_flush_tlb();
+
+	return 0;
+}
+
 #ifdef CONFIG_DUNE_BOOT
 /**
  * @brief Clone a page table.
@@ -1426,6 +1502,17 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	assert(vma != NULL);
 	assert(vma->prot == PROT_READ);
 	log_success("Test mprotect passed");
+
+#ifdef CONFIG_VMPL_PGTABLE_PROTECTION
+	// Test pkey_mprotect
+	log_info("Test pkey_mprotect");
+	rc = pkey_mprotect(addr, PGSIZE, PROT_READ, 0);
+	assert(rc == 0);
+	vma = find_vma_intersection(vm, addr, addr + PGSIZE);
+	assert(vma != NULL);
+	assert(vma->prot == PROT_READ);
+	log_success("Test pkey_mprotect passed");
+#endif
 
 	// Test mremap
 	log_info("Test mremap");

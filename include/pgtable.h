@@ -34,6 +34,7 @@ typedef uint64_t pte_t;
 #define PAGE_ALIGN_UP(x) PAGE_ALIGN(x)
 #define PAGE_ALIGN_DOWN(x) ((x) & ~(PAGE_SIZE - 1))
 #define PAGE_MASK(x) ((x) & (PAGE_SIZE - 1))
+#define PTE_PKEY_SHIFT 59
 
 #ifdef CONFIG_PGTABLE_LA57
 #define P4D_PRESENT (1UL << 0)
