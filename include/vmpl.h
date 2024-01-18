@@ -87,6 +87,13 @@ struct dune_tf {
 	uint16_t pad3[3];
 } __attribute__((packed));
 
+#define ARG0(tf) ((tf)->rdi)
+#define ARG1(tf) ((tf)->rsi)
+#define ARG2(tf) ((tf)->rdx)
+#define ARG3(tf) ((tf)->rcx)
+#define ARG4(tf) ((tf)->r8)
+#define ARG5(tf) ((tf)->r9)
+
 typedef void (*dune_intr_cb) (struct dune_tf *tf);
 typedef void (*dune_pgflt_cb) (uintptr_t addr, uint64_t fec, struct dune_tf *tf);
 typedef void (*dune_syscall_cb) (struct dune_tf *tf);
@@ -115,6 +122,12 @@ extern int dune_register_intr_handler(int vec, dune_intr_cb cb);
 extern int dune_register_signal_handler(int signum, dune_intr_cb cb);
 extern void dune_register_pgflt_handler(dune_pgflt_cb cb);
 extern void dune_register_syscall_handler(dune_syscall_cb cb);
+
+extern void dune_pop_trap_frame(struct dune_tf *tf);
+extern int dune_jump_to_user(struct dune_tf *tf);
+extern void dune_ret_from_user(int ret) __attribute__((noreturn));
+extern void dune_dump_trap_frame(struct dune_tf *tf);
+extern void dune_passthrough_syscall(struct dune_tf *tf);
 
 // fault handling
 extern sighandler_t dune_signal(int sig, sighandler_t cb);

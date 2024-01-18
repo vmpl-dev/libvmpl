@@ -469,7 +469,11 @@ static void setup_syscall(struct dune_percpu *percpu)
 #endif
 }
 #else
-static void setup_syscall(struct dune_percpu *percpu) { }
+static void setup_syscall(struct dune_percpu *percpu)
+{
+    log_info("setup syscall");
+    wrmsrl(MSR_LSTAR, __dune_syscall);
+}
 #endif
 
 #ifdef CONFIG_REMAP_SYSCALL

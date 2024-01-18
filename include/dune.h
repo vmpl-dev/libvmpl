@@ -4,10 +4,15 @@
 #include "vmpl.h"
 #include "mm.h"
 
-#define dune_flush_tlb() flush_tlb()
+#define ptent_t             pte_t
+#define PTE_ADDR            pte_addr
+#define dune_flush_tlb()    flush_tlb()
+#define dune_printf         printf
+#define dune_puts           puts
+#define dune_mmap           mmap
+#define dune_die            exit
 
-#define dune_fd vmpl_fd
-#define pgroot  this_pgd
+#define dune_fd             vmpl_fd
 
 #define dune_enter()          vmpl_enter(1, NULL)
 #define dune_init_and_enter() vmpl_enter(1, NULL)
@@ -24,7 +29,7 @@
 
 #define dune_vm_clone		vmpl_vm_clone
 #define dune_vm_free		vmpl_vm_free
-#define dune_vm_default_pgflt_handler	vmpl_vm_default_pgflt_handler
+#define dune_vm_default_pgflt_handler	vmpl_mm_default_pgflt_handler
 
 #define dune_vm_page_walk	vmpl_vm_page_walk
 

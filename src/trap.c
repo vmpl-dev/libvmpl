@@ -149,6 +149,13 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 	printf("dune: --- End Trap Dump ---\n");
 }
 
+void dune_passthrough_syscall(struct dune_tf *tf)
+{
+	int ret;
+	ret = syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
+	tf->rax = ret;
+}
+
 void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {

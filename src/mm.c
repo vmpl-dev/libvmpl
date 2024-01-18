@@ -591,6 +591,28 @@ int vmpl_vm_map_pages(pte_t *root, void *va, size_t len, int perm)
 	return ret;
 }
 
+int vmpl_vm_insert_page(pte_t *root, void *va, struct page *pg, int perm)
+{
+	return -1;
+}
+
+struct page * vmpl_vm_lookup_page(pte_t *root, void *va)
+{
+	int rc;
+	pte_t *ptep;
+	rc = pgtable_lookup(root, va, false, &ptep);
+	if (rc != 0) {
+		return NULL;
+	}
+
+	return vmpl_pa2page(pte_addr(*ptep));
+}
+
+int vmpl_vm_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
+{
+	return pgtable_lookup(root, va, create, pte_out);
+}
+
 /**
  * @brief This is a prologue before redirecting `mmap` to the guest OS.
  * @note Note: This function is not implemented.
