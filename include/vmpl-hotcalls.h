@@ -91,45 +91,20 @@ static inline long hotcalls6(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_ar
     return hotcalls_call(&args);
 }
 
-/* Process */
-ssize_t hotcalls_read(int fd, void *buf, size_t count);
-ssize_t hotcalls_write(int fd, const void *buf, size_t count);
-int hotcalls_open(const char *pathname, int flags, mode_t mode);
-int hotcalls_openat(int dirfd, const char *pathname, int flags, mode_t mode);
-int hotcalls_close(int fd);
-int hotcalls_fcntl(int fd, int cmd, ... /* arg */);
-
 /* Memory */
-void *hotcalls_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-int hotcalls_mprotect(void *addr, size_t len, int prot);
-int hotcalls_munmap(void *addr, size_t length);
-void *hotcalls_mremap(void *old_address, size_t old_size, size_t new_size, int flags, void *new_address);
-int hotcalls_pkey_mprotect(void *addr, size_t len, int prot, int pkey);
-int hotcalls_pkey_alloc(unsigned long flags, unsigned long init_val);
-int hotcalls_pkey_free(int pkey);
+#define hotcalls_mmap(addr, length, prot, flags, fd, offset) \
+    hotcalls6(SYS_mmap, addr, length, prot, flags, fd, offset)
 
-/* File */
-int hotcalls_ioctl(int fd, unsigned long request, ...);
-ssize_t hotcalls_readv(int fd, const struct iovec *iov, int iovcnt);
-ssize_t hotcalls_writev(int fd, const struct iovec *iov, int iovcnt);
-ssize_t hotcalls_preadv(int fd, void *buf, size_t count, off_t offset);
-ssize_t hotcalls_pwritev(int fd, const void *buf, size_t count, off_t offset);
-ssize_t hotcalls_preadv2(int fd, const struct iovec *iov, int iovcnt, off_t offset);
-ssize_t hotcalls_pwritev2(int fd, const struct iovec *iov, int iovcnt, off_t offset);
+#define hotcalls_mprotect(addr, len, prot) \
+    hotcalls3(SYS_mprotect, addr, len, prot)
 
-/* Socket */
-int hotcalls_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int hotcalls_listen(int sockfd, int backlog);
-int hotcalls_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-int hotcalls_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int hotcalls_socket(int domain, int type, int protocol);
-int hotcalls_getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
-int hotcalls_setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
+#define hotcalls_munmap(addr, length) \
+    hotcalls2(SYS_munmap, addr, length)
 
-/* Epoll */
-int hotcalls_epoll_wait(int epfd, struct epoll_event *events,
-                int maxevents, int timeout);
-int hotcalls_epoll_pwait(int epfd, struct epoll_event *events,
-                int maxevents, int timeout,
-                const sigset_t *sigmask);
+#define hotcalls_mremap(old_address, old_size, new_size, flags, new_address) \
+    hotcalls5(SYS_mremap, old_address, old_size, new_size, flags, new_address)
+
+#define hotcalls_pkey_mprotect(addr, len, prot, pkey) \
+    hotcalls4(SYS_pkey_mprotect, addr, len, prot, pkey)
+
 #endif // __VMPL_HOTCALLS_H__

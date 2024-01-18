@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "config.h"
 #include "vc.h"

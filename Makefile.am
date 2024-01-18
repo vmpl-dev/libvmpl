@@ -12,7 +12,6 @@ lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
                     src/vmpl-ioctl.c \
-                    src/vmpl-hotcalls.c \
                     src/page.c \
                     src/pgtable.c \
                     src/vma.c \
