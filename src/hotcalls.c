@@ -122,6 +122,74 @@ int lstat(const char *pathname, struct stat *statbuf)
     return hotcalls2(SYS_lstat, pathname, statbuf);
 }
 
+#ifndef CONFIG_VMPL_MM
+// Wrapper for mmap
+void *mmap(void *addr, size_t length, int prot, int flags,
+           int fd, off_t offset)
+{
+    init_hook(mmap);
+    if (unlikely(!need_hotcalls())) {
+        return mmap_orig(addr, length, prot, flags, fd, offset);
+    }
+
+    return (void *)hotcalls6(SYS_mmap, addr, length, prot, flags, fd, offset);
+}
+
+// Wrapper for mprotect
+int mprotect(void *addr, size_t len, int prot)
+{
+    init_hook(mprotect);
+    if (unlikely(!need_hotcalls())) {
+        return mprotect_orig(addr, len, prot);
+    }
+
+    return hotcalls3(SYS_mprotect, addr, len, prot);
+}
+
+// Wrapper for munmap
+int munmap(void *addr, size_t length)
+{
+    init_hook(munmap);
+    if (unlikely(!need_hotcalls())) {
+        return munmap_orig(addr, length);
+    }
+
+    return hotcalls2(SYS_munmap, addr, length);
+}
+
+// Wrapper for mremap
+void *mremap(void *old_address, size_t old_size,
+             size_t new_size, int flags, ... /* void *new_address */)
+{
+    void *new_address = NULL;
+	if (flags | MREMAP_FIXED) {
+		va_list ap;
+		va_start(ap, flags);
+		new_address = va_arg(ap, void *);
+		va_end(ap);
+	}
+
+    init_hook(mremap);
+    if (unlikely(!need_hotcalls())) {
+        return mremap_orig(old_address, old_size, new_size, flags, new_address);
+    }
+
+    return (void *)hotcalls5(SYS_mremap, old_address, old_size, new_size, flags, new_address);
+}
+
+// Wrapper for pkey_mprotect
+int pkey_mprotect(void *addr, size_t len, int prot, int pkey)
+{
+    init_hook(pkey_mprotect);
+    if (unlikely(!need_hotcalls())) {
+        errno = -ENOSYS;
+        return -1;
+    }
+
+    return hotcalls4(SYS_pkey_mprotect, addr, len, prot, pkey);
+}
+#endif
+
 int brk(void *addr)
 {
 	init_hook(brk);

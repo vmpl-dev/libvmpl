@@ -577,7 +577,6 @@ static int setup_ghcb(struct dune_percpu *percpu) {
 }
 #endif
 
-#ifdef CONFIG_VMPL_MM
 /**
  * @brief  Setup stack for VMPL library
  * @note   
@@ -668,12 +667,6 @@ static int setup_mm(struct dune_percpu *percpu)
 
     return 0;
 }
-#else
-static int setup_mm(struct dune_percpu *percpu) {
-    log_warn("setup mm not supported");
-    return 0;
-}
-#endif
 
 #ifdef CONFIG_VMPL_XSAVE
 #define XSAVE_SIZE 4096
