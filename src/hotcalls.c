@@ -122,6 +122,28 @@ int lstat(const char *pathname, struct stat *statbuf)
     return hotcalls2(SYS_lstat, pathname, statbuf);
 }
 
+// poll
+int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    init_hook(poll);
+    if (unlikely(!need_hotcalls())) {
+        return poll_orig(fds, nfds, timeout);
+    }
+
+    return hotcalls3(SYS_poll, fds, nfds, timeout);
+}
+
+// lseek
+int lseek(int fd, off_t offset, int whence)
+{
+    init_hook(lseek);
+    if (unlikely(!need_hotcalls())) {
+        return lseek_orig(fd, offset, whence);
+    }
+
+    return hotcalls3(SYS_lseek, fd, offset, whence);
+}
+
 #ifndef CONFIG_VMPL_MM
 // Wrapper for mmap
 void *mmap(void *addr, size_t length, int prot, int flags,
@@ -257,6 +279,66 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 	return hotcalls3(SYS_writev, fd, iov, iovcnt);
 }
 
+int access(const char *pathname, int mode)
+{
+    init_hook(access);
+    if (unlikely(!need_hotcalls())) {
+        return access_orig(pathname, mode);
+    }
+
+    return hotcalls2(SYS_access, pathname, mode);
+}
+
+int pipe(int pipefd[2])
+{
+    init_hook(pipe);
+    if (unlikely(!need_hotcalls())) {
+        return pipe_orig(pipefd);
+    }
+
+    return hotcalls1(SYS_pipe, pipefd);
+}
+
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)
+{
+    init_hook(select);
+    if (unlikely(!need_hotcalls())) {
+        return select_orig(nfds, readfds, writefds, exceptfds, timeout);
+    }
+
+    return hotcalls5(SYS_select, nfds, readfds, writefds, exceptfds, timeout);
+}
+
+int msync(void *addr, size_t length, int flags)
+{
+    init_hook(msync);
+    if (unlikely(!need_hotcalls())) {
+        return msync_orig(addr, length, flags);
+    }
+
+    return hotcalls3(SYS_msync, addr, length, flags);
+}
+
+int mincore(void *addr, size_t length, unsigned char *vec)
+{
+    init_hook(mincore);
+    if (unlikely(!need_hotcalls())) {
+        return mincore_orig(addr, length, vec);
+    }
+
+    return hotcalls3(SYS_mincore, addr, length, vec);
+}
+
+int madvise(void *addr, size_t length, int advice)
+{
+    init_hook(madvise);
+    if (unlikely(!need_hotcalls())) {
+        return madvise_orig(addr, length, advice);
+    }
+
+    return hotcalls3(SYS_madvise, addr, length, advice);
+}
+
 // shmget
 int shmget(key_t key, size_t size, int shmflg)
 {
@@ -307,6 +389,36 @@ int dup2(int oldfd, int newfd)
     }
 
     return hotcalls2(SYS_dup2, oldfd, newfd);
+}
+
+int getitimer(int which, struct itimerval *value)
+{
+    init_hook(getitimer);
+    if (unlikely(!need_hotcalls())) {
+        return getitimer_orig(which, value);
+    }
+
+    return hotcalls2(SYS_getitimer, which, value);
+}
+
+unsigned int alarm(unsigned int seconds)
+{
+    init_hook(alarm);
+    if (unlikely(!need_hotcalls())) {
+        return alarm_orig(seconds);
+    }
+
+    return hotcalls1(SYS_alarm, seconds);
+}
+
+int setitimer(int which, const struct itimerval *value, struct itimerval *old_value)
+{
+    init_hook(setitimer);
+    if (unlikely(!need_hotcalls())) {
+        return setitimer_orig(which, value, old_value);
+    }
+
+    return hotcalls3(SYS_setitimer, which, value, old_value);
 }
 
 // Hotcalls wrapper for getpid
@@ -827,6 +939,66 @@ clock_t times(struct tms *buf)
     }
 
     return hotcalls1(SYS_times, buf);
+}
+
+long ptrace(int request, pid_t pid, void *addr, void *data)
+{
+    init_hook(ptrace);
+    if (unlikely(!need_hotcalls())) {
+        return ptrace_orig(request, pid, addr, data);
+    }
+
+    return hotcalls4(SYS_ptrace, request, pid, addr, data);
+}
+
+int syslog(int type, const char *bufp, int len)
+{
+    init_hook(syslog);
+    if (unlikely(!need_hotcalls())) {
+        return syslog_orig(type, bufp, len);
+    }
+
+    return hotcalls3(SYS_syslog, type, bufp, len);
+}
+
+int utime(const char *filename, const struct utimbuf *times)
+{
+    init_hook(utime);
+    if (unlikely(!need_hotcalls())) {
+        return utime_orig(filename, times);
+    }
+
+    return hotcalls2(SYS_utime, filename, times);
+}
+
+int mknod(const char *pathname, mode_t mode, dev_t dev)
+{
+    init_hook(mknod);
+    if (unlikely(!need_hotcalls())) {
+        return mknod_orig(pathname, mode, dev);
+    }
+
+    return hotcalls3(SYS_mknod, pathname, mode, dev);
+}
+
+int uselib(const char *library)
+{
+    init_hook(uselib);
+    if (unlikely(!need_hotcalls())) {
+        return uselib_orig(library);
+    }
+
+    return hotcalls1(SYS_uselib, library);
+}
+
+int personality(unsigned long persona)
+{
+    init_hook(personality);
+    if (unlikely(!need_hotcalls())) {
+        return personality_orig(persona);
+    }
+
+    return hotcalls1(SYS_personality, persona);
 }
 
 // Hotcalls wrapper for ustat
@@ -1360,6 +1532,32 @@ int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsigned int
     return hotcalls4(SYS_sendmmsg, sockfd, msgvec, vlen, flags);
 }
 
+ssize_t process_vm_readv(pid_t pid,
+                          const struct iovec *lvec, unsigned long liovcnt,
+                          const struct iovec *rvec, unsigned long riovcnt,
+                          unsigned long flags)
+{
+    init_hook(process_vm_readv);
+    if (unlikely(!need_hotcalls())) {
+        return process_vm_readv_orig(pid, lvec, liovcnt, rvec, riovcnt, flags);
+    }
+
+    return hotcalls6(SYS_process_vm_readv, pid, lvec, liovcnt, rvec, riovcnt, flags);
+}
+
+ssize_t process_vm_writev(pid_t pid,
+                           const struct iovec *lvec, unsigned long liovcnt,
+                           const struct iovec *rvec, unsigned long riovcnt,
+                           unsigned long flags)
+{
+    init_hook(process_vm_writev);
+    if (unlikely(!need_hotcalls())) {
+        return process_vm_writev_orig(pid, lvec, liovcnt, rvec, riovcnt, flags);
+    }
+
+    return hotcalls6(SYS_process_vm_writev, pid, lvec, liovcnt, rvec, riovcnt, flags);
+}
+
 // Hotcalls wrapper for renameat2
 int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags)
 {
@@ -1391,6 +1589,37 @@ ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
     }
 
     return hotcalls3(SYS_getrandom, buf, buflen, flags);
+}
+
+int memfd_create(const char *name, unsigned int flags)
+{
+    init_hook(memfd_create);
+    if (unlikely(!need_hotcalls())) {
+        return memfd_create_orig(name, flags);
+    }
+
+    return hotcalls2(SYS_memfd_create, name, flags);
+}
+
+int mlock2(const void *addr, size_t length, int flags)
+{
+    init_hook(mlock2);
+    if (unlikely(!need_hotcalls())) {
+        return mlock2_orig(addr, length, flags);
+    }
+
+    return hotcalls3(SYS_mlock2, addr, length, flags);
+}
+
+ssize_t copy_file_range(int fd_in, loff_t *off_in, int fd_out,
+                        loff_t *off_out, size_t len, unsigned int flags)
+{
+    init_hook(copy_file_range);
+    if (unlikely(!need_hotcalls())) {
+        return copy_file_range_orig(fd_in, off_in, fd_out, off_out, len, flags);
+    }
+
+    return hotcalls6(SYS_copy_file_range, fd_in, off_in, fd_out, off_out, len, flags);
 }
 
 ssize_t preadv2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
