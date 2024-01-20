@@ -6,6 +6,10 @@ AM_CFLAGS = -Wall -g -O3 -MD
 AM_LDFLAGS = -L. -lvmpl -lhotcalls -ldict
 
 # Specify programs to be built
+bin_PROGRAMS = test_mmap test_heap test_mem
+test_mmap_SOURCES = tests/mmap.c
+test_heap_SOURCES = tests/heap.c
+test_mem_SOURCES = tests/mem.c
 
 # Specify shared libraries to be built
 lib_LTLIBRARIES = libvmpl.la libdunify.la
