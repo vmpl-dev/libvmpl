@@ -31,8 +31,13 @@ extern struct page *pages;
 extern int num_dune_pages;
 extern int num_vmpl_pages;
 
+#ifdef CONFIG_DUNE_BOOT
 #define PAGEBASE	0x100000000 /* 4 GB start */
 #define MAX_PAGES	(1ul << 20) /* 4 GB of memory */
+#else
+#define PAGEBASE	0x0			/* 0 GB start */
+#define MAX_PAGES	(8ul << 20) /* 8 GB of memory */
+#endif
 
 extern void *do_mapping(int fd, uint64_t phys, size_t len);
 static inline void __get_page(struct page *pg)

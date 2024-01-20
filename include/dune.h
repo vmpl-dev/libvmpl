@@ -6,6 +6,7 @@
 
 #define ptent_t             pte_t
 #define PTE_ADDR            pte_addr
+#define load_cr3            pgtable_load_cr3
 #define dune_flush_tlb()    flush_tlb()
 #define dune_printf         printf
 #define dune_puts           puts

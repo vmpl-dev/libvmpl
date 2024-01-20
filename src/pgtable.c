@@ -185,6 +185,16 @@ void pgtable_test(pte_t *pgd, uint64_t va)
 }
 #endif
 
+void pgtable_load_cr3(uint64_t cr3)
+{
+    physaddr_t pa;
+    pa = pgtable_va_to_pa(pte_addr(cr3));
+    cr3 &= ~ADDR_MASK;
+    cr3 |= pa;
+    asm volatile("int3");
+    load_cr3(cr3);
+}
+
 /**
  * @brief Map a physical page in the page table.
  * @note The page table is linearly mapped to the virtual address space of the process, such that

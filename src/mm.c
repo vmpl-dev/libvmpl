@@ -197,7 +197,7 @@ int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
 					  new_dir, *pte, cur_va, level);
 			memset(new_dir, 0, PGSIZE);
 			uint64_t pa = pgtable_va_to_pa(new_dir);
-			*pte = pte_addr(pa) | PTE_DEF_FLAGS | PTE_C;
+			*pte = pte_addr(pa) | PTE_DEF_FLAGS;
 		} else {
 			new_dir = pgtable_do_mapping(pte_addr(*pte));
 			if (!new_dir)
@@ -261,9 +261,9 @@ static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 
 	log_debug("va = 0x%lx, prot = 0x%lx, pte = 0x%lx", va, vma->prot, *pte);
 	if (vma->prot & PROT_EXEC)
-		perm = PTE_DEF_FLAGS;
+		perm = PTE_VMPL_FLAGS;
 	else
-		perm = PTE_DEF_FLAGS | PTE_NX;
+		perm = PTE_VMPL_FLAGS | PTE_NX;
 
 	// Support MAP_POPULATE flags.
 	if (vma->flags & MAP_POPULATE) {
@@ -285,8 +285,6 @@ static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 	} else {
 		// Clear the page table entry.
 		*pte = 0;
-		// Clear the present bit, since we are not mapping the page.
-		perm &= ~PTE_P;
 	}
 
 out:
@@ -315,14 +313,12 @@ static int __vmpl_vm_mremap_helper(const void *arg, pte_t *pte, void *va)
 	// These are the pages that are not present in the old mapping.
 	if (offset >= mremap_arg->old_size) {
 		if (mremap_arg->prot & PROT_EXEC)
-			perm = PTE_DEF_FLAGS;
+			perm = PTE_VMPL_FLAGS;
 		else
-			perm = PTE_DEF_FLAGS | PTE_NX;
+			perm = PTE_VMPL_FLAGS | PTE_NX;
 		// Simply popluate the new page table entry.
 		log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
 		*pte |= perm;
-		// Clear the present bit, since we are not mapping the page.
-		*pte &= ~PTE_P;
 		log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
 		return 0;
 	}
@@ -648,6 +644,10 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 		errno = ENOTSUP;
 		return MAP_FAILED;
 	}
+
+	/* force arch specific MAP_FIXED handling in get_unmapped_area */
+	if (flags & MAP_FIXED_NOREPLACE)
+		flags |= MAP_FIXED;
 
 	// Check that the address is not NULL
 	if (addr != NULL) {
@@ -1271,6 +1271,11 @@ long handle_anonymous_fault(uintptr_t addr, uint64_t fec, pte_t *pte)
 		return -EEXIST;
 	}
 
+	// Check if the page belongs to vmpl-mm.
+	if (!pte_vmpl(*pte)) {
+		return -ENOENT;
+	}
+
 	// Allocate a new page
 	phys_addr_t pa = alloc_phys_page();
 	if (pa == NULL) {
@@ -1379,7 +1384,6 @@ long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 	}
 
 	// If the page is a COW page, then we need to duplicate the page.
-	log_debug("If the page is a COW page, then we need to duplicate the page.");
 	rc = handle_cow_pgflt(addr, fec, pte);
 	if (!rc)
 		return rc;

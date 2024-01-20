@@ -436,7 +436,7 @@ void vmpl_vm_vma_test(struct vmpl_vm_t *vm, const char *algorithm)
 		va_start = vm->va_start + i * 0x1000;
 		va_end = va_start + 0x1000;
 
-		vma = find_vma(vm, va_start);
+		vma = find_vma_exact(vm, va_start);
 		assert(vma != NULL);
 		log_debug("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
 		assert(vma->start == va_start && vma->end == va_end);

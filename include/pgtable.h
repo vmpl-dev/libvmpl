@@ -92,6 +92,7 @@ typedef uint64_t pte_t;
 #define PTE_C       BIT_64(51)   /* Encrypted page */
 #define PTE_AVAIL2  GENMASK_ULL(63, 52) /* Available for software use */
 #define PTE_NX      BIT_64(63)   /* No execute: only if NX feature present */
+#define ADDR_MASK   GENMASK_ULL(50, 12) /* Address mask */
 
 #define PAGE_PRESENT  PTE_P
 #define PAGE_RW       PTE_W
@@ -107,7 +108,7 @@ typedef uint64_t pte_t;
 #define PTE_BAD   (1UL << 1)
 
 #define page_address(page) ((page) << 12)
-#define pte_addr(pte) ((pte) & 0x0007fffffffff000UL)
+#define pte_addr(pte) ((pte) & ADDR_MASK)
 #define pfn2page(pfn) ((pfn) << 12)
 #define page2pfn(page) ((page) >> 12)
 
@@ -152,6 +153,7 @@ typedef uint64_t pte_t;
 #define pte_write(pte)     ((pte) & PTE_W)
 
 #define pte_big(pte)       ((pte) & 0x80)
+#define pte_vmpl(pte)      ((pte) & PTE_VMPL)
 #endif
 
 #define pte_flags(pte) ((pte) & 0xfffUL)
@@ -170,6 +172,7 @@ typedef uint64_t pte_t;
 
 #define PDADDR(n, i)	(((unsigned long) (i)) << PDSHIFT(n))
 #define PTE_DEF_FLAGS	(PTE_P | PTE_W | PTE_U | PTE_C)
+#define PTE_VMPL_FLAGS  (PTE_W | PTE_U | PTE_C| PTE_VMPL)
 #define LGPGSIZE	(1 << (PGSHIFT + NPTBITS))
 
 typedef uint64_t PhysAddr;
@@ -191,6 +194,7 @@ void pgtable_test(pte_t *pgd, uint64_t va);
 #else
 static inline void pgtable_test(pte_t *pgd, uint64_t va) {}
 #endif
+void pgtable_load_cr3(uint64_t cr3);
 pte_t *pgtable_do_mapping(uint64_t phys);
 int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out);
 int pgtable_create(pte_t *root, void *va, pte_t **pte_out);
