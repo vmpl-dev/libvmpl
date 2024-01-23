@@ -179,12 +179,12 @@ AC_ARG_ENABLE([dump-details],
               [enable_dump_details=no])
 AM_CONDITIONAL([ENABLE_DUMP_DETAILS], [test "x$enable_dump_details" = "xyes"])
 
-AC_ARG_ENABLE([pgtbale-la57],
-              [AS_HELP_STRING([--enable-pgtbale-la57],
-                              [Enable pgtbale la57 support])],
-              [enable_pgtbale_la57=$enableval],
-              [enable_pgtbale_la57=no])
-AM_CONDITIONAL([ENABLE_PGTBALE_LA57], [test "x$enable_pgtbale_la57" = "xyes"])
+AC_ARG_ENABLE([pgtable-la57],
+              [AS_HELP_STRING([--enable-pgtable-la57],
+                              [Enable pgtable la57 support])],
+              [enable_pgtable_la57=$enableval],
+              [enable_pgtable_la57=no])
+AM_CONDITIONAL([ENABLE_PGTABLE_LA57], [test "x$enable_pgtable_la57" = "xyes"])
 
 AC_ARG_ENABLE([stack-trace],
               [AS_HELP_STRING([--enable-stack-trace],
@@ -275,8 +275,8 @@ if test "x$enable_dump_details" = "xyes"; then
     AC_DEFINE([CONFIG_DUMP_DETAILS], [1], [Enable dump details support])
 fi
 
-if test "x$enable_pgtbale_la57" = "xyes"; then
-    AC_DEFINE([CONFIG_PGTBALE_LA57], [1], [Enable pgtbale la57 support])
+if test "x$enable_pgtable_la57" = "xyes"; then
+    AC_DEFINE([CONFIG_PGTABLE_LA57], [1], [Enable pgtable la57 support])
 fi
 
 if test "x$enable_stack_trace" = "xyes"; then

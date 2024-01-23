@@ -66,7 +66,7 @@ struct vmpl_vma_t {
 	uint32_t minor;  // New field for device
 	uint32_t major;  // New field for device
 	uint32_t inode;  // New field for inode
-	char *path;
+	char *vm_file;
 };
 
 #define VMPL_VMA_INIT(start, end, flags, prot, offset, vmpl_vma_flags) \
@@ -96,7 +96,7 @@ static inline void vmpl_vma_print(struct vmpl_vma_t *vma)
 			vma->prot & PROT_WRITE? 'w' : '-',
 			vma->prot & PROT_EXEC? 'x' : '-',
 			vma->offset, vma->minor, vma->major, vma->inode,
-			vma->path);
+			vma->vm_file);
 }
 static inline void vmpl_vma_dump(struct vmpl_vma_t *vma)
 {
@@ -106,7 +106,7 @@ static inline void vmpl_vma_dump(struct vmpl_vma_t *vma)
 			vma->prot & PROT_WRITE? 'w' : '-',
 			vma->prot & PROT_EXEC? 'x' : '-',
 			vma->offset, vma->minor, vma->major, vma->inode,
-			vma->path);
+			vma->vm_file);
 }
 extern int get_vmpl_vma_type(const char *path);
 extern struct vmpl_vma_t *vmpl_vma_new(const char *path);

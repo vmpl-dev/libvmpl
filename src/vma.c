@@ -76,7 +76,7 @@ struct vmpl_vma_t *vmpl_vma_new(const char *path)
 	vma->major = 0;
 	vma->inode = 0;
 	vma->offset = 0;
-	vma->path = strdup(path);
+	vma->vm_file = strdup(path);
 	return vma;
 }
 
@@ -92,7 +92,7 @@ struct vmpl_vma_t *vmpl_vma_create(uint64_t va_start, size_t len, uint64_t prot,
 	vma->major = 0;
 	vma->inode = 0;
 	vma->offset = offset;
-	vma->path = NULL;
+	vma->vm_file = NULL;
 	return vma;
 }
 
@@ -107,14 +107,14 @@ struct vmpl_vma_t *vmpl_vma_clone(struct vmpl_vma_t *vma)
 	new_vma->major = vma->major;
 	new_vma->inode = vma->inode;
 	new_vma->offset = vma->offset;
-	new_vma->path = strdup(vma->path);
+	new_vma->vm_file = strdup(vma->vm_file);
 	return new_vma;
 }
 
 // Free vma
 void vmpl_vma_free(struct vmpl_vma_t *vma)
 {
-	free(vma->path);
+	free(vma->vm_file);
 	free(vma);
 }
 
@@ -192,7 +192,7 @@ struct vmpl_vma_t *merge_vmas(struct vmpl_vma_t *vma1, struct vmpl_vma_t *vma2)
 	merged_vma->end = vma1->end > vma2->end ? vma1->end : vma2->end;
 	merged_vma->prot = vma1->prot; // Since vma1->prot == vma2->prot, we can use either
 	merged_vma->offset = vma1->offset < vma2->offset ? vma1->offset : vma2->offset;
-	merged_vma->path = NULL; // TODO: Set the path if needed
+	merged_vma->vm_file = NULL; // TODO: Set the path if needed
 
 	return merged_vma;
 }
@@ -208,7 +208,7 @@ struct vmpl_vma_t *split_vma(struct vmpl_vma_t *vma, uint64_t addr)
 	split_vma->end = addr;
 	split_vma->prot = vma->prot;
 	split_vma->offset = vma->offset;
-	split_vma->path = NULL; // TODO: Set the path if needed
+	split_vma->vm_file = NULL; // TODO: Set the path if needed
 
 	vma->start = addr;
 
@@ -223,7 +223,7 @@ void dump_vmpl_vma(struct vmpl_vma_t *vma)
 			vma->prot & PROT_WRITE? 'w' : '-',
 			vma->prot & PROT_EXEC? 'x' : '-',
 			vma->offset, vma->minor, vma->major, vma->inode,
-			vma->path);
+			vma->vm_file);
 }
 
 dict *get_vma_cache(void)

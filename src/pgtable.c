@@ -31,7 +31,7 @@
 #define virt_to_phys(x) __pa(x)
 
 #define padding(level) ((level)*4 + 4)
-static char *pt_names[] = { "PML4", "PDP", "PD", "PT", "Page" };
+static char *pt_names[] = { "P4D", "PUD", "PMD", "PTE", "Page" };
 pte_t *pgroot;
 
 static inline virtaddr_t pgtable_alloc(void)
@@ -52,6 +52,7 @@ static inline virtaddr_t pgtable_alloc(void)
     assert(pa == (va - PGTABLE_MMAP_BASE));
     assert(pg == vmpl_pa2page(pa));
     assert(pg->flags == 1);
+    memset(va, 0, PAGE_SIZE);
 	log_debug("pg = 0x%lx, pa = 0x%lx, va = 0x%lx, ref = %d", pg, pa, va, pg->ref);
 	return va;
 }
@@ -190,6 +191,7 @@ void pgtable_load_cr3(uint64_t cr3)
     physaddr_t pa;
     pa = pgtable_va_to_pa(pte_addr(cr3));
     cr3 &= ~ADDR_MASK;
+    cr3 |= PTE_C;
     cr3 |= pa;
     asm volatile("int3");
     load_cr3(cr3);
@@ -225,7 +227,7 @@ pte_t *pgtable_do_mapping(uint64_t phys)
 
     log_debug("newly mapped phys %lx to %p", phys, va);
     log_debug("content: %lx", *va);
-    
+
 failed:
     return va;
 }
@@ -240,77 +242,72 @@ failed:
  */
 int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 {
-#ifdef CONFIG_PGTABLE_LA57
     int m, i, j, k, l;
-    pte_t *pml5 = root, *pml4, *pdpte, *pde, *pte;
-#else
-	int m, i, j, k, l;
-    pte_t *pgd = root, *pml4, *pdpte, *pde, *pte;
-#endif
+    pte_t *pgd = root, *p4d, *pud, *pmd, *pte;
     uint64_t pa;
 
     assert(root != NULL);
     assert(va != NULL);
     assert(pte_out != NULL);
 
+    m = PDX(4, va);
 	i = PDX(3, va);
 	j = PDX(2, va);
 	k = PDX(1, va);
 	l = PDX(0, va);
 
 #ifdef CONFIG_PGTABLE_LA57
-    m = PDX(4, va);
     log_debug("%p, %d, %d, %d, %d, %d", va, m, i, j, k, l);
     log_debug("pgd[%d] = %lx", m, pgd[m]);
     if (!pte_present(pgd[m])) {
         if (!create)
             return -ENOENT;
-        pml4 = pgtable_alloc();
-        log_debug("pml4 = %p", pml4);
-        pgd[m] = pte_addr(__pa(pml4)) | PTE_DEF_FLAGS;
+        p4d = pgtable_alloc();
+        log_debug("p4d = %p", p4d);
+        pgd[m] = pte_addr(__pa(p4d)) | PTE_DEF_FLAGS;
         log_debug("pgd[%d] = %lx", m, pgd[m]);
     } else {
-        pml4 = pgtable_do_mapping(pte_addr(pgd[m]));
+        p4d = pgtable_do_mapping(pte_addr(pgd[m]));
     }
 #else
-    pml4 = pgd;
+    p4d = pgd;
 #endif
 
     log_debug("%p, %d, %d, %d, %d", va, i, j, k, l);
-    log_debug("pml4e[%d] = %lx", i, pml4[i]);
-	if (!pte_present(pml4[i])) {
+    log_debug("p4d[%d] = %lx", i, p4d[i]);
+	if (!pte_present(p4d[i])) {
         if (!create)
             return -ENOENT;
-        pdpte = pgtable_alloc();
-        pml4[i] = pte_addr(__pa(pdpte)) | PTE_DEF_FLAGS;
+        pud = pgtable_alloc();
+        p4d[i] = pte_addr(__pa(pud)) | PTE_DEF_FLAGS;
     } else {
-        pdpte = pgtable_do_mapping(pte_addr(pml4[i]));
+        pud = pgtable_do_mapping(pte_addr(p4d[i]));
     }
 
-    log_debug("pdpte[%d] = %lx", j, pdpte[j]);
-	if (!pte_present(pdpte[j])) {
+    log_debug("pud[%d] = %lx", j, pud[j]);
+	if (!pte_present(pud[j])) {
         if (!create)
             return -ENOENT;
-        pde = pgtable_alloc();
-        pdpte[j] = pte_addr(__pa(pde)) | PTE_DEF_FLAGS;
-    } else if (pte_big(pdpte[j])) {
-        *pte_out = &pdpte[j];
+        pmd = pgtable_alloc();
+        pud[j] = pte_addr(__pa(pmd)) | PTE_DEF_FLAGS;
+    } else if (pte_big(pud[j])) {
+        *pte_out = &pud[j];
         return 0;
     } else {
-        pde = pgtable_do_mapping(pte_addr(pdpte[j]));
+        pmd = pgtable_do_mapping(pte_addr(pud[j]));
     }
 
-    log_debug("pde[%d] = %lx", k, pde[k]);
-	if (!pte_present(pde[k])) {
+    log_debug("pmd[%d] = %lx", k, pmd[k]);
+	if (!pte_present(pmd[k])) {
         if (!create)
             return -ENOENT;
         pte = pgtable_alloc();
-        pde[k] = pte_addr(__pa(pte)) | PTE_DEF_FLAGS;
-    } else if (pte_big(pde[k])) {
-        *pte_out = &pde[k];
+        pmd[k] = pte_addr(__pa(pte)) | PTE_DEF_FLAGS;
+    } else if (pte_big(pmd[k])) {
+        *pte_out = &pmd[k];
         return 0;
     } else {
-        pte = pgtable_do_mapping(pte_addr(pde[k]));
+        pte = pgtable_do_mapping(pte_addr(pmd[k]));
     }
 
     log_debug("pte[%d] = %lx", l, pte[l]);
@@ -349,56 +346,53 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
  * @param ptep The page table entry of the virtual address.
  * @retval 0 on success, -1 on error
  */
-int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep)
+int lookup_address_in_pgd(pte_t *root, uint64_t va, int *level, pte_t **ptep)
 {
-#ifdef CONFIG_PGTABLE_LA57
     int m, i, j, k, l;
-    pte_t *pml5 = pgd;
 
+    assert(root != NULL);
+#ifdef CONFIG_PGTABLE_LA57
     log_debug("%p", va);
-    pml5e_t *pml5e = pml5_offset(pml5, va);
-    if (pml5e_none(*pml5e) || pml5e_bad(*pml5e)) {
+    pgd_t *pgd = pgd_offset(root, va);
+    if (pte_none(*pgd) || pte_bad(*pgd)) {
         return -EINVAL;
     }
 
     if (level)
         *level = 5;
 
-    log_debug("pml5e: %lx", *pml5e);
-    pml4e_t *pml4 = pml4_offset(pml5e, va);
+    log_debug("pgd: %lx", *pgd);
+    p4d_t *p4d = p4d_offset(pgd, va);
 #else
-    int i, j, k, l;
-    pte_t *pml4 = pgd;
+    p4d_t *p4d = p4d_offset(root, va);
 #endif
-
-    pml4e_t *pml4e = pml4_offset(pml4, va);
-    if (pml4e_none(*pml4e) || pml4e_bad(*pml4e)) {
+    if (pte_none(*p4d) || pte_bad(*p4d)) {
         return -EINVAL;
     }
 
     if (level)
         *level = 4;
 
-    log_debug("pml4e: %lx", *pml4e);
-    pdpe_t *pdpe = pdp_offset(pml4e, va);
-    if (pdpe_none(*pdpe) || pdpe_bad(*pdpe)) {
+    log_debug("p4d: %lx", *p4d);
+    pud_t *pud = pud_offset(p4d, va);
+    if (pte_none(*pud) || pte_bad(*pud)) {
         return -EINVAL;
     }
 
     if (level)
         *level = 3;
 
-    log_debug("pdpe: %lx", *pdpe);
-    pde_t *pde = pd_offset(pdpe, va);
-    if (pde_none(*pde) || pde_bad(*pde)) {
+    log_debug("pud: %lx", *pud);
+    pmd_t *pmd = pmd_offset(pud, va);
+    if (pte_none(*pmd) || pte_bad(*pmd)) {
         return -EINVAL;
     }
 
     if (level)
         *level = 2;
 
-    log_debug("pde: %lx", *pde);
-    pte_t *pte = pte_offset(pde, va);
+    log_debug("pmd: %lx", *pmd);
+    pte_t *pte = pte_offset(pmd, va);
     if (pte_none(*pte) || !pte_present(*pte)) {
         return -EINVAL;
     }

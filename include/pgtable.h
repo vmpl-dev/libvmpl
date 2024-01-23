@@ -14,19 +14,6 @@
     (((~0ULL) << (l)) & (~0ULL >> (64 - 1 - (h))))
 #define BIT_64(nr) (1UL << (nr))
 
-#ifdef CONFIG_PGTABLE_LA57
-typedef uint64_t pgd_t;
-typedef uint64_t p4d_t;
-typedef uint64_t pmd_t;
-typedef uint64_t pud_t;
-typedef uint64_t pte_t;
-#else
-typedef uint64_t pml4e_t;
-typedef uint64_t pdpe_t;
-typedef uint64_t pde_t;
-typedef uint64_t pte_t;
-#endif
-
 #define PAGE_SHIFT 12
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
 #define PAGE_OFFSET(addr) ((addr) & (PAGE_SIZE - 1))
@@ -36,47 +23,6 @@ typedef uint64_t pte_t;
 #define PAGE_MASK(x) ((x) & (PAGE_SIZE - 1))
 #define PTE_PKEY_SHIFT 59
 
-#ifdef CONFIG_PGTABLE_LA57
-#define P4D_PRESENT (1UL << 0)
-#define PUD_PRESENT (1UL << 0)
-#define PMD_PRESENT (1UL << 0)
-#define PTE_PRESENT (1UL << 0)
-
-#define P4D_BAD (1UL << 1)
-#define PUD_BAD (1UL << 1)
-#define PMD_BAD (1UL << 1)
-#define PTE_BAD (1UL << 1)
-
-#define pgd_index(va) PDX(4, va)
-#define p4d_index(va) PDX(3, va)
-#define pud_index(va) PDX(2, va)
-#define pmd_index(va) PDX(1, va)
-#define pte_index(va) PDX(0, va)
-
-#define pgd_offset(pgd, va) ((pgd) + pgd_index(va))
-#define p4d_offset(pgd, va) ((pgd) + p4d_index(va))
-#define pud_offset(p4d, va) ((p4d) + pud_index(va))
-#define pmd_offset(pud, va) ((pud) + pmd_index(va))
-#define pte_offset(pmd, va) ((pmd) + pte_index(va))
-
-#define pgd_none(pgd) (!(pgd & PGD_PRESENT))
-#define p4d_none(p4d) (!(p4d & P4D_PRESENT))
-#define pud_none(pud) (!(pud & PUD_PRESENT))
-#define pmd_none(pmd) (!(pmd & PMD_PRESENT))
-#define pte_none(pte) (!(pte & PTE_PRESENT))
-
-#define pgd_bad(pgd) (pgd & P4D_BAD)
-#define p4d_bad(p4d) (p4d & P4D_BAD)
-#define pud_bad(pud) (pud & PUD_BAD)
-#define pmd_bad(pmd) (pmd & PMD_BAD)
-#define pte_bad(pte) (pte & PTE_BAD)
-
-#define pgd_present(pgd) ((pgd) & PGD_PRESENT)
-#define p4d_present(p4d) ((p4d) & P4D_PRESENT)
-#define pud_present(pud) ((pud) & PUD_PRESENT)
-#define pmd_present(pmd) ((pmd) & PMD_PRESENT)
-#define pte_present(pte) ((pte) & PTE_PRESENT)
-#else
 #define PTE_P       BIT_64(0)    /* Present */
 #define PTE_W       BIT_64(1)    /* Writable */
 #define PTE_U       BIT_64(2)    /* User-accessible */
@@ -92,6 +38,7 @@ typedef uint64_t pte_t;
 #define PTE_C       BIT_64(51)   /* Encrypted page */
 #define PTE_AVAIL2  GENMASK_ULL(63, 52) /* Available for software use */
 #define PTE_NX      BIT_64(63)   /* No execute: only if NX feature present */
+#define PTE_MPK     GENMASK_ULL(62, 59) /* Memory Protection Keys (MPK) Bit */
 #define ADDR_MASK   GENMASK_ULL(50, 12) /* Address mask */
 
 #define PAGE_PRESENT  PTE_P
@@ -102,65 +49,55 @@ typedef uint64_t pte_t;
 #define PAGE_KERNEL (PAGE_PRESENT | PAGE_RW | PAGE_ACCESSED | PAGE_DIRTY | PAGE_GLOBAL)
 #define PAGE_USER   (PAGE_PRESENT | PAGE_RW | PAGE_ACCESSED | PAGE_DIRTY)
 
-#define PML4E_BAD (1UL << 1)
-#define PDPE_BAD  (1UL << 1)
-#define PDE_BAD   (1UL << 1)
 #define PTE_BAD   (1UL << 1)
 
 #define page_address(page) ((page) << 12)
-#define pte_addr(pte) ((pte) & ADDR_MASK)
+
 #define pfn2page(pfn) ((pfn) << 12)
 #define page2pfn(page) ((page) >> 12)
 
-#define pml4_index(va) PDX(3, va)
-#define pdp_index(va)  PDX(2, va)
-#define pd_index(va)   PDX(1, va)
-#define pt_index(va)   PDX(0, va)
+typedef uint64_t pgd_t;
+typedef uint64_t p4d_t;
+typedef uint64_t pmd_t;
+typedef uint64_t pud_t;
+typedef uint64_t pte_t;
 
-#define pml4_deref(pml4)   __va(pte_addr(*pml4))
-#define pdpe_deref(pdpe)   __va(pte_addr(*pdpe))
-#define pde_deref(pde)     __va(pte_addr(*pde))
-#define pte_deref(pte)     __va(pte_addr(*pte))
+#define PTE_PRESENT (1UL << 0)
+#define PTE_BAD (1UL << 1)
 
-#define pml4_offset(pml4, va) ((pml4) + (pml4_index(va) << 3))
-#define pdp_offset(pdp, va)   (pdpe_deref(pdp) + (pdp_index(va) << 3))
-#define pd_offset(pd, va)     (pde_deref(pd) + (pd_index(va) << 3))
-#define pte_offset(pt, va)    (pte_deref(pt) + (pt_index(va) << 3))
+#define pgd_index(va) PDX(4, va)
+#define p4d_index(va) PDX(3, va)
+#define pud_index(va) PDX(2, va)
+#define pmd_index(va) PDX(1, va)
+#define pte_index(va) PDX(0, va)
 
-#define pml4e_none(pml4e) (!((pml4e) & PTE_P))
-#define pdpe_none(pdpe)   (!((pdpe) & PTE_P))
-#define pde_none(pde)     (!((pde) & PTE_P))
-#define pte_none(pte)     (!((pte) & PTE_P))
+#define pte_deref(pte)   __va(pte_addr(*pte))
 
-#define pml4e_val(pml4e) ((pml4e) & 0xfffUL)
-#define pdpe_val(pdpe)   ((pdpe) & 0xfffUL)
-#define pde_val(pde)     ((pde) & 0xfffUL)
-#define pte_val(pte)     ((pte) & 0xfffUL)
-
-#define pml4e_bad(pml4e) (!(pml4e_val(pml4e) & PML4E_BAD))
-#define pdpe_bad(pdpe)   (!(pdpe_val(pdpe) & PDPE_BAD))
-#define pde_bad(pde)     (!(pde_val(pde) & PDE_BAD))
-#define pte_bad(pte)     (!(pte_val(pte) & PTE_BAD))
-
-#define pml4e_present(pml4e) ((pml4e) & PTE_P)
-#define pdpe_present(pdpe)   ((pdpe) & PTE_P)
-#define pde_present(pde)     ((pde) & PTE_P)
-#define pte_present(pte)     ((pte) & PTE_P)
-
-#define pml4e_write(pml4e) ((pml4e) & PTE_W)
-#define pdpe_write(pdpe)   ((pdpe) & PTE_W)
-#define pde_write(pde)     ((pde) & PTE_W)
-#define pte_write(pte)     ((pte) & PTE_W)
-
-#define pte_big(pte)       ((pte) & 0x80)
-#define pte_vmpl(pte)      ((pte) & PTE_VMPL)
+#ifdef CONFIG_PGTABLE_LA57
+#define pgd_offset(pgd, va) ((pgd) + (pgd_index(va) << 3))
+#define p4d_offset(p4d, va) (pte_deref(pgd) + (p4d_index(va) << 3))
+#else
+#define p4d_offset(p4d, va) ((p4d) + (p4d_index(va) << 3))
 #endif
+#define pud_offset(pud, va) (pte_deref(p4d) + (pud_index(va) << 3))
+#define pmd_offset(pud, va) (pte_deref(pud) + (pmd_index(va) << 3))
+#define pte_offset(pte, va) (pte_deref(pte) + (pte_index(va) << 3))
 
-#define pte_flags(pte) ((pte) & 0xfffUL)
+#define pte_none(pte)       (!((pte) & PTE_P))
+#define pte_val(pte)        ((pte) & 0xfffUL)
+#define pte_bad(pte)        (!(pte_val(pte) & PTE_BAD))
+#define pte_present(pte)    ((pte) & PTE_P)
+#define pte_write(pte)      ((pte) & PTE_W)
+#define pte_big(pte)        ((pte) & 0x80)
+#define pte_vmpl(pte)       ((pte) & PTE_VMPL)
+
+#define pte_addr(pte) ((pte) & ADDR_MASK)
+#define pte_flags(pte) ((pte) & ~ADDR_MASK)
 #define pte_clear(mm, addr, ptep) set_pte(ptep, 0)
 #define pte_page(pte) ((pte) >> 12)
 #define pfn_pte(pfn, prot) ((pfn) | (prot))
 #define set_pte(ptep, pte) (*(ptep) = (pte))
+
 #define bitset(x, n) ((x) | (1UL << (n)))
 #define bitclr(x, n) ((x) & ~(1UL << (n)))
 
@@ -200,7 +137,7 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out);
 int pgtable_create(pte_t *root, void *va, pte_t **pte_out);
 int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa);
 
-int lookup_address_in_pgd(pte_t *pgd, uint64_t va, int *level, pte_t **ptep);
+int lookup_address_in_pgd(pte_t *root, uint64_t va, int *level, pte_t **ptep);
 int lookup_address(uint64_t va, int *level, pte_t **ptep);
 
 uint64_t pgtable_pa_to_va(uint64_t pa);

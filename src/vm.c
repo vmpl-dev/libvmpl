@@ -198,26 +198,6 @@ bool remove_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
 }
 
 /**
- * @brief Discard all VMAs that intersect with the given range.
- * @note VMPL-VM Low Level API
- * @param vm The VMPL-VM to remove from.
- * @param va_start The start address of the range.
- * @param va_end The end address of the range.
- * @return None.
- */
-void discard_overlapping_vmas(struct vmpl_vm_t *vm, uint64_t va_start, uint64_t va_end)
-{
-	struct vmpl_vma_t *vma;
-	bool removed;
-
-	while ((vma = find_vma_intersection(vm, va_start, va_end)) != NULL) {
-		removed = remove_vma(vm, vma);
-		assert(removed == true);
-		vmpl_vma_free(vma);
-	}
-}
-
-/**
  * @brief  Allocate a VMA from the VMPL-VM.
  * @note VMPL-VM Low Level API
  * @param vm The VMPL-VM to allocate from.
@@ -245,7 +225,7 @@ struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size
 	vma->end = va_start + size;
 	vma->prot = 0;
 	vma->offset = 0;
-	vma->path = NULL;
+	vma->vm_file = NULL;
 	log_trace("vma->start = 0x%lx, vma->end = 0x%lx", vma->start, vma->end);
 	return vma;
 }
@@ -267,7 +247,7 @@ static void insert_vma_callback(struct procmap_entry_t *entry, void *arg) {
 	new_vma->minor = entry->minor;
 	new_vma->major = entry->major;
 	new_vma->inode = entry->inode;
-	new_vma->path = strdup(entry->path);
+	new_vma->vm_file = strdup(entry->path);
 	bool inserted = insert_vma(vm, new_vma);
 	log_trace("inserted = %s", inserted ? "true" : "false");
 }
@@ -351,7 +331,7 @@ void vmpl_vm_dump(struct vmpl_vm_t *vm)
 	dict_itor *itor = dict_itor_new(vm->vma_dict);
 	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
 		struct vmpl_vma_t *vma = dict_itor_key(itor);
-		if (strcmp(vma->path, "[vmpl]") == 0) {
+		if (strcmp(vma->vm_file, "[vmpl]") == 0) {
 			vmpl_vma_dump(dict_itor_key(itor));
 		}
 	}
@@ -372,7 +352,7 @@ void vmpl_vm_print(struct vmpl_vm_t *vm)
 	dict_itor *itor = dict_itor_new(vm->vma_dict);
 	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
 		struct vmpl_vma_t *vma = dict_itor_key(itor);
-		if (strcmp(vma->path, "[vmpl]") == 0) {
+		if (strcmp(vma->vm_file, "[vmpl]") == 0) {
 			vmpl_vma_print(dict_itor_key(itor));
 		}
 	}
@@ -389,7 +369,7 @@ void vmpl_vm_print(struct vmpl_vm_t *vm)
 void vmpl_vm_stats(struct vmpl_vm_t *vm)
 {
 	printf("VMPL-VM Stats:\n");
-	printf("dict_count(vma_dict) = %d\n", dict_count(vm->vma_dict));
+	printf("dict_count(vma_dict) = %ld\n", dict_count(vm->vma_dict));
 	pthread_spin_lock(&vm->lock);
 	dict_itor *itor = dict_itor_new(vm->vma_dict);
 	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {

@@ -116,6 +116,16 @@ static inline void free_virt_page(virtaddr_t va)
 	dune_page_put(pg);
 }
 
+static inline virtaddr_t alloc_zero_page(void)
+{
+	virtaddr_t va = alloc_virt_page();
+	if (va != NULL) {
+		memset(va, 0, PGSIZE);
+	}
+
+	return va;
+}
+
 static inline void get_page(void * page)
 {
 	struct page *pg = vmpl_va2page(page);
@@ -190,12 +200,11 @@ int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
 			if (!create)
 				continue;
 
-			new_dir = alloc_virt_page();
+			new_dir = alloc_zero_page();
 			if (!new_dir)
 				return -ENOMEM;
 			log_debug("new_dir = 0x%lx, pte = 0x%lx, cur_va = 0x%lx, level = %d",
 					  new_dir, *pte, cur_va, level);
-			memset(new_dir, 0, PGSIZE);
 			uint64_t pa = pgtable_va_to_pa(new_dir);
 			*pte = pte_addr(pa) | PTE_DEF_FLAGS;
 		} else {
@@ -253,7 +262,6 @@ static int __vmpl_vm_map_pages_helper(const void *arg, pte_t *pte, void *va)
 
 	return 0;
 }
-
 static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 {
 	struct vmpl_vma_t *vma = (struct vmpl_vma_t *) arg;
@@ -264,6 +272,19 @@ static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 		perm = PTE_VMPL_FLAGS;
 	else
 		perm = PTE_VMPL_FLAGS | PTE_NX;
+
+#if 0
+	// Support MAP_PRIVATE flags.
+	if (vma->flags & MAP_PRIVATE) {
+		perm &= ~PTE_W;
+		perm |= (PTE_COW | PTE_D);
+	}
+
+	// Support MAP_SHARED flags.
+	if (vma->flags & MAP_SHARED) {
+		perm |= PTE_W;
+	}
+#endif
 
 	// Support MAP_POPULATE flags.
 	if (vma->flags & MAP_POPULATE) {
@@ -444,7 +465,9 @@ static int __vmpl_vm_pkey_mprotect_helper(const void *arg, pte_t *pte, void *va)
 #endif
 
 	// Set the protection key on the page table entry.
+	log_debug("va = 0x%lx, perm = 0x%lx", va, *perm);
 	*pte |= (*perm);
+	log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
 
 	return 0;
 }
@@ -508,8 +531,8 @@ int vmpl_vm_vma_walk(pte_t *root, struct vmpl_vm_t *vm, page_walk_cb cb, const v
 		// Skip the vsyscall page
 		if (vma->start == VSYSCALL_ADDR)
 			continue;
-		log_debug("start = 0x%lx, end = 0x%lx, level = %d, path = %s",
-				  vma->start, vma->end, level, vma->path);
+		log_debug("start = 0x%lx, end = 0x%lx, level = %d, vm_file = %s",
+				  vma->start, vma->end, level, vma->vm_file);
 		ret = __vmpl_vm_page_walk(root, vma->start, vma->end - 1,
 								  cb, arg, level, CREATE_NONE);
 		if (ret)
@@ -610,6 +633,38 @@ int vmpl_vm_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 }
 
 /**
+ * @brief Discard all VMAs that intersect with the given range.
+ * @note VMPL-VM Low Level API
+ * @param vm The VMPL-VM to remove from.
+ * @param va_start The start address of the range.
+ * @param va_end The end address of the range.
+ * @return None.
+ */
+static int unmap_vma(void *va_start, void *va_end)
+{
+	int rc;
+	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
+	struct vmpl_vma_t *vma;
+	bool removed;
+
+	while ((vma = find_vma_intersection(vm, va_start, va_end)) != NULL) {
+		// Walk the page table and unmap the pages in the VMA.
+		int rc = __vmpl_vm_page_walk(vmpl_mm.pgd, vma->start, vma->end - 1,
+									&__vmpl_vm_munmap_helper, vma,
+									3, CREATE_NONE);
+		if (rc != 0) {
+			log_debug("Failed to walk the page table");
+			errno = ENOMEM;
+			return -1;
+		}
+
+		removed = remove_vma(vm, vma);
+		assert(removed == true);
+		vmpl_vma_free(vma);
+	}
+}
+
+/**
  * @brief This is a prologue before redirecting `mmap` to the guest OS.
  * @note Note: This function is not implemented.
  * @param root The root of the page table.
@@ -638,8 +693,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	}
 
 	// Filter out unsupported flags
-	if (flags & (MAP_SHARED | MAP_GROWSDOWN | MAP_STACK | MAP_HUGETLB
-		| MAP_LOCKED | MAP_NONBLOCK)) {
+	if (flags & (MAP_GROWSDOWN | MAP_STACK | MAP_HUGETLB | MAP_LOCKED | MAP_NONBLOCK)) {
 		log_debug("Unsupported flags");
 		errno = ENOTSUP;
 		return MAP_FAILED;
@@ -677,9 +731,13 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 			// If MAP_FIXED is set, discard any overlapping mappings
 			if (flags & MAP_FIXED) {
 				log_debug("MAP_FIXED is set, discarding overlapping mappings");
-				discard_overlapping_vmas(vm, va_start, va_end);
-
-				// TODO: Support MAP_FIXED, munmap the overlapping mappings
+				// For fixed mappings, we need to replace any existing mapping at the specified address.
+				// Here, we assume that the function unmap_vma is available to unmap any existing VMA.
+				rc = unmap_vma(va_start, va_end);
+				if (rc != 0) {
+					errno = ENOMEM;
+					return MAP_FAILED;
+				}
 			}
 		}
 
@@ -707,7 +765,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	vma->inode	= 0;
 	vma->major	= 0;
 	vma->minor	= 0;
-	vma->path = strdup("[vmpl]");
+	vma->vm_file = strdup("[vmpl]");
 
 	// Allocate page table entries for the new VMA
 	rc = __vmpl_vm_page_walk(vmpl_mm.pgd, vma->start, vma->end - 1,
@@ -818,12 +876,8 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 			// If MAP_FIXED is set, discard any overlapping mappings
 			if (flags & MREMAP_FIXED) {
 				log_debug("MAP_FIXED is set, discarding overlapping mappings");
-				discard_overlapping_vmas(vm, new_address, new_address + new_size);
-
 				// Support MREMAP_FIXED, munmap the overlapping mappings
-				rc = __vmpl_vm_page_walk(vmpl_mm.pgd, new_address, new_address + new_size - 1,
-										 &__vmpl_vm_munmap_helper, new_vma,
-										 3, CREATE_NONE);
+				rc = unmap_vma(new_address, new_address + new_size);
 				if (rc != 0) {
 					log_debug("Failed to walk the page table");
 					errno = ENOMEM;
@@ -904,7 +958,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	new_vma->major = old_vma->major;
 	new_vma->minor = old_vma->minor;
 	new_vma->inode = old_vma->inode;
-	new_vma->path = strdup(old_vma->path);
+	new_vma->vm_file = strdup(old_vma->vm_file);
 
 	// Insert new VMA into VMPL-VM
 	bool inserted = insert_vma(vm, new_vma);
@@ -1142,7 +1196,7 @@ int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pke
 	// Call the pkey_mprotect_helper for each page in the range [addr, addr + len)
 	log_debug(VMPL_VM_PKEY_MPROTECT_FMT, va_start, va_end, prot, pkey);
 	ret = __vmpl_vm_page_walk(root, va_start, va_end - 1,
-							  &__vmpl_vm_pkey_mprotect_helper, (void *)perm,
+							  &__vmpl_vm_pkey_mprotect_helper, (void *)&perm,
 							  3, CREATE_NONE);
 	if (ret) {
 		log_debug("Failed to walk the page table");
@@ -1168,8 +1222,7 @@ pte_t *vmpl_vm_clone(pte_t *root)
 	int ret;
 	pte_t *new_root;
 
-	new_root = alloc_virt_page();
-	memset(new_root, 0, PGSIZE);
+	new_root = alloc_zero_page();
 	log_debug("root = %lx, new_root = %lx", root, new_root);
 
 	ret = __vmpl_vm_page_walk(root, VA_START, VA_END,
@@ -1221,8 +1274,7 @@ pte_t *vmpl_vm_clone(pte_t *root)
 	pte_t *new_root;
 	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
 
-	new_root = alloc_virt_page();
-	memset(new_root, 0, PGSIZE);
+	new_root = alloc_zero_page();
 	log_debug("root = %lx, new_root = %lx", root, new_root);
 
 	ret = vmpl_vm_vma_walk(root, vm, &__vmpl_vm_clone_helper, new_root, 3);
@@ -1307,9 +1359,9 @@ long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
 	 */
 	assert(!(fec & (FEC_P | FEC_RSV)));
 	if ((fec & FEC_W) && (*pte & PTE_COW)) {
-		physaddr_t pa = PTE_ADDR(*pte);
+		physaddr_t pa = pte_addr(*pte);
 		struct page *pg = vmpl_pa2page(pa);
-		pte_t perm = PTE_FLAGS(*pte);
+		pte_t perm = pte_flags(*pte);
 
 		// Compute new permissions
 		perm &= ~PTE_COW;
@@ -1330,7 +1382,7 @@ long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
 
 		// Map page
 		pa = pgtable_va_to_pa(new_page);
-		*pte = PTE_ADDR(pa) | perm;
+		*pte = pte_addr(pa) | perm;
 
 		// Invalidate
 		vmpl_flush_tlb_one(addr);
@@ -1365,18 +1417,15 @@ long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 		return -1;
 	}
 
-	// Find the page table entry for the faulting address
-	// log_debug("Find the page table entry for the faulting address %d", addr);
-	rc = pgtable_lookup(vmpl_mm.pgd, (void *)va_start, false, &pte);
-	assert(rc == 0);
-
 	// Find the VMA that contains the faulting address 
-	// log_debug("Find the VMA that contains the faulting address");
 	vma = find_vma_intersection(vm, va_start, va_end);
 	assert(vma != NULL);
 
+	// Find the page table entry for the faulting address
+	rc = pgtable_lookup(vmpl_mm.pgd, (void *)va_start, false, &pte);
+	assert(rc == 0);
+
 	// If the page is an anonymous page, then we need to allocate a new page.
-	// log_debug("If the page is an anonymous page, then we need to allocate a new page.");
 	if (vma->flags & MAP_ANONYMOUS) {
 		rc = handle_anonymous_fault(addr, fec, pte);
 		if (!rc)
@@ -1464,9 +1513,17 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 {
 	int rc;
 	void *addr, *tmp_addr;
+	pte_t *ptep;
 	pte_t *new_root;
 	struct vmpl_vma_t *vma;
 	struct vmpl_vm_t *vm = &vmpl_mm->vmpl_vm;
+
+	// Test page table entry lookup
+	log_info("Test page table entry lookup");
+	rc = pgtable_lookup(vmpl_mm->pgd, vmpl_mm->vmpl_vm.va_start, false, &ptep);
+	assert(rc == 0);
+	assert(ptep != NULL);
+	log_success("Test page table entry lookup passed, pte = 0x%lx", *ptep);
 
 	// Test mmap
 	log_info("Test mmap");
@@ -1483,7 +1540,6 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test page table entry lookup
 	log_info("Test page table entry lookup");
-	pte_t *ptep;
 	rc = pgtable_lookup(vmpl_mm->pgd, addr, false, &ptep);
 	assert(rc == 0);
 	assert(ptep != NULL);
@@ -1506,7 +1562,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test access to the mapped page at a specific address
 	pgtable_lookup(vmpl_mm->pgd, addr, false, &ptep);
-	log_info("Test access to the mapped page at a specific address");
+	log_info("Test access to the mapped page at a specific address, pte = 0x%lx", *ptep);
 	assert(!pte_present(*ptep));
 	*(uint64_t *)(addr) = 0xdeadbeef;
 	assert(*(uint64_t *)addr == 0xdeadbeef);
@@ -1538,16 +1594,27 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	assert(vma->prot == PROT_READ);
 	log_success("Test mprotect passed");
 
-#ifdef CONFIG_VMPL_PGTABLE_PROTECTION
+	// Test pkey_alloc
+	log_info("Test pkey_alloc");
+	int pkey = pkey_alloc(0, PKEY_DISABLE_WRITE);
+	assert(pkey >= 0);
+	log_success("Test pkey_alloc passed");
+
+	// Test pkey_free
+	log_info("Test pkey_free");
+	rc = pkey_free(pkey);
+	assert(rc == 0);
+	log_success("Test pkey_free passed");
+
 	// Test pkey_mprotect
 	log_info("Test pkey_mprotect");
-	rc = pkey_mprotect(addr, PGSIZE, PROT_READ, 0);
+	pkey = pkey_alloc(0, PKEY_DISABLE_WRITE);
+	rc = pkey_mprotect(addr, PGSIZE, PROT_READ, pkey);
 	assert(rc == 0);
 	vma = find_vma_intersection(vm, addr, addr + PGSIZE);
 	assert(vma != NULL);
 	assert(vma->prot == PROT_READ);
 	log_success("Test pkey_mprotect passed");
-#endif
 
 	// Test mremap
 	log_info("Test mremap");
