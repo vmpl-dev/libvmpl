@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <time.h>
+#include <poll.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/epoll.h>
@@ -134,7 +135,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 }
 
 // lseek
-int lseek(int fd, off_t offset, int whence)
+off_t lseek(int fd, off_t offset, int whence)
 {
     init_hook(lseek);
     if (unlikely(!need_hotcalls())) {
@@ -941,16 +942,6 @@ clock_t times(struct tms *buf)
     return hotcalls1(SYS_times, buf);
 }
 
-long ptrace(int request, pid_t pid, void *addr, void *data)
-{
-    init_hook(ptrace);
-    if (unlikely(!need_hotcalls())) {
-        return ptrace_orig(request, pid, addr, data);
-    }
-
-    return hotcalls4(SYS_ptrace, request, pid, addr, data);
-}
-
 int syslog(int type, const char *bufp, int len)
 {
     init_hook(syslog);
@@ -1601,7 +1592,7 @@ int memfd_create(const char *name, unsigned int flags)
     return hotcalls2(SYS_memfd_create, name, flags);
 }
 
-int mlock2(const void *addr, size_t length, int flags)
+int mlock2(const void *addr, size_t length, unsigned int flags)
 {
     init_hook(mlock2);
     if (unlikely(!need_hotcalls())) {
@@ -1643,7 +1634,7 @@ ssize_t pwritev2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 }
 
 // Hotcalls wrapper for pkey_alloc
-int pkey_alloc(unsigned long flags, unsigned long init_val)
+int pkey_alloc(unsigned int flags, unsigned int init_val)
 {
     init_hook(pkey_alloc)
     if (unlikely(!need_hotcalls())) {
