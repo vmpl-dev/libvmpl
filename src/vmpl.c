@@ -41,6 +41,7 @@
 #include "page.h"
 #include "pgtable.h"
 #include "mm.h"
+#include "syscall.h"
 #include "seimi.h"
 #include "vc.h"
 #include "serial.h"
@@ -1090,6 +1091,7 @@ static void vmpl_init_stats(void)
 static int vmpl_init_test(void)
 {
     vmpl_mm_test(&vmpl_mm);
+    vmpl_syscall_test();
 }
 
 static void vmpl_init_banner(void)

@@ -1630,8 +1630,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	// Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP.
 	log_info("Test mremap to a specific address with MREMAP_FIXED | MREMAP_DONTUNMAP");
 	tmp_addr = (void *)vmpl_mm->vmpl_vm.va_start + PGSIZE * 8;
-	addr = mremap(addr, PGSIZE * 2, PGSIZE * 2,
-						  MREMAP_FIXED | MREMAP_DONTUNMAP, tmp_addr);
+	addr = mremap(addr, PGSIZE * 2, PGSIZE * 2, MREMAP_FIXED | MREMAP_DONTUNMAP, tmp_addr);
 	assert(addr != MAP_FAILED);
 	assert(addr == tmp_addr);
 	vma = find_vma_intersection(vm, tmp_addr, tmp_addr + PGSIZE * 2);

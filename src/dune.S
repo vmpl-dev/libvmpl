@@ -294,9 +294,19 @@ __dune_syscall:
 	/* handle system calls from G0 */
 	testq $1, %gs:IN_USERMODE
 	jnz 1f
+	push %rax
+	push %rcx
+	push %rdx
+	mov $0xc0010130, %ecx
+    mov $16, %eax
+    xor %edx, %edx
+	wrmsr
+	pop %rdx
+	pop %rcx
+	pop %rax
 	pushq	%r11
 	popfq
-	vmcall
+	vmgexit
 	jmp	*%rcx
 
 1:
