@@ -107,7 +107,7 @@ AM_CONDITIONAL([ENABLE_VMPL_GHCB], [test "x$enable_vmpl_ghcb" = "xyes"])
 AC_ARG_ENABLE([vmpl-mm], [AS_HELP_STRING([--enable-vmpl-mm],
                                          [Enable mm support])],
               [enable_vmpl_mm=$enableval],
-              [enable_vmpl_mm=yes])
+              [enable_vmpl_mm=no])
 AM_CONDITIONAL([ENABLE_VMPL_MM], [test "x$enable_vmpl_mm" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-seimi],

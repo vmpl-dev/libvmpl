@@ -1081,6 +1081,7 @@ static void vmpl_init_stats(void)
     vmpl_mm_stats(&vmpl_mm);
 }
 
+#ifdef CONFIG_VMPL_TEST
 /**
  * Initializes a test for the VMPL library.
  * This function writes a banner to the standard output and exits.
@@ -1091,6 +1092,9 @@ static int vmpl_init_test(void)
 {
     vmpl_mm_test(&vmpl_mm);
 }
+#else
+static int vmpl_init_test(void) { }
+#endif
 
 static void vmpl_init_banner(void)
 {
@@ -1217,6 +1221,10 @@ void on_dune_exit(struct vmsa_config *conf)
 		conf->ret = 0;
 		__dune_go_dune(dune_fd, conf);
 		break;
+    case DUNE_RET_INTERRUPT:
+		dune_debug_handle_int(conf);
+		printf("dune: exit due to interrupt %lld\n", conf->status);
+        break;
     case DUNE_RET_SIGNAL:
         __dune_go_dune(dune_fd, conf);
         break;

@@ -18,8 +18,7 @@
 #include "mm.h"
 #include "vmpl.h"
 #include "log.h"
-// #include "syscall.h"
-// #include "trap.h"
+#include "vmpl-core.h"
 
 /**
  * @brief  Exception messages

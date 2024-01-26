@@ -27,6 +27,7 @@ test_pagemap_SOURCES = tests/test_pagemap.c
 lib_LTLIBRARIES = libvmpl.la libdunify.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
+                    src/debug.c \
                     src/vmpl-ioctl.c \
                     src/page.c \
                     src/pgtable.c \

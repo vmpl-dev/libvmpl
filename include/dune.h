@@ -2,6 +2,7 @@
 #define __DUNE_H_
 
 #include "vmpl.h"
+#include "apic.h"
 #include "mm.h"
 
 #define ptent_t             pte_t
@@ -17,6 +18,8 @@
 
 #define dune_enter()          vmpl_enter(1, NULL)
 #define dune_init_and_enter() vmpl_enter(1, NULL)
+
+#define dune_apic_ipi       apic_send_ipi
 
 #define dune_va_to_pa       pgtable_va_to_pa
 #define dune_vm_mprotect	vmpl_vm_mprotect

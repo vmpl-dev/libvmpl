@@ -39,6 +39,7 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
     }
 
 	// Mark as mapped in VMPL-VM
+	log_info("Marking page %lx-%lx as mapped", phys, phys + len);
 	for (size_t i = 0; i < len; i += PGSIZE) {
 		struct page *pg = vmpl_pa2page(phys + i);
 		pg->flags = PAGE_FLAG_MAPPED;
@@ -299,6 +300,7 @@ void page_stats(void)
 	dune_page_stats();
 }
 
+#ifdef CONFIG_VMPL_TEST
 void page_test(int vmpl_fd)
 {
 	log_info("Page Test");
@@ -306,3 +308,4 @@ void page_test(int vmpl_fd)
 	dune_page_test(vmpl_fd);
 	log_success("Page Test Passed");
 }
+#endif

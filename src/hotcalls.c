@@ -205,8 +205,7 @@ int pkey_mprotect(void *addr, size_t len, int prot, int pkey)
 {
     init_hook(pkey_mprotect);
     if (unlikely(!need_hotcalls())) {
-        errno = -ENOSYS;
-        return -1;
+        return pkey_mprotect_orig(addr, len, prot, pkey);
     }
 
     return hotcalls4(SYS_pkey_mprotect, addr, len, prot, pkey);

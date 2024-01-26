@@ -207,6 +207,10 @@ int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
 					  new_dir, *pte, cur_va, level);
 			uint64_t pa = pgtable_va_to_pa(new_dir);
 			*pte = pte_addr(pa) | PTE_DEF_FLAGS;
+			// Clear the C-bit on the page table entry
+			if (level > 1) {
+				*pte &= ~PTE_C;
+			}
 		} else {
 			new_dir = pgtable_do_mapping(pte_addr(*pte));
 			if (!new_dir)
@@ -303,6 +307,8 @@ static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 		log_debug("Allocated a physical page, va = 0x%lx, pa = 0x%lx", va, pa);
 		// Map the physical page to the virtual page.
 		*pte = pte_addr(pa);
+		// Set the present bit on the page table entry.
+		*pte |= PTE_P;
 	} else {
 		// Clear the page table entry.
 		*pte = 0;

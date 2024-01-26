@@ -108,6 +108,7 @@ typedef uint64_t pte_t;
 #define PGTABLE_MMAP_END  (PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)
 
 #define PDADDR(n, i)	(((unsigned long) (i)) << PDSHIFT(n))
+#define PT_DEF_FLAGS   (PTE_P | PTE_W | PTE_U)
 #define PTE_DEF_FLAGS	(PTE_P | PTE_W | PTE_U | PTE_C)
 #define PTE_VMPL_FLAGS  (PTE_W | PTE_U | PTE_C| PTE_VMPL)
 #define LGPGSIZE	(1 << (PGSHIFT + NPTBITS))

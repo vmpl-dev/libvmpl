@@ -3,9 +3,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "vmpl-dev.h"
 #include "vmpl-ioctl.h"
-// #include "pgtable.h"
 #include "log.h"
 
 #ifdef CONFIG_VMPL_PGTABLE_PROTECTION
@@ -79,7 +77,7 @@ int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param) {
     return 0;
 }
 
-int vmpl_ioctl_get_layout(int vmpl_fd, struct vmsa_layout *vmsa_layout) {
+int vmpl_ioctl_get_layout(int vmpl_fd, struct vmpl_layout *vmsa_layout) {
     int rc;
     rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_LAYOUT, vmsa_layout);
     if (rc != 0) {
@@ -91,6 +89,28 @@ int vmpl_ioctl_get_layout(int vmpl_fd, struct vmsa_layout *vmsa_layout) {
     log_debug("dune: phys_limit at 0x%lx", vmsa_layout->phys_limit);
     log_debug("dune: base_map at 0x%lx", vmsa_layout->base_map);
     log_debug("dune: base_stack at 0x%lx", vmsa_layout->base_stack);
+
+    return 0;
+}
+
+int vmpl_ioctl_trap_enable(int vmpl_fd, struct vmpl_trap_config *trap_config) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_TRAP_ENABLE, trap_config);
+    if (rc < 0) {
+        log_err("Failed to enable trap: %s", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
+int vmpl_ioctl_trap_disable(int vmpl_fd) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_TRAP_DISABLE);
+    if (rc < 0) {
+        log_err("Failed to disable trap: %s", strerror(errno));
+        return -errno;
+    }
 
     return 0;
 }
@@ -118,6 +138,28 @@ int vmpl_ioctl_vmpl_run(int vmpl_fd, struct vmsa_config *vmsa_config) {
 }
 
 #ifdef CONFIG_DUNE_BOOT
+int dune_ioctl_trap_enable(int dune_fd, struct dune_trap_config *trap_config) {
+    int rc;
+    rc = ioctl(dune_fd, DUNE_TRAP_ENABLE, trap_config);
+    if (rc < 0) {
+        log_err("Failed to enable trap: %s", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
+int dune_ioctl_trap_disable(int dune_fd) {
+    int rc;
+    rc = ioctl(dune_fd, DUNE_TRAP_DISABLE);
+    if (rc < 0) {
+        log_err("Failed to disable trap: %s", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
 int dune_ioctl_get_syscall(int dune_fd, uint64_t *syscall) {
     int rc;
     rc = ioctl(dune_fd, DUNE_GET_SYSCALL, syscall);
