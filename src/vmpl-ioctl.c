@@ -6,7 +6,6 @@
 #include "vmpl-ioctl.h"
 #include "log.h"
 
-#ifdef CONFIG_VMPL_PGTABLE_PROTECTION
 int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint32_t attrs) {
     int rc;
     struct vmpl_data data = {
@@ -23,7 +22,6 @@ int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, u
 
     return 0;
 }
-#endif
 
 int vmpl_ioctl_set_user_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint32_t attrs) {
     int rc;

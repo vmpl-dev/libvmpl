@@ -74,7 +74,7 @@ AC_ARG_ENABLE([vmpl-cpuset],
               [AS_HELP_STRING([--enable-vmpl-cpuset],
                               [Enable cpuset support])],
               [enable_vmpl_cpuset=$enableval],
-              [enable_vmpl_cpuset=yes])
+              [enable_vmpl_cpuset=no])
 AM_CONDITIONAL([ENABLE_VMPL_CPUSET], [test "x$enable_vmpl_cpuset" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-signal],
@@ -101,7 +101,7 @@ AC_ARG_ENABLE([vmpl-ghcb],
               [AS_HELP_STRING([--enable-vmpl-ghcb],
                               [Enable ghcb support])],
               [enable_vmpl_ghcb=$enableval],
-              [enable_vmpl_ghcb=yes])
+              [enable_vmpl_ghcb=no])
 AM_CONDITIONAL([ENABLE_VMPL_GHCB], [test "x$enable_vmpl_ghcb" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-mm], [AS_HELP_STRING([--enable-vmpl-mm],

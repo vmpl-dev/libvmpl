@@ -5,14 +5,8 @@
 
 #include "vmpl-dev.h"
 
-#ifdef CONFIG_VMPL_PGTABLE_PROTECTION
 int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size,
                                 uint32_t attrs);
-#else
-static inline int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint32_t attrs) {
-	return 0;
-}
-#endif
 int vmpl_ioctl_set_user_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size,
 							 uint32_t attrs);
 int vmpl_ioctl_get_ghcb(int vmpl_fd, uint64_t *ghcb);

@@ -193,8 +193,8 @@ void pgtable_load_cr3(uint64_t cr3)
     cr3 &= ~ADDR_MASK;
     cr3 |= PTE_C;
     cr3 |= pa;
-    asm volatile("int3");
     load_cr3(cr3);
+    asm volatile("int3");
 }
 
 /**
