@@ -15,7 +15,9 @@ bin_PROGRAMS = xsave xsave_new \
             test_pagemap
 
 xsave_SOURCES = tests/xsave.c
+xsave_CFLAGS = -DXSAVE -mxsave -mxsaveopt -mavx
 xsave_new_SOURCES = tests/xsave-new.c
+xsave_new_CFLAGS = -DXSAVE -mxsave -mxsaveopt -mavx -mno-avx2
 test_mmap_SOURCES = tests/mmap.c
 test_heap_SOURCES = tests/heap.c
 test_mem_SOURCES = tests/mem.c
@@ -40,6 +42,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/serial.c \
                     src/trap.c \
                     src/apic.c \
+                    src/elf.c \
                     src/bitmap.c \
                     src/env.c \
                     src/log.c
@@ -72,5 +75,6 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/vmpl-hotcalls.h \
                     include/seimi.h \
                     include/apic.h \
+                    include/elf.h \
                     include/bitmap.h \
                     include/log.h
