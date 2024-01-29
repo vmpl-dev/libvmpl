@@ -304,6 +304,8 @@ static void setup_signal(void) { }
  */
 static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
 {
+    int rc;
+    struct vmpl_segs_t segs;
     log_info("setup vmsa");
 
     /* NOTE: We don't setup the general purpose registers because __dune_ret
@@ -312,20 +314,26 @@ static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
     config->rsp = 0;
     config->rflags = 0x202;
 
-#if 0
-    config->tr.selector = GD_TSS;
-    config->tr.base = &percpu->tss;
-    config->tr.limit = sizeof(percpu->tss);
-    config->tr.attrib = 0x0089; // refer to linux-svsm
+    segs.tr.selector = GD_TSS;
+    segs.tr.base = &percpu->tss;
+    segs.tr.limit = sizeof(percpu->tss);
+    segs.tr.attrib = 0x0089; // refer to linux-svsm
 
-    config->gdtr.base = (uint64_t)&percpu->gdt;
-    config->gdtr.limit = sizeof(percpu->gdt) - 1;
+    segs.gdtr.base = (uint64_t)&percpu->gdt;
+    segs.gdtr.limit = sizeof(percpu->gdt) - 1;
 
-    config->idtr.base = (uint64_t)&idt;
-    config->idtr.limit = sizeof(idt) - 1;
-#endif
+    segs.idtr.base = (uint64_t)&idt;
+    segs.idtr.limit = sizeof(idt) - 1;
+
+    rc = vmpl_ioctl_set_segs(dune_fd, &segs);
+    if (rc != 0) {
+        log_err("dune: failed to set segs");
+        goto failed;
+    }
 
     return 0;
+failed:
+    return rc;
 }
 
 /**
@@ -1179,13 +1187,13 @@ void dump_vmsa_config(struct vmsa_config *conf) { }
  */
 void on_dune_exit(struct vmsa_config *conf)
 {
-    printf("on_dune_exit()\n");
     switch (conf->ret) {
     case DUNE_RET_EXIT:
+        printf("on_dune_exit()\n");
         syscall(SYS_exit, conf->status);
         // exit(conf->status);
     case DUNE_RET_SYSCALL:
-        conf->rax = syscall(conf->rax, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
+        conf->rax = syscall(conf->status, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
 		__dune_go_dune(dune_fd, conf);
 		break;
     case DUNE_RET_INTERRUPT:
@@ -1193,6 +1201,7 @@ void on_dune_exit(struct vmsa_config *conf)
 		printf("dune: exit due to interrupt %lld\n", conf->status);
         break;
     case DUNE_RET_SIGNAL:
+        printf("on_dune_exit()\n");
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:

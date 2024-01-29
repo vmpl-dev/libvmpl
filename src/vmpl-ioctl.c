@@ -124,6 +124,28 @@ int vmpl_ioctl_set_seimi(int vmpl_fd) {
     return 0;
 }
 
+int vmpl_ioctl_set_segs(int vmpl_fd, struct vmpl_segs_t *segs) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SEGS, segs);
+    if (rc < 0) {
+        log_err("Failed to setup segs: %s", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
+int vmpl_ioctl_get_segs(int vmpl_fd, struct vmpl_segs_t *segs) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_SEGS, segs);
+    if (rc < 0) {
+        log_err("Failed to get segs: %s", strerror(errno));
+        return -errno;
+    }
+
+    return 0;
+}
+
 int vmpl_ioctl_vmpl_run(int vmpl_fd, struct vmsa_config *vmsa_config) {
     int rc;
     rc = ioctl(vmpl_fd, VMPL_IOCTL_VMPL_RUN, vmsa_config);
@@ -135,7 +157,6 @@ int vmpl_ioctl_vmpl_run(int vmpl_fd, struct vmsa_config *vmsa_config) {
     return rc;
 }
 
-#ifdef CONFIG_DUNE_BOOT
 int dune_ioctl_trap_enable(int dune_fd, struct dune_trap_config *trap_config) {
     int rc;
     rc = ioctl(dune_fd, DUNE_TRAP_ENABLE, trap_config);
@@ -185,4 +206,3 @@ int dune_ioctl_get_layout(int dune_fd, struct dune_layout *layout) {
 
     return 0;
 }
-#endif

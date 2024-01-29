@@ -16,6 +16,8 @@ int vmpl_ioctl_get_layout(int vmpl_fd, struct vmpl_layout *layout);
 int vmpl_ioctl_set_seimi(int vmpl_fd);
 int vmpl_ioctl_trap_enable(int vmpl_fd, struct vmpl_trap_config *trap_config);
 int vmpl_ioctl_trap_disable(int vmpl_fd);
+int vmpl_ioctl_set_segs(int vmpl_fd, struct vmpl_segs_t *segs);
+int vmpl_ioctl_get_segs(int vmpl_fd, struct vmpl_segs_t *segs);
 int vmpl_ioctl_vmpl_run(int vmpl_fd, struct vmsa_config *vmsa_config);
 #ifdef CONFIG_DUNE_BOOT
 int dune_ioctl_trap_enable(int dune_fd, struct dune_trap_config *trap_config);
