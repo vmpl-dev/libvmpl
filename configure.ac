@@ -142,7 +142,7 @@ AC_ARG_ENABLE([vmpl-xsave],
               [AS_HELP_STRING([--enable--vmpl-xsave],
                               [Enable xsave support])],
               [enable_vmpl_xsave=$enableval],
-              [enable_vmpl_xsave=yes])
+              [enable_vmpl_xsave=no])
 AM_CONDITIONAL([ENABLE_VMPL_XSAVE], [test "x$enable_vmpl_xsave" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-hotcalls], [AS_HELP_STRING([--enable-vmpl-hotcalls],
@@ -155,7 +155,7 @@ AC_ARG_ENABLE([dune-boot],
               [AS_HELP_STRING([--enable-dune-boot],
                               [Enable dune boot support])],
               [enable_dune_boot=$enableval],
-              [enable_dune_boot=no])
+              [enable_dune_boot=yes])
 AM_CONDITIONAL([ENABLE_DUNE_BOOT], [test "x$enable_dune_boot" = "xyes"])
 
 AC_ARG_ENABLE([remap-syscall],

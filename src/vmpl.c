@@ -90,28 +90,6 @@ typedef uint16_t segsel_t;
 static struct idtd idt[IDT_ENTRIES];
 static __thread struct dune_percpu *percpu;
 
-/**
- * Gets the segment registers.
- * 
- * @param regs Pointer to the vmsa_seg struct to be initialized.
- * @return void
- */
-static void get_segment_registers(struct vmsa_config *regs) {
-    __asm__ volatile(
-        "movw %%cs, %c[cs](%0)\n"
-        "movw %%ds, %c[ds](%0)\n"
-        "movw %%es, %c[es](%0)\n"
-        "movw %%fs, %c[fs](%0)\n"
-        "movw %%gs, %c[gs](%0)\n"
-        "movw %%ss, %c[ss](%0)\n" ::"r"(regs),
-        [cs] "i"(offsetof(struct vmsa_config, cs)),
-        [ds] "i"(offsetof(struct vmsa_config, ds)),
-        [es] "i"(offsetof(struct vmsa_config, es)),
-        [fs] "i"(offsetof(struct vmsa_config, fs)),
-        [gs] "i"(offsetof(struct vmsa_config, gs)),
-        [ss] "i"(offsetof(struct vmsa_config, ss)));
-}
-
 #ifdef CONFIG_DUMP_DETAILS
 /**
  * @brief  Dump GDT Entries
@@ -330,32 +308,22 @@ static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
 
     /* NOTE: We don't setup the general purpose registers because __dune_ret
      * will restore them as they were before the __dune_enter call */
+    config->rip = (uint64_t) &__dune_ret;
     config->rsp = 0;
     config->rflags = 0x202;
 
-    config->cs.base = 0;
-    config->cs.selector = GD_KT;
-    config->cs.limit = 0xFFFFFFFF;
-    config->cs.attrib = 0x029a;
-
-    config->ds.selector = GD_KD;
-    config->es = config->ds;
-    config->ss = config->ds;
-
+#if 0
     config->tr.selector = GD_TSS;
     config->tr.base = &percpu->tss;
     config->tr.limit = sizeof(percpu->tss);
     config->tr.attrib = 0x0089; // refer to linux-svsm
-    
-    config->fs.base = percpu->kfs_base;
-    config->gs.base = (uint64_t)percpu;
-    config->rip = (uint64_t) &__dune_ret;
 
     config->gdtr.base = (uint64_t)&percpu->gdt;
     config->gdtr.limit = sizeof(percpu->gdt) - 1;
 
     config->idtr.base = (uint64_t)&idt;
     config->idtr.limit = sizeof(idt) - 1;
+#endif
 
     return 0;
 }
@@ -973,6 +941,10 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     rc = xsave_begin(percpu);
     assert(rc == 0);
 
+    // wrfsbase, wrgsbase
+    wrfsbase(percpu->ufs_base);
+    wrgsbase((uint64_t)percpu);
+
     return 0;
 }
 
@@ -1045,10 +1017,6 @@ static int vmpl_init_post(struct dune_percpu *percpu)
 {
     // Setup XSAVE for FPU
     xsave_end(percpu);
-
-    // wrfsbase, wrgsbase
-    asm volatile("wrfsbase %0" : : "r" (percpu->kfs_base));
-    asm volatile("wrgsbase %0" : : "r" (percpu));
 
     // Setup VC communication
     vc_init(percpu->ghcb);
@@ -1218,7 +1186,6 @@ void on_dune_exit(struct vmsa_config *conf)
         // exit(conf->status);
     case DUNE_RET_SYSCALL:
         conf->rax = syscall(conf->rax, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
-		conf->ret = 0;
 		__dune_go_dune(dune_fd, conf);
 		break;
     case DUNE_RET_INTERRUPT:
