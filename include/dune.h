@@ -20,6 +20,10 @@
 #define dune_init_and_enter() vmpl_enter(1, NULL)
 
 #define dune_apic_ipi       apic_send_ipi
+#define dune_apic_eoi       apic_eoi
+#define dune_apic_init_rt_entry apic_init_rt_entry
+#define dune_apic_id_for_cpu    apic_get_id_for_cpu
+#define dune_apic_send_ipi      apic_send_ipi
 
 #define dune_va_to_pa       pgtable_va_to_pa
 #define dune_vm_mprotect	vmpl_vm_mprotect

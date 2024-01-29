@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include "mmu-x86.h"
+#include "mmu.h"
 #include "dune.h"
 #include "elf.h"
 

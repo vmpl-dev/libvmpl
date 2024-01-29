@@ -304,28 +304,35 @@ static void setup_signal(void) { }
  */
 static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
 {
+    int rc;
+    struct vmpl_segs_t *segs = malloc(sizeof(struct vmpl_segs_t));
+    memset(segs, 0, sizeof(struct vmpl_segs_t));
     log_info("setup vmsa");
 
-    /* NOTE: We don't setup the general purpose registers because __dune_ret
-     * will restore them as they were before the __dune_enter call */
-    config->rip = (uint64_t) &__dune_ret;
-    config->rsp = 0;
-    config->rflags = 0x202;
+    segs->fs.base = percpu->kfs_base;
+    segs->gs.base = (uint64_t)percpu;
 
-#if 0
-    config->tr.selector = GD_TSS;
-    config->tr.base = &percpu->tss;
-    config->tr.limit = sizeof(percpu->tss);
-    config->tr.attrib = 0x0089; // refer to linux-svsm
+    segs->tr.selector = GD_TSS;
+    segs->tr.base = &percpu->tss;
+    segs->tr.limit = sizeof(percpu->tss);
+    segs->tr.attrib = 0x0089; // refer to linux-svsm
 
-    config->gdtr.base = (uint64_t)&percpu->gdt;
-    config->gdtr.limit = sizeof(percpu->gdt) - 1;
+    segs->gdtr.base = (uint64_t)&percpu->gdt;
+    segs->gdtr.limit = sizeof(percpu->gdt) - 1;
 
-    config->idtr.base = (uint64_t)&idt;
-    config->idtr.limit = sizeof(idt) - 1;
-#endif
+    segs->idtr.base = (uint64_t)&idt;
+    segs->idtr.limit = sizeof(idt) - 1;
 
+    rc = vmpl_ioctl_set_segs(dune_fd, segs);
+    if (rc != 0) {
+        log_err("dune: failed to set segs");
+        goto failed;
+    }
+
+    free(segs);
     return 0;
+failed:
+    return rc;
 }
 
 /**
@@ -764,6 +771,13 @@ static struct vmsa_config *vmsa_alloc_config()
     log_debug("vmsa_alloc_config");
     struct vmsa_config *conf = malloc(sizeof(struct vmsa_config));
     memset(conf, 0, sizeof(struct vmsa_config));
+
+    /* NOTE: We don't setup the general purpose registers because __dune_ret
+     * will restore them as they were before the __dune_enter call */
+    conf->rip = (uint64_t) &__dune_ret;
+    conf->rsp = 0;
+    conf->rflags = 0x202;
+
     return conf;
 }
 
@@ -941,10 +955,6 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     rc = xsave_begin(percpu);
     assert(rc == 0);
 
-    // wrfsbase, wrgsbase
-    wrfsbase(percpu->ufs_base);
-    wrgsbase((uint64_t)percpu);
-
     return 0;
 }
 
@@ -1015,6 +1025,10 @@ static int dune_boot(struct dune_percpu *percpu)
  */
 static int vmpl_init_post(struct dune_percpu *percpu)
 {
+    // wrfsbase, wrgsbase
+    wrfsbase(percpu->ufs_base);
+    wrgsbase((uint64_t)percpu);
+
     // Setup XSAVE for FPU
     xsave_end(percpu);
 
@@ -1154,22 +1168,11 @@ failed:
     return -EIO;
 }
 
-#ifdef CONFIG_DUMP_DETAILS
-void dump_vmsa_config(struct vmsa_config *conf)
+void on_dune_syscall(struct vmsa_config *conf)
 {
-    printf("vmsa_config:");
-    printf("ret: %16lx, rax: %16lx, rbx: %16lx, rcx: %16lx", conf->ret, conf->rax, conf->rbx, conf->rcx);
-    printf("rdx: %16lx, rsi: %16lx, rdi: %16lx, rsp: %16lx", conf->rdx, conf->rsi, conf->rdi, conf->rsp);
-    printf("rbp: %16lx, r8: %16lx, r9: %16lx, r10: %16lx", conf->rbp, conf->r8, conf->r9, conf->r10);
-    printf("r11: %16lx, r12: %16lx, r13: %16lx, r14: %16lx", conf->r11, conf->r12, conf->r13, conf->r14);
-    printf("r15: %16lx, rip: %16lx, rflags: %16lx, cr3: %16lx", conf->r15, conf->rip, conf->rflags, conf->cr3);
-    printf("status: %16lx, vcpu: %16lx, cs: %16lx, ds: %16lx", conf->status, conf->vcpu, conf->cs, conf->ds);
-    printf("es: %16lx, ss: %16lx, tr: %16lx, fs: %16lx", conf->es, conf->ss, conf->tr, conf->fs);
-    printf("gs: %16lx, gdtr: %16lx, idtr: %16lx", conf->gs, conf->gdtr, conf->idtr);
+    conf->rax = syscall(conf->status, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
+    __dune_go_dune(dune_fd, conf);
 }
-#else
-void dump_vmsa_config(struct vmsa_config *conf) { }
-#endif
 
 /**
  * on_dune_exit - handle Dune exits
@@ -1179,20 +1182,20 @@ void dump_vmsa_config(struct vmsa_config *conf) { }
  */
 void on_dune_exit(struct vmsa_config *conf)
 {
-    printf("on_dune_exit()\n");
     switch (conf->ret) {
     case DUNE_RET_EXIT:
+        printf("on_dune_exit()\n");
         syscall(SYS_exit, conf->status);
         // exit(conf->status);
     case DUNE_RET_SYSCALL:
-        conf->rax = syscall(conf->rax, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
-		__dune_go_dune(dune_fd, conf);
+        on_dune_syscall(conf);
 		break;
     case DUNE_RET_INTERRUPT:
 		dune_debug_handle_int(conf);
 		printf("dune: exit due to interrupt %lld\n", conf->status);
         break;
     case DUNE_RET_SIGNAL:
+        printf("on_dune_exit()\n");
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:
