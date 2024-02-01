@@ -88,7 +88,7 @@ typedef uint64_t pte_t;
 #define pte_bad(pte)        (!(pte_val(pte) & PTE_BAD))
 #define pte_present(pte)    ((pte) & PTE_P)
 #define pte_write(pte)      ((pte) & PTE_W)
-#define pte_big(pte)        ((pte) & 0x80)
+#define pte_big(pte)        ((pte) & PTE_PS)
 #define pte_vmpl(pte)       ((pte) & PTE_VMPL)
 
 #define pte_addr(pte) ((pte) & ADDR_MASK)
