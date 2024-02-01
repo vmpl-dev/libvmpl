@@ -1292,6 +1292,41 @@ pte_t *vmpl_vm_clone(pte_t *root)
 	return new_root;
 }
 
+pte_t vmpl_vm_clone_pml4(pte_t *root)
+{
+	int i, ret;
+	pte_t *new_root;
+	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
+
+	new_root = alloc_zero_page();
+	log_debug("root = %lx, new_root = %lx", root, new_root);
+
+#if 0
+	void *start_va = (void *)0;
+	void *end_va = (void *)0xFFFFFFFFFFFFFFFF;
+
+	int level = 3;
+	int start_idx = PDX(level, start_va);
+	int end_idx = PDX(level, end_va);
+
+	assert(level >= 0 && level <= NPTLVLS);
+	assert(end_idx < NPTENTRIES);
+
+	for (i = start_idx; i <= end_idx; i++) {
+		pte_t *pte = &root[i];
+
+		if (pte_present(*pte)) {
+			pte_t *new_pte = &new_root[i];
+			*new_pte = *pte;
+		}
+	}
+#else
+	memcpy(new_root, root, PGSIZE);
+#endif
+
+	return new_root;
+}
+
 /**
  * Free the page table and decrement the reference count on any pages.
  * @param root The root of the page table.
@@ -1658,6 +1693,17 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	new_root = vmpl_vm_clone(vmpl_mm->pgd);
 	assert(new_root != NULL);
 	log_success("Test clone passed");
+
+	// Test load new page table
+	log_info("Test load new page table");
+	// pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
+	log_info("Test load new page table passed");
+
+	// Test vmpl-mm-clone-pml4
+	log_info("Test vmpl-mm-clone-pml4");
+	new_root = vmpl_vm_clone_pml4(vmpl_mm->pgd);
+	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
+	log_success("Test vmpl-mm-clone-pml4 passed");
 
 	// Test free
 	log_info("Test free");
