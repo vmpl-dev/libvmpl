@@ -1025,12 +1025,12 @@ static int dune_boot(struct dune_percpu *percpu)
  */
 static int vmpl_init_post(struct dune_percpu *percpu)
 {
-    // wrfsbase, wrgsbase
-    wrfsbase(percpu->ufs_base);
-    wrgsbase((uint64_t)percpu);
-
     // Setup XSAVE for FPU
     xsave_end(percpu);
+
+    // wrfsbase, wrgsbase
+    asm volatile("wrfsbase %0" : : "r" (percpu->kfs_base));
+    asm volatile("wrgsbase %0" : : "r" (percpu));
 
     // Setup VC communication
     vc_init(percpu->ghcb);

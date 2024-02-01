@@ -1216,7 +1216,7 @@ int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pke
 	return 0;
 }
 
-#ifdef CONFIG_DUNE_BOOT
+#ifdef CONFIG_MM_FULL
 /**
  * @brief Clone a page table.
  * @note  This function is not implemented.
