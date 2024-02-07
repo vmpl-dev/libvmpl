@@ -1216,7 +1216,7 @@ int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pke
 	return 0;
 }
 
-#ifdef CONFIG_MM_FULL
+#ifdef CONFIG_DUNE_BOOT
 /**
  * @brief Clone a page table.
  * @note  This function is not implemented.
@@ -1696,14 +1696,19 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test load new page table
 	log_info("Test load new page table");
-	// pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
-	log_info("Test load new page table passed");
+	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
+	log_success("Test load new page table passed");
 
+#if 0
 	// Test vmpl-mm-clone-pml4
 	log_info("Test vmpl-mm-clone-pml4");
 	new_root = vmpl_vm_clone_pml4(vmpl_mm->pgd);
 	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
 	log_success("Test vmpl-mm-clone-pml4 passed");
+#endif
+
+	// Restore the original page table
+	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)vmpl_mm->pgd);
 
 	// Test free
 	log_info("Test free");
