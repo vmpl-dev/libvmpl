@@ -625,6 +625,7 @@ static int setup_mm(struct dune_percpu *percpu)
     int rc;
     log_info("setup mm");
 
+#if 0
     // Setup Stack
     rc = setup_stack(CONFIG_VMPL_STACK_SIZE);
     assert(rc == 0);
@@ -632,6 +633,7 @@ static int setup_mm(struct dune_percpu *percpu)
     // Setup Heap
     rc = setup_heap(CONFIG_VMPL_HEAP_SIZE);
     assert(rc == 0);
+#endif
 
     // Setup VMPL VM
     rc = vmpl_mm_init(&vmpl_mm);
@@ -722,6 +724,20 @@ sighandler_t dune_signal(int sig, sighandler_t cb)
 	dune_register_intr_handler(DUNE_SIGNAL_INTR_BASE + sig, x);
 
 	return NULL;
+}
+
+unsigned long dune_get_user_fs(void)
+{
+	void *ptr;
+	asm("movq %%gs:%c[ufs_base], %0" : "=r"(ptr) :
+	    [ufs_base]"i"(offsetof(struct dune_percpu, ufs_base)) : "memory");
+	return (unsigned long) ptr;
+}
+
+void dune_set_user_fs(unsigned long fs_base)
+{
+	asm ("movq %0, %%gs:%c[ufs_base]" : : "r"(fs_base),
+	     [ufs_base]"i"(offsetof(struct dune_percpu, ufs_base)));
 }
 
 /**
@@ -1029,7 +1045,7 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     xsave_end(percpu);
 
     // wrfsbase, wrgsbase
-    wrfsbase(percpu->ufs_base);
+    wrfsbase(percpu->kfs_base);
     wrgsbase((uint64_t)percpu);
 
     // Setup VC communication

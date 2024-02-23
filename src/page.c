@@ -39,7 +39,7 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
     }
 
 	// Mark as mapped in VMPL-VM
-	log_info("Marking page %lx-%lx as mapped", phys, phys + len);
+	log_debug("Marking page %lx-%lx as mapped", phys, phys + len);
 	for (size_t i = 0; i < len; i += PGSIZE) {
 		struct page *pg = vmpl_pa2page(phys + i);
 		pg->flags = PAGE_FLAG_MAPPED;

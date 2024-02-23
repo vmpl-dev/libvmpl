@@ -45,6 +45,7 @@ static inline struct vmpl_vma_t *alloc_vma(struct vmpl_vm_t *vm, size_t size) {
 
 // VMPL-VM High Level API
 extern int vmpl_vm_init(struct vmpl_vm_t *vm);
+extern int vmpl_vm_init_procmaps(struct vmpl_vm_t *vm);
 extern int vmpl_vm_exit(struct vmpl_vm_t *vm);
 extern void vmpl_vm_dump(struct vmpl_vm_t *vm);
 extern void vmpl_vm_stats(struct vmpl_vm_t *vm);

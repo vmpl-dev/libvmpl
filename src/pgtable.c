@@ -332,7 +332,7 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
         return ret;
     }
 
-    (*ptep) |= PTE_ADDR(pa) | PTE_DEF_FLAGS;
+    (*ptep) |= pte_addr(pa) | PTE_DEF_FLAGS;
 
     return 0;
 }

@@ -6,6 +6,7 @@
 #include "vm.h"
 
 #include <sys/mman.h>
+#include <pthread.h>
 // virtual memory
 
 #define vmpl_va_to_pa(va)	pgtable_va_to_pa(va)
@@ -95,6 +96,7 @@ struct vmpl_mm_t {
 	pte_t *pgd;
 	struct vmpl_vm_t vmpl_vm;
 	bool initialized;
+	pthread_mutex_t lock;
 };
 
 extern struct vmpl_mm_t vmpl_mm;
