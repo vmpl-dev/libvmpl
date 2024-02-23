@@ -155,7 +155,7 @@ AC_ARG_ENABLE([dune-boot],
               [AS_HELP_STRING([--enable-dune-boot],
                               [Enable dune boot support])],
               [enable_dune_boot=$enableval],
-              [enable_dune_boot=yes])
+              [enable_dune_boot=no])
 AM_CONDITIONAL([ENABLE_DUNE_BOOT], [test "x$enable_dune_boot" = "xyes"])
 
 AC_ARG_ENABLE([remap-syscall],

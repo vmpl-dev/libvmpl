@@ -263,8 +263,6 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	int rc;
 	char *va_start, *va_end;
 	size_t size;
-	struct vmpl_vma_t *vma;
-	bool removed, inserted;
 
 	// VMPL Preserve Kernel Mapping
 	va_start = CONFIG_VMPL_VA_START;
@@ -283,6 +281,16 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	vmpl_vm->fit_algorithm = get_fit_algorithm(CONFIG_VMPL_FIT_ALGORITHM);
 	vmpl_vm->vma_dict = rb_dict_new(vmpl_vma_cmp);
 	pthread_spin_init(&vmpl_vm->lock, PTHREAD_PROCESS_PRIVATE);
+
+	return 0;
+}
+
+int vmpl_vm_init_procmaps(struct vmpl_vm_t *vmpl_vm) {
+	int rc;
+	struct vmpl_vma_t *vma;
+	bool removed, inserted;
+
+	// VMPL VMA Initialization
 	rc = parse_procmaps(insert_vma_callback, vmpl_vm);
 	if (rc != 0) {
 		perror("parse_procmaps");

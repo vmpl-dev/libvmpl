@@ -1481,7 +1481,10 @@ long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 	return -1;
 }
 
-struct vmpl_mm_t vmpl_mm = {.initialized = false};
+struct vmpl_mm_t vmpl_mm = {
+	.initialized = false,
+	.lock = PTHREAD_MUTEX_INITIALIZER,
+};
 
 /**
  * @brief Initialize the VMPL Memory Management. 
@@ -1493,9 +1496,12 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 {
     int rc;
 
+	pthread_mutex_lock(&vmpl_mm->lock);
+
 	// VMPL Memory Management
-	if (vmpl_mm->initialized)
-		return 0;
+	if (vmpl_mm->initialized) {
+		goto out;
+	}
 
     // VMPL Page Management
     rc = page_init(dune_fd);
@@ -1509,7 +1515,13 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
     rc = pgtable_init(&vmpl_mm->pgd, dune_fd);
 	assert(rc == 0);
 
+	// VMPL Memory Management
+	rc = vmpl_vm_init_procmaps(&vmpl_mm->vmpl_vm);
+	assert(rc == 0);
+
 	vmpl_mm->initialized = true;
+out:
+	pthread_mutex_unlock(&vmpl_mm->lock);
 
 	return 0;
 }

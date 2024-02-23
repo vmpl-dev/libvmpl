@@ -1,6 +1,7 @@
 #ifndef __VMPL_PAGE_H_
 #define __VMPL_PAGE_H_
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -32,7 +33,7 @@ extern int num_dune_pages;
 extern int num_vmpl_pages;
 
 #define PAGEBASE	0x0			/* 0 GB start */
-#define MAX_PAGES	(8ul << 20) /* 8 GB of memory */
+#define MAX_PAGES	(2ul << 20) /* 8 GB of memory */
 
 extern void *do_mapping(int fd, uint64_t phys, size_t len);
 static inline void __get_page(struct page *pg)
@@ -60,6 +61,9 @@ extern void vmpl_page_stats(void);
 
 static inline struct page * vmpl_pa2page(physaddr_t pa)
 {
+	if (pa >= (PAGEBASE + (MAX_PAGES << PGSHIFT))) {
+		printf("pa: %lx\n", pa);
+	}
 	assert(pa >= PAGEBASE);
 	assert(pa < (PAGEBASE + (MAX_PAGES << PGSHIFT)));
 	return &pages[PPN(pa - PAGEBASE)];
