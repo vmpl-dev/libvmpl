@@ -46,7 +46,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/bitmap.c \
                     src/env.c \
                     src/log.c
-libvmpl_la_LDFLAGS = -fPIC -shared \
+libvmpl_la_LDFLAGS = \
                     -ldl \
                     -lhotcalls \
                     -ldict \

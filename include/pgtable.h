@@ -86,6 +86,7 @@ typedef uint64_t pte_t;
 #define pte_none(pte)       (!((pte) & PTE_P))
 #define pte_val(pte)        ((pte) & 0xfffUL)
 #define pte_bad(pte)        (!(pte_val(pte) & PTE_BAD))
+#define pte_user(pte)       ((pte) & PTE_U)
 #define pte_present(pte)    ((pte) & PTE_P)
 #define pte_write(pte)      ((pte) & PTE_W)
 #define pte_big(pte)        ((pte) & PTE_PS)
