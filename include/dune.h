@@ -8,11 +8,13 @@
 #define ptent_t             pte_t
 #define PTE_ADDR            pte_addr
 #define load_cr3            pgtable_load_cr3
-#define dune_flush_tlb()    flush_tlb()
+#define dune_flush_tlb      flush_tlb
+#define dune_flush_tlb_one  flush_tlb_one
 #define dune_printf         printf
 #define dune_puts           puts
 #define dune_mmap           mmap
 #define dune_die            exit
+#define dune_get_ticks      rdtsc
 
 #define dune_fd             vmpl_fd
 

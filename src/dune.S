@@ -295,8 +295,16 @@ __dune_syscall:
 	testq $1, %gs:IN_USERMODE
 	jnz 1f
 	pushq	%r11
+	push %rcx
+	push %rdx
+	mov $0xc0010130, %ecx
+	mov $16, %eax
+	xor %edx, %edx
+	wrmsr
+	pop %rdx
+    pop %rcx
 	popfq
-	vmcall
+	vmgexit
 	jmp	*%rcx
 
 1:

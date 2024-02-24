@@ -386,6 +386,10 @@ static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 	pte_t *new_root = (pte_t *)arg;
 	pte_t *new_pte;
 
+	// Skip non-user pages
+	if (!pte_user(*pte))
+		return 0;
+
 	log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
 	// Create new page table entry for the new page table root
 	ret = pgtable_lookup(new_root, va, true, &new_pte);
@@ -393,8 +397,14 @@ static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 		return ret;
 
 	// Refcount the physical page, if present.
-	if (pte_present(*pte))
-		vmpl_page_get_addr(pte_addr(*pte));
+	if (pte_present(*pte)) {
+		if (pte_addr(*pte) > PGTABLE_MMAP_SIZE) {
+			log_warn("addr is too large: 0x%lx, pte = 0x%lx, va = 0x%lx", pte_addr(*pte), *pte, va);
+			return 0;
+		} else {
+			vmpl_page_get_addr(pte_addr(*pte));
+		}
+	}
 
 	// Copy the page table entry
 	log_debug("new_pte = 0x%lx", *new_pte);
