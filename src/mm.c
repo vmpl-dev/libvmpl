@@ -386,10 +386,6 @@ static int __vmpl_vm_clone_helper(const void *arg, pte_t *pte, void *va)
 	pte_t *new_root = (pte_t *)arg;
 	pte_t *new_pte;
 
-	// Skip non-user pages
-	if (!pte_user(*pte))
-		return 0;
-
 	log_debug("va = 0x%lx, pte = 0x%lx", va, *pte);
 	// Create new page table entry for the new page table root
 	ret = pgtable_lookup(new_root, va, true, &new_pte);

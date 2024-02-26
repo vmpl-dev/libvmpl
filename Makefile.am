@@ -26,7 +26,7 @@ test_maps_SOURCES = tests/test_maps.c
 test_pagemap_SOURCES = tests/test_pagemap.c
 
 # Specify shared libraries to be built
-lib_LTLIBRARIES = libvmpl.la libdunify.la
+lib_LTLIBRARIES = libvmpl.la libdunify.la libdune.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/sys.c \
                     src/debug.c \
@@ -51,6 +51,9 @@ libvmpl_la_LDFLAGS = \
                     -lhotcalls \
                     -ldict \
                     -version-info 1:0:0
+
+libdune_la_SOURCES = src/libdune.c
+libdune_la_LDFLAGS = -lvmpl
 
 libdunify_la_SOURCES = src/dunify.c \
                     src/hotcalls.c

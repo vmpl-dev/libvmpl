@@ -60,10 +60,6 @@ struct dune_percpu {
 	struct Tss tss;
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
-    void *lstar;
-    void *vsyscall;
-	void *dune_syscall;
-	void *dune_vsyscall;
     char *xsave_area;
     uint64_t xsave_mask;
     int pkey;
@@ -415,54 +411,53 @@ static int setup_cpuset()
  * @return void
  */
 #ifdef CONFIG_VMPL_SYSCALL
-static void setup_syscall(struct dune_percpu *percpu)
+static int setup_syscall(struct dune_percpu *percpu)
 {
-	uint64_t lstar, vaddr;
-	assert((uint64_t) __dune_syscall_end  -
-	       (uint64_t) __dune_syscall < PAGE_SIZE);
+    int rc;
+    unsigned long lstar;
+    unsigned long lstara;
+    unsigned char *page;
+    pte_t *pte;
+    size_t off;
+    int i;
 
     log_info("setup syscall");
-    lstar = rdmsr(MSR_LSTAR);
-    vaddr = PAGE_ALIGN_DOWN(lstar);
+    assert((unsigned long) __dune_syscall_end  -
+           (unsigned long) __dune_syscall < PGSIZE);
 
-#ifdef CONFIG_REMAP_SYSCALL
-    // remap syscall page to another page
-    percpu->lstar = mremap((void*)vaddr, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
-    if (percpu->lstar == MAP_FAILED) {
-        perror("dune: failed to remap syscall page");
-        exit(EXIT_FAILURE);
+    rc = dune_ioctl_get_syscall(dune_fd, &lstar);
+    if (rc != 0)
+        return -errno;
+
+    log_info("dune: lstar at %lx", lstar);
+    page = mmap((void *) NULL, PGSIZE * 2,
+            PROT_READ | PROT_WRITE | PROT_EXEC,
+            MAP_PRIVATE | MAP_ANON, -1, 0);
+
+    if (page == MAP_FAILED)
+        return -errno;
+
+    lstara = lstar & ~(PGSIZE - 1);
+    off = lstar - lstara;
+
+    memcpy(page + off, __dune_syscall,
+        (unsigned long) __dune_syscall_end -
+        (unsigned long) __dune_syscall);
+
+    for (i = 0; i <= PGSIZE; i += PGSIZE) {
+        uintptr_t pa = pgtable_va_to_pa(page + i);
+        vmpl_vm_lookup(pgroot, (void *) (lstara + i), CREATE_NORMAL, &pte);
+        *pte = PTE_ADDR(pa) | PTE_P | PTE_C;
     }
 
-    // remap dune syscall page to syscall page
-    percpu->dune_syscall = mremap((void*)__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
-#else
-    // unmap syscall page
-    munmap(vaddr, PAGE_SIZE);
-
-    // remap dune syscall page to syscall page
-    mremap(__dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
-#endif
+    return 0;
 }
 #else
-static void setup_syscall(struct dune_percpu *percpu)
+static int setup_syscall(struct dune_percpu *percpu)
 {
-    log_info("setup syscall");
-    wrmsrl(MSR_LSTAR, __dune_syscall);
+    log_warn("vmpl-syscall is not supportted");
+    return 0;
 }
-#endif
-
-#ifdef CONFIG_REMAP_SYSCALL
-static void restore_syscall(struct dune_percpu *percpu)
-{
-    uint64_t lstar, vaddr;
-    lstar = rdmsr(MSR_LSTAR);
-    vaddr = PAGE_ALIGN_DOWN(lstar);
-
-    mremap(percpu->lstar, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vaddr);
-    mremap(percpu->dune_syscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, __dune_syscall);
-}
-#else
-static void restore_syscall(struct dune_percpu *percpu) { }
 #endif
 
 /**
@@ -473,44 +468,21 @@ static void restore_syscall(struct dune_percpu *percpu) { }
  * @return void
  */
 #ifdef CONFIG_VMPL_VSYSCALL
-static void setup_vsyscall(struct dune_percpu *percpu)
+static int setup_vsyscall(struct dune_percpu *percpu)
 {
-    // 1. 设置vsyscall
-    void *vsyscall_addr = (void *)VSYSCALL_ADDR;
+    pte_t *pte;
     log_info("setup vsyscall");
+    vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
+    *pte = PTE_ADDR(pgtable_va_to_pa(&__dune_vsyscall_page)) | PTE_P | PTE_U | PTE_C;
 
-#ifdef CONFIG_REMAP_VSYSCALL
-    // remap vsyscall page to another page
-    percpu->vsyscall = mremap(vsyscall_addr, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, NULL);
-    if (percpu->vsyscall == MAP_FAILED) {
-        perror("dune: failed to remap vsyscall page");
-        exit(EXIT_FAILURE);
-    }
-
-    // remap dune vsyscall page to vsyscall page
-    percpu->dune_vsyscall = mremap((void*)__dune_vsyscall_page, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
-#else
-    // unmap vsyscall page
-    munmap(vsyscall_addr, PAGE_SIZE);
-
-    // remap dune vsyscall page to vsyscall page
-    mremap(__dune_vsyscall_page, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
-#endif
+    return 0;
 }
 #else
-static void setup_vsyscall(struct dune_percpu *percpu) { }
-#endif
-
-#ifdef CONFIG_REMAP_VSYSCALL
-static void restore_vsyscall(struct dune_percpu *percpu)
+static int setup_vsyscall(struct dune_percpu *percpu)
 {
-    void *vsyscall_addr = (void *)VSYSCALL_ADDR;
-
-    mremap(percpu->vsyscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, vsyscall_addr);
-    mremap(percpu->dune_vsyscall, PAGE_SIZE, PAGE_SIZE, MREMAP_FIXED, __dune_vsyscall_page);
+    log_warn("vmpl-vsyscall is not supportted");
+    return 0;
 }
-#else
-static void restore_vsyscall(struct dune_percpu *percpu) { }
 #endif
 
 /**
@@ -625,7 +597,6 @@ static int setup_mm(struct dune_percpu *percpu)
     int rc;
     log_info("setup mm");
 
-#if 0
     // Setup Stack
     rc = setup_stack(CONFIG_VMPL_STACK_SIZE);
     assert(rc == 0);
@@ -633,7 +604,6 @@ static int setup_mm(struct dune_percpu *percpu)
     // Setup Heap
     rc = setup_heap(CONFIG_VMPL_HEAP_SIZE);
     assert(rc == 0);
-#endif
 
     // Setup VMPL VM
     rc = vmpl_mm_init(&vmpl_mm);
@@ -967,6 +937,14 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 	rc = setup_mm(percpu);
     assert(rc == 0);
 
+    // Setup syscall handler
+    rc = setup_syscall(percpu);
+    assert(rc == 0);
+
+    // Setup vsyscall handler
+    rc = setup_vsyscall(percpu);
+    assert(rc == 0);
+
     // Setup XSAVE for FPU
     rc = xsave_begin(percpu);
     assert(rc == 0);
@@ -1053,12 +1031,6 @@ static int vmpl_init_post(struct dune_percpu *percpu)
 
     // Setup serial port
     serial_init();
-
-    // Setup syscall handler
-    setup_syscall(percpu);
-
-    // Setup vsyscall handler
-    setup_vsyscall(percpu);
 
     // Finish setup
     vmpl_booted = true;
