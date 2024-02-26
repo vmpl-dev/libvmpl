@@ -158,20 +158,6 @@ AC_ARG_ENABLE([dune-boot],
               [enable_dune_boot=no])
 AM_CONDITIONAL([ENABLE_DUNE_BOOT], [test "x$enable_dune_boot" = "xyes"])
 
-AC_ARG_ENABLE([remap-syscall],
-              [AS_HELP_STRING([--enable-remap-syscall],
-                              [Enable remap syscall support])],
-              [enable_remap_syscall=$enableval],
-              [enable_remap_syscall=no])
-AM_CONDITIONAL([ENABLE_REMAP_SYSCALL], [test "x$enable_remap_syscall" = "xyes"])
-
-AC_ARG_ENABLE([remap-vsyscall],
-              [AS_HELP_STRING([--enable-remap-vsyscall],
-                              [Enable remap vsyscall support])],
-              [enable_remap_vsyscall=$enableval],
-              [enable_remap_vsyscall=no])
-AM_CONDITIONAL([ENABLE_REMAP_VSYSCALL], [test "x$enable_remap_vsyscall" = "xyes"])
-
 AC_ARG_ENABLE([dump-details],
               [AS_HELP_STRING([--enable-dump-details],
                               [Enable dump details support])],
@@ -261,14 +247,6 @@ fi
 
 if test "x$enable_dune_boot" = "xyes"; then
     AC_DEFINE([CONFIG_DUNE_BOOT], [1], [Enable dune boot support])
-fi
-
-if test "x$enable_remap_syscall" = "xyes"; then
-    AC_DEFINE([CONFIG_REMAP_SYSCALL], [1], [Enable remap syscall support])
-fi
-
-if test "x$enable_remap_vsyscall" = "xyes"; then
-    AC_DEFINE([CONFIG_REMAP_VSYSCALL], [1], [Enable remap vsyscall support])
 fi
 
 if test "x$enable_dump_details" = "xyes"; then

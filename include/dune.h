@@ -5,6 +5,77 @@
 #include "apic.h"
 #include "mm.h"
 
+#ifdef LIBDUNE
+#define PTE_ADDR            pte_addr
+
+typedef pte_t ptent_t;
+
+static inline unsigned long dune_get_ticks(void)
+{
+	unsigned int a, d;
+	asm volatile("rdtsc" : "=a" (a), "=d" (d));
+	return ((unsigned long) a) | (((unsigned long) d) << 32);
+}
+
+static inline void dune_flush_tlb_one(unsigned long addr)
+{
+	asm ("invlpg (%0)" :: "r" (addr) : "memory");
+}
+
+static inline void dune_flush_tlb(void)
+{
+	asm ("mov %%cr3, %%rax\n"
+	     "mov %%rax, %%cr3\n" ::: "rax");
+}
+
+// virtual memory
+
+extern void load_cr3(uint64_t cr3);
+extern int dune_printf(const char *fmt, ...);
+extern void * dune_mmap(void *addr, size_t length, int prot,
+                        int flags, int fd, off_t offset);
+extern void dune_die(void);
+
+extern int dune_vm_mprotect(ptent_t *root, void *va, size_t len, int perm);
+extern int dune_vm_map_phys(ptent_t *root, void *va, size_t len, void *pa, int perm);
+extern int dune_vm_map_pages(ptent_t *root, void *va, size_t len, int perm);
+extern void dune_vm_unmap(ptent_t *root, void *va, size_t len);
+extern int dune_vm_lookup(ptent_t *root, void *va, int create, ptent_t **pte_out);
+
+extern int dune_vm_insert_page(ptent_t *root, void *va, struct page *pg, int perm);
+extern struct page * dune_vm_lookup_page(ptent_t *root, void *va);
+
+extern ptent_t * dune_vm_clone(ptent_t *root);
+extern void dune_vm_free(ptent_t *root);
+extern void dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec);
+
+extern int dune_vm_page_walk(ptent_t *root, void *start_va, void *end_va,
+			    page_walk_cb cb, const void *arg);
+
+// entry routines
+
+extern int dune_init(bool map_full);
+extern int dune_enter();
+
+/**
+ * dune_init_and_enter - initializes libdune and enters "Dune mode"
+ * 
+ * This is a simple initialization routine that handles everything
+ * in one go. Note that you still need to call dune_enter() in
+ * each new forked child or thread.
+ * 
+ * Returns 0 on success, otherwise failure.
+ */
+static inline int dune_init_and_enter(void)
+{
+	int ret;
+	
+	if ((ret = dune_init(1)))
+		return ret;
+	
+	return dune_enter();
+}
+#else
 #define ptent_t             pte_t
 #define PTE_ADDR            pte_addr
 #define load_cr3            pgtable_load_cr3
@@ -42,5 +113,5 @@
 #define dune_vm_default_pgflt_handler	vmpl_mm_default_pgflt_handler
 
 #define dune_vm_page_walk	vmpl_vm_page_walk
-
+#endif
 #endif

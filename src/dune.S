@@ -294,7 +294,9 @@ __dune_syscall:
 	/* handle system calls from G0 */
 	testq $1, %gs:IN_USERMODE
 	jnz 1f
+	int3
 	pushq	%r11
+	push %rax
 	push %rcx
 	push %rdx
 	mov $0xc0010130, %ecx
@@ -303,6 +305,7 @@ __dune_syscall:
 	wrmsr
 	pop %rdx
     pop %rcx
+	pop %rax
 	popfq
 	vmgexit
 	jmp	*%rcx

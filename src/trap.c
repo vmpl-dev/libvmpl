@@ -55,7 +55,18 @@ static const char *exceptions[] = {
 };
 
 static dune_syscall_cb syscall_cb;
+static dune_pgflt_cb pgflt_cb;
 static dune_intr_cb intr_cbs[IDT_ENTRIES];
+
+void dune_vm_default_pgflt_handler(struct dune_tf *tf) {
+	if (pgflt_cb) {
+		pgflt_cb(read_cr2(), tf->err, tf);
+	} else {
+		printf("unhandled page fault %lx %lx\n", read_cr2(), tf->err);
+		dune_dump_trap_frame(tf);
+		exit(EXIT_FAILURE);
+	}
+}
 
 int dune_register_intr_handler(int vec, dune_intr_cb cb)
 {
@@ -78,29 +89,48 @@ void dune_register_syscall_handler(dune_syscall_cb cb)
 
 void dune_register_pgflt_handler(dune_pgflt_cb cb)
 {
-	dune_register_intr_handler(T_PF, cb);
+	pgflt_cb = cb;
+	dune_register_intr_handler(T_PF, dune_vm_default_pgflt_handler);
 }
 
+#ifdef CONFIG_VMPL_DEBUG
 #ifdef CONFIG_STACK_TRACE
+static bool addr_is_mapped(void *va)
+{
+    int ret;
+    pte_t *pte;
+
+    ret = vmpl_vm_lookup(pgroot, va, CREATE_NONE, &pte);
+    if (ret)
+        return 0;
+
+    if (!(*pte & PTE_P))
+        return 0;
+
+    return 1;
+}
+
 #define STACK_DEPTH 12
 
 static void dune_dump_stack(struct dune_tf *tf)
 {
-	int i;
-	unsigned long *sp = (unsigned long *)tf->rsp;
+    int i;
+    unsigned long *sp = (unsigned long *) tf->rsp;
 
-	// we use printf() because this might
-	// have to work even if libc doesn't.
-	printf("dune: Dumping Stack Contents...\n");
-	for (i = 0; i < STACK_DEPTH; i++) {
-		int rc = lookup_address((unsigned long)&sp[i], NULL, NULL);
-		if (rc != 0) {
-			printf("dune: reached unmapped addr\n");
-			break;
-		}
-		printf("dune: RSP%+-3lx 0x%016lx\n", i * sizeof(long), sp[i]);
-	}
+    // we use printf() because this might
+    // have to work even if libc doesn't.
+    printf("dune: Dumping Stack Contents...\n");
+    for (i = 0; i < STACK_DEPTH; i++) {
+        if (!addr_is_mapped(&sp[i])) {
+            printf("dune: reached unmapped addr\n");
+            break;
+        }
+        printf("dune: RSP%+-3d 0x%016lx\n", i * sizeof(long),
+               sp[i]);
+    }
 }
+#else
+static void dune_dump_stack(struct dune_tf *tf) { }
 #endif
 
 static void dune_hexdump(void *x, int len)
@@ -141,12 +171,13 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 	printf("dune: R10 0x%016lx R11 0x%016lx\n", tf->r10, tf->r11);
 	printf("dune: R12 0x%016lx R13 0x%016lx\n", tf->r12, tf->r13);
 	printf("dune: R14 0x%016lx R15 0x%016lx\n", tf->r14, tf->r15);
-#ifdef CONFIG_STACK_TRACE
 	dune_dump_stack(tf);
-#endif
 	dump_ip(tf);
 	printf("dune: --- End Trap Dump ---\n");
 }
+#else
+void dune_dump_trap_frame(struct dune_tf *tf) { }
+#endif
 
 void dune_passthrough_syscall(struct dune_tf *tf)
 {
@@ -162,6 +193,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 		syscall_cb(tf);
 	} else {
 		log_err("dune: missing handler for syscall %ld", tf->rax);
+		dune_dump_trap_frame(tf);
 		exit(EXIT_FAILURE);
 	}
 }
@@ -172,12 +204,10 @@ void dune_trap_handler(int num, struct dune_tf *tf)
 		intr_cbs[num](tf);
 		return;
 	} else {
-#ifdef CONFIG_VMPL_DEBUG
-		dune_dump_trap_frame(tf);
-#endif
 		long ret = syscall(ULONG_MAX, num, (unsigned long)tf);
 		if (ret != 0) {
 			log_err("Unable to handle trap %d, error code %d", num, ret);
+			dune_dump_trap_frame(tf);
 			exit(EXIT_FAILURE);
 		}
 	}
