@@ -1026,6 +1026,9 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     wrfsbase(percpu->kfs_base);
     wrgsbase((uint64_t)percpu);
 
+    // wrmsr
+    wrmsrl(MSR_LSTAR, (uint64_t) &__dune_syscall);
+
     // Setup VC communication
     vc_init(percpu->ghcb);
 
@@ -1045,11 +1048,15 @@ static void vmpl_init_exit(void)
     apic_cleanup();
 }
 
+#ifdef CONFIG_DUMP_DETAILS
 static void vmpl_init_stats(void)
 {
     log_info("VMPL Stats:");
     vmpl_mm_stats(&vmpl_mm);
 }
+#else
+static void vmpl_init_stats(void) { }
+#endif
 
 #ifdef CONFIG_VMPL_TEST
 /**

@@ -288,13 +288,11 @@ __dune_go_dune:
  *
  * XXX: don't do relative jumps - watch out code is memcpy
  */
-.align 4096
 .globl __dune_syscall
 __dune_syscall:
 	/* handle system calls from G0 */
 	testq $1, %gs:IN_USERMODE
 	jnz 1f
-	int3
 	pushq	%r11
 	push %rax
 	push %rcx
@@ -330,8 +328,9 @@ __dune_syscall:
 	/* then finally re-enable interrupts and jump to the handler */
 	sti
 	movq	%rsp, %rdi /* argument 0 */
-	lea	dune_syscall_handler@GOT, %rax
-	call	*%rax
+	/* lea	dune_syscall_handler@GOT, %rax */
+	/* call	*%rax */
+	call dune_syscall_handler
 
 	/* next restore the CPL3 FS base address */
 	SET_G3_FS_BASE
