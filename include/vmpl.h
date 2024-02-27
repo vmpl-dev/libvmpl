@@ -134,8 +134,6 @@ extern void dune_passthrough_syscall(struct dune_tf *tf);
 extern sighandler_t dune_signal(int sig, sighandler_t cb);
 extern unsigned long dune_get_user_fs(void);
 extern void dune_set_user_fs(unsigned long fs_base);
-extern void dune_syscall_handler(struct dune_tf *tf);
-extern void dune_trap_handler(int num, struct dune_tf *tf);
 
 // elf helper functions
 #include "elf.h"
