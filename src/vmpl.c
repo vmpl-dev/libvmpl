@@ -474,6 +474,7 @@ static int setup_vsyscall(struct dune_percpu *percpu)
     log_info("setup vsyscall");
     vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
     *pte = PTE_ADDR(pgtable_va_to_pa(&__dune_vsyscall_page)) | PTE_P | PTE_U | PTE_C;
+    log_info("dune: vsyscall at %p, pte = %lx", VSYSCALL_ADDR, *pte);
 
     return 0;
 }
@@ -1027,7 +1028,7 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     wrgsbase((uint64_t)percpu);
 
     // wrmsr
-    wrmsrl(MSR_LSTAR, (uint64_t) &__dune_syscall);
+    wrmsr(MSR_LSTAR, (uintptr_t) &__dune_syscall);
 
     // Setup VC communication
     vc_init(percpu->ghcb);
@@ -1055,7 +1056,7 @@ static void vmpl_init_stats(void)
     vmpl_mm_stats(&vmpl_mm);
 }
 #else
-static void vmpl_init_stats(void) { }
+static inline void vmpl_init_stats(void) { }
 #endif
 
 #ifdef CONFIG_VMPL_TEST

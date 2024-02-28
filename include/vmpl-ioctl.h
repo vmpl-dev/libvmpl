@@ -13,7 +13,7 @@ int vmpl_ioctl_get_ghcb(int vmpl_fd, uint64_t *ghcb);
 int vmpl_ioctl_get_cr3(int vmpl_fd, uint64_t *cr3);
 int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param);
 int vmpl_ioctl_get_layout(int vmpl_fd, struct vmpl_layout *layout);
-int vmpl_ioctl_set_seimi(int vmpl_fd);
+int vmpl_ioctl_set_seimi(int vmpl_fd, struct vmpl_seimi_t *seimi);
 int vmpl_ioctl_trap_enable(int vmpl_fd, struct vmpl_trap_config *trap_config);
 int vmpl_ioctl_trap_disable(int vmpl_fd);
 int vmpl_ioctl_set_segs(int vmpl_fd, struct vmpl_segs_t *segs);

@@ -10,8 +10,13 @@ int setup_seimi(int dune_fd)
 {
     int rc;
 
+    struct vmpl_seimi_t seimi = {
+        .pgd_user = SEIMI_PGD_USER,
+        .pgd_super = SEIMI_PGD_SUPER,
+    };
+
     log_info("Setting up SEIMI");
-    rc = vmpl_ioctl_set_seimi(dune_fd);
+    rc = vmpl_ioctl_set_seimi(dune_fd, &seimi);
     if (rc < 0) {
         log_err("Failed to setup SEIMI: %s", strerror(errno));
     }

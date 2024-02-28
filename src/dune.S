@@ -5,7 +5,7 @@
 #define __ASSEMBLY__
 #include "vmpl-core.h"
 
-#define USE_RDWRGSFS 0
+#define USE_RDWRGSFS 1
 
 #define MSR_FS_BASE	0xc0000100
 #define GD_KT		0x10
