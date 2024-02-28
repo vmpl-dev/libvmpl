@@ -113,9 +113,9 @@ int vmpl_ioctl_trap_disable(int vmpl_fd) {
     return 0;
 }
 
-int vmpl_ioctl_set_seimi(int vmpl_fd) {
+int vmpl_ioctl_set_seimi(int vmpl_fd, struct vmpl_seimi_t *seimi) {
 	int rc;
-	rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SEIMI, 0);
+	rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SEIMI, seimi);
 	if (rc < 0) {
         log_err("Failed to setup SEIMI: %s", strerror(errno));
         return -errno;
