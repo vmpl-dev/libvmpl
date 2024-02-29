@@ -429,7 +429,7 @@ static int setup_syscall()
     if (rc != 0)
         return -errno;
 
-    log_info("dune: lstar at %lx", lstar);
+    log_debug("dune: lstar at %lx", lstar);
     page = mmap((void *) NULL, PGSIZE * 2,
             PROT_READ | PROT_WRITE | PROT_EXEC,
             MAP_PRIVATE | MAP_ANON, -1, 0);
@@ -474,7 +474,7 @@ static int setup_vsyscall()
     log_info("setup vsyscall");
     vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
     *pte = PTE_ADDR(pgtable_va_to_pa(&__dune_vsyscall_page)) | PTE_P | PTE_U | PTE_C;
-    log_info("dune: vsyscall at %p, pte = %lx", VSYSCALL_ADDR, *pte);
+    log_debug("dune: vsyscall at %p, pte = %lx", VSYSCALL_ADDR, *pte);
 
     return 0;
 }

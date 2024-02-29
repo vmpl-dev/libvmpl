@@ -9,14 +9,14 @@
     push %rcx
     push %rdx
     mov $0xc0010130, %ecx
-    mov $16, %eax
+    mov $0x16, %eax
     xor %edx, %edx
     wrmsr
     pop %rdx
     pop %rcx
     pop %rax
     popf
-    rep; vmmcall
+    vmgexit
     jmp 2f
 1:
     pop %rax

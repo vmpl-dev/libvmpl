@@ -189,7 +189,7 @@ void dune_passthrough_syscall(struct dune_tf *tf)
 void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {
-		log_info("dune: handling syscall %ld", tf->rax);
+		log_debug("dune: handling syscall %ld", tf->rax);
 		syscall_cb(tf);
 	} else {
 		log_err("dune: missing handler for syscall %ld", tf->rax);
