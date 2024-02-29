@@ -839,7 +839,7 @@ static struct dune_percpu *vmpl_alloc_percpu(void)
 
 	percpu->kfs_base = fs_base;
 	percpu->ufs_base = fs_base;
-	percpu->in_usermode = 0;
+	percpu->in_usermode = 1;
 
 	if (setup_safe_stack(percpu)) {
         log_err("dune: failed to setup safe stack");
@@ -1035,6 +1035,9 @@ static int dune_boot(struct dune_percpu *percpu)
  */
 static int vmpl_init_post(struct dune_percpu *percpu)
 {
+    // Now we are in VMPL mode
+    percpu->in_usermode = 0;
+
     // Setup XSAVE for FPU
     xsave_end(percpu);
 
