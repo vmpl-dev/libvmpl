@@ -26,6 +26,9 @@ struct vmpl_vm_t {
 	fit_algorithm_t fit_algorithm;
 	uint64_t va_start;
 	uint64_t va_end;
+	uintptr_t phys_limit;
+	uintptr_t mmap_base;
+	uintptr_t start_stack;
 	pthread_spinlock_t lock;
 };
 

@@ -89,8 +89,9 @@ static inline int dune_init_and_enter(void)
 
 #define dune_fd             vmpl_fd
 
-#define dune_enter()          vmpl_enter(1, NULL)
-#define dune_init_and_enter() vmpl_enter(1, NULL)
+#define dune_init(map_full)		vmpl_init(map_full)
+#define dune_enter()			vmpl_enter(1, NULL)
+#define dune_init_and_enter()	vmpl_init_and_enter(1, NULL)
 
 #define dune_apic_ipi       apic_send_ipi
 #define dune_apic_eoi       apic_eoi
