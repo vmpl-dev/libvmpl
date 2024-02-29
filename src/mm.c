@@ -1521,27 +1521,36 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 	vmpl_mm->vmpl_vm.phys_limit = layout.phys_limit;
 	vmpl_mm->vmpl_vm.mmap_base = layout.base_map;
 	vmpl_mm->vmpl_vm.start_stack = layout.base_stack;
-	log_info("VMPL-VM: phys_limit = 0x%lx", vmpl_mm->vmpl_vm.phys_limit);
-	log_info("VMPL-VM: mmap_base = 0x%lx", vmpl_mm->vmpl_vm.mmap_base);
-	log_info("VMPL-VM: start_stack = 0x%lx", vmpl_mm->vmpl_vm.start_stack);
+	log_debug("VMPL-VM: phys_limit = 0x%lx", vmpl_mm->vmpl_vm.phys_limit);
+	log_debug("VMPL-VM: mmap_base = 0x%lx", vmpl_mm->vmpl_vm.mmap_base);
+	log_debug("VMPL-VM: start_stack = 0x%lx", vmpl_mm->vmpl_vm.start_stack);
 
 	// VMPL-VM Abstraction
 	rc = vmpl_vm_init(&vmpl_mm->vmpl_vm);
-	assert(rc == 0);
+	if (rc != 0) {
+		log_err("Failed to initialize VMPL-VM");
+		goto out;
+	}
 
 	// VMPL Page Table Management
     rc = pgtable_init(&vmpl_mm->pgd, dune_fd);
-	assert(rc == 0);
+	if (rc != 0) {
+		log_err("Failed to initialize page table");
+		goto out;
+	}
 
 	// VMPL Memory Management
 	rc = vmpl_vm_init_procmaps(&vmpl_mm->vmpl_vm);
-	assert(rc == 0);
+	if (rc != 0) {
+		log_err("Failed to initialize VMPL-VM procmaps");
+		goto out;
+	}
 
 	vmpl_mm->initialized = true;
 out:
 	pthread_mutex_unlock(&vmpl_mm->lock);
 
-	return 0;
+	return rc;
 }
 
 /**
