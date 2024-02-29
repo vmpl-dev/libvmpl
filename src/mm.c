@@ -1514,6 +1514,18 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
     assert(rc == 0);
 
 	// VMPL-VM Abstraction
+	struct vmpl_layout layout;
+	rc = vmpl_ioctl_get_layout(dune_fd, &layout);
+	assert(rc == 0);
+
+	vmpl_mm->vmpl_vm.phys_limit = layout.phys_limit;
+	vmpl_mm->vmpl_vm.mmap_base = layout.base_map;
+	vmpl_mm->vmpl_vm.start_stack = layout.base_stack;
+	log_info("VMPL-VM: phys_limit = 0x%lx", vmpl_mm->vmpl_vm.phys_limit);
+	log_info("VMPL-VM: mmap_base = 0x%lx", vmpl_mm->vmpl_vm.mmap_base);
+	log_info("VMPL-VM: start_stack = 0x%lx", vmpl_mm->vmpl_vm.start_stack);
+
+	// VMPL-VM Abstraction
 	rc = vmpl_vm_init(&vmpl_mm->vmpl_vm);
 	assert(rc == 0);
 

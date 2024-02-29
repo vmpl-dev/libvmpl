@@ -411,7 +411,7 @@ static int setup_cpuset()
  * @return void
  */
 #ifdef CONFIG_VMPL_SYSCALL
-static int setup_syscall(struct dune_percpu *percpu)
+static int setup_syscall()
 {
     int rc;
     unsigned long lstar;
@@ -453,7 +453,7 @@ static int setup_syscall(struct dune_percpu *percpu)
     return 0;
 }
 #else
-static int setup_syscall(struct dune_percpu *percpu)
+static int setup_syscall()
 {
     log_warn("vmpl-syscall is not supportted");
     return 0;
@@ -468,7 +468,7 @@ static int setup_syscall(struct dune_percpu *percpu)
  * @return void
  */
 #ifdef CONFIG_VMPL_VSYSCALL
-static int setup_vsyscall(struct dune_percpu *percpu)
+static int setup_vsyscall()
 {
     pte_t *pte;
     log_info("setup vsyscall");
@@ -479,7 +479,7 @@ static int setup_vsyscall(struct dune_percpu *percpu)
     return 0;
 }
 #else
-static int setup_vsyscall(struct dune_percpu *percpu)
+static int setup_vsyscall()
 {
     log_warn("vmpl-vsyscall is not supportted");
     return 0;
@@ -593,7 +593,7 @@ static void vmpl_default_pf_handler(struct dune_tf *tf)
 	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
 }
 
-static int setup_mm(struct dune_percpu *percpu)
+static int setup_mm()
 {
     int rc;
     log_info("setup mm");
@@ -861,7 +861,6 @@ static void vmpl_free_percpu(struct dune_percpu *percpu)
     munmap(percpu, PGSIZE);
 }
 
-bool vmpl_initialized = false;
 bool vmpl_booted = false;
 
 /**
@@ -869,14 +868,11 @@ bool vmpl_booted = false;
  * @note   Common initialization for both pre and post
  * @retval 0 on success, otherwise an error code.
  */
-static int vmpl_init(void)
+int vmpl_init(bool map_full)
 {
     int rc;
-    if (vmpl_initialized) {
-        log_debug("dune: already initialized");
-        return 0;
-    }
 
+    log_init();
     log_info("vmpl_init");
 
     // Open dune_fd
@@ -887,6 +883,36 @@ static int vmpl_init(void)
         goto failed;
     }
 
+    // Setup CPU set
+    if ((rc = setup_cpuset())) {
+        log_err("dune: unable to setup CPU set");
+        goto failed;
+    }
+
+    // Setup Memory Management
+	if ((rc = setup_mm())) {
+        log_err("dune: unable to setup memory management");
+        goto failed;
+    }
+
+    // Setup SEIMI for Intra-Process Isolation
+    if ((rc = setup_seimi(dune_fd))) {
+		log_err("dune: unable to setup SEIMI");
+		goto failed;
+	}
+
+    // Setup syscall handler
+    if ((rc = setup_syscall())) {
+        log_err("dune: unable to setup syscall handler");
+        goto failed;
+    }
+
+    // Setup vsyscall handler
+    if ((rc = setup_vsyscall()) && map_full) {
+        log_err("dune: unable to setup vsyscall handler");
+        goto failed;
+    }
+
     // Setup signal
     setup_signal();
 
@@ -894,17 +920,17 @@ static int vmpl_init(void)
     setup_idt();
 
     // Setup APIC
-    rc = apic_setup();
-    if (rc != 0) {
+    if ((rc = apic_setup())) {
         perror("dune: failed to setup APIC");
+		rc = -ENOMEM;
         goto failed_apic;
-    }
+	}
 
-    vmpl_initialized = true;
     return 0;
 failed_apic:
 	apic_cleanup();
 failed:
+    close(dune_fd);
     return rc;
 }
 
@@ -920,37 +946,26 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     setup_gdt(percpu);
 
     // Setup segments registers
-    setup_vmsa(percpu, config);
-
-    // Setup CPU set
-    rc = setup_cpuset();
-    assert(rc == 0);
+    if ((rc = setup_vmsa(percpu, config))) {
+		log_err("dune: failed to setup vmsa");
+		goto failed;
+	}
 
     // Setup GHCB for hypercall
-    rc = setup_ghcb(percpu);
-    assert(rc == 0);
-
-    // Setup SEIMI for Intra-Process Isolation
-    rc = setup_seimi(dune_fd);
-    assert(rc == 0);
-
-    // Setup Memory Management
-	rc = setup_mm(percpu);
-    assert(rc == 0);
-
-    // Setup syscall handler
-    rc = setup_syscall(percpu);
-    assert(rc == 0);
-
-    // Setup vsyscall handler
-    rc = setup_vsyscall(percpu);
-    assert(rc == 0);
+    if ((rc = setup_ghcb(percpu))) {
+		log_err("dune: failed to setup ghcb");
+		goto failed;
+	}
 
     // Setup XSAVE for FPU
-    rc = xsave_begin(percpu);
-    assert(rc == 0);
+    if ((rc = xsave_begin(percpu))) {
+		log_err("dune: failed to setup xsave");
+		goto failed;
+	}
 
     return 0;
+failed:
+	return rc;
 }
 
 /**
@@ -1095,7 +1110,6 @@ int vmpl_enter(int argc, char *argv[])
     struct vmsa_config *__conf;
     struct dune_percpu *__percpu;
 
-    log_init();
 	log_info("vmpl_enter");
 
 	// Build assert
@@ -1103,14 +1117,6 @@ int vmpl_enter(int argc, char *argv[])
 
     // Check if percpu is already allocated
     if (!percpu) {
-        // boot case (first time)
-        log_debug("dune: boot case");
-        rc = vmpl_init();
-        if (rc) {
-            log_err("dune: failed to initialize VMPL library");
-            goto failed;
-        }
-
         // Allocate percpu struct for VMPL library
         __percpu = vmpl_alloc_percpu();
         if (!__percpu) {

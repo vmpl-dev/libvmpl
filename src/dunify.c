@@ -84,7 +84,7 @@ static int main_hook(int argc, char **argv, char **envp)
 	}
 
 	log_debug("entering dune mode...");
-	int ret = vmpl_enter(argc, argv);
+	int ret = vmpl_init_and_enter(argc, argv);
 	if (ret) {
 		log_err("failed to initialize dune");
 	} else {
@@ -133,7 +133,7 @@ pid_t fork()
 
 		if (run_in_vmpl_process) {
 			log_debug("entering dune mode...");
-			int ret = vmpl_enter(1, NULL);
+			int ret = vmpl_init_and_enter(1, NULL);
 			if (ret) {
 				log_err("failed to initialize dune");
 			} else {

@@ -163,20 +163,37 @@ extern int dune_elf_iter_ph(struct dune_elf *elf, dune_elf_phcb cb);
 extern int dune_elf_load_ph(struct dune_elf *elf, Elf64_Phdr *phdr, off_t off);
 
 // vmpl initialization
-extern bool vmpl_initialized;
 extern bool vmpl_booted;
+extern int vmpl_init(bool map_full);
 extern int vmpl_enter(int argc, char *argv[]);
+/**
+ * vmpl_init_and_enter - initializes libvmpl and enters "VMPL mode"
+ * 
+ * This is a simple initialization routine that handles everything
+ * in one go. Note that you still need to call vmpl_enter() in
+ * each new forked child or thread.
+ * 
+ * Returns 0 on success, otherwise failure.
+ */
+static inline int vmpl_init_and_enter(int argc, char *argv[])
+{
+	int ret;
+
+	if ((ret = vmpl_init(1)))
+		return ret;
+
+	return vmpl_enter(argc, argv);
+}
+
+#define VMPL_ENTER                        \
+	do                                    \
+	{                                     \
+		if (vmpl_init_and_enter(1, NULL)) \
+		{                                 \
+			return 1;                     \
+		}                                 \
+	} while (0)
 #ifdef __cplusplus
 }
 #endif
-
-#define VMPL_ENTER                  \
-	do                              \
-	{                               \
-		if (vmpl_enter(1, NULL)) 	\
-		{                           \
-			return 1;               \
-		}                           \
-	} while (0)
-
 #endif /* __VMPL_H_ */
