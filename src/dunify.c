@@ -78,13 +78,19 @@ static int main_hook(int argc, char **argv, char **envp)
 	// Register cleanup function
 	atexit(cleanup);
 
+	int rc = vmpl_init(true);
+	if (rc) {
+		log_err("failed to initialize dune");
+		return rc;
+	}
+
 	// Call original main
 	if (!run_in_vmpl) {
 		return main_orig(argc, argv, envp);
 	}
 
 	log_debug("entering dune mode...");
-	int ret = vmpl_init_and_enter(argc, argv);
+	int ret = vmpl_enter(argc, argv);
 	if (ret) {
 		log_err("failed to initialize dune");
 	} else {
