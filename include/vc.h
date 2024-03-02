@@ -42,6 +42,25 @@
 #define GHCB_MSR_PROTOCOL_MIN(x) (((x) >> 32) & 0xffff)
 #define GHCB_MSR_PROTOCOL_MAX(x) (((x) >> 48) & 0xffff)
 
+// MSR protocol: CPUID Request
+/// 0x004
+#define GHCB_MSR_CPUID_REQ 0x004
+#define GHCB_MSR_CPUID_REQ_EAX(x) ((0x00 << 30) | GHCB_MSR_CPUID_REQ)
+#define GHCB_MSR_CPUID_REQ_EBX(x) ((0x01 << 30) | GHCB_MSR_CPUID_REQ)
+#define GHCB_MSR_CPUID_REQ_ECX(x) ((0x02 << 30) | GHCB_MSR_CPUID_REQ)
+#define GHCB_MSR_CPUID_REQ_EDX(x) ((0x03 << 30) | GHCB_MSR_CPUID_REQ)
+/// 0x005
+#define GHCB_MSR_CPUID_RES 0x005
+#define GHCB_MSR_CPUID_RES_VAL(v) (GHCB_MSR_DATA(v) >> 32)
+
+// MSR protocol: Preferred GHCB GPA
+/// 0x010
+#define GHCB_MSR_PREFERRED_GHCB_REQ 0x010
+#define GHCB_MSR_PREFERRED_GHCB(x) ((x) | GHCB_MSR_PREFERRED_GHCB_REQ)
+/// 0x011
+#define GHCB_MSR_PREFERRED_GHCB_RES 0x011
+#define GHCB_MSR_PREFERRED_GHCB_VAL(v) (GHCB_MSR_DATA(v) >> 12)
+
 // MSR protocol: GHCB registration
 /// 0x12
 #define GHCB_MSR_REGISTER_GHCB_REQ 0x12
@@ -82,6 +101,12 @@
 // MSR protocol: Termination request
 /// 0x100
 #define GHCB_MSR_TERMINATE_REQ 0x100
+/// 0x0 General termination request
+#define GHCB_MSR_TERMINATE_GENERAL 0x0
+/// 0x1 SEV-ES/GHCB Protocol range is not supported.
+#define GHCB_MSR_TERMINATE_PROTOCOL_RANGE 0x1
+/// 0x2 SEV-SNP features not supported
+#define GHCB_MSR_TERMINATE_SNP_FEATURES 0x2
 
 /// 0
 #define RESCIND 0
@@ -111,20 +136,42 @@
 #define GHCB_NAE_RDTSCP 0x87
 /// 0x89
 #define GHCB_NAE_WBINVD 0x89
+/// 0x80000001
+#define GHCB_NAE_MMIO_READ 0x80000001
+/// 0x80000002
+#define GHCB_NAE_MMIO_WRITE 0x80000002
+/// 0x80000003
+#define GHCB_NAE_NMI_COMPLETE 0x80000003
+/// 0x80000004
+#define GHCB_NAE_AP_RESET_HOLD 0x80000004
+/// 0x80000005
+#define GHCB_NAE_AP_JUMP_TABLE 0x80000005
 /// 0x80000010
 #define GHCB_NAE_PSC 0x80000010
 /// 0x80000011
 #define GHCB_NAE_SNP_GUEST_REQUEST 0x80000011
-/// 0x800000112
+/// 0x80000012
 #define GHCB_NAE_SNP_EXTENDED_GUEST_REQUEST 0x80000012
 /// 0x80000013
 #define GHCB_NAE_SNP_AP_CREATION 0x80000013
 /// 1
 #define SNP_AP_CREATE_IMMEDIATE 1
+/// 0x80000014
+#define GHCB_NAE_HV_DOORBELL_PAGE 0x80000014
+/// 0x80000015
+#define GHCB_NAE_HV_IPI 0x80000015
+/// 0x80000016
+#define GHCB_NAE_HV_TIMER 0x80000016
 /// 0x80000017
 #define GHCB_NAE_GET_APIC_IDS 0x80000017
 /// 0x80000018
 #define GHCB_NAE_RUN_VMPL 0x80000018
+/// 0x8000fffd
+#define GHCB_NAE_HV_FEATURES 0x8000fffd
+/// 0x8000fffe
+#define GHCB_NAE_TERMINATE_REQUEST 0x8000fffe
+/// 0x8000ffff
+#define GHCB_NAE_UNSUPPORTED_EVENT 0x8000ffff
 
 #define GHCB_NAE_SNP_AP_CREATION_REQ(op, vmpl, apic) \
     ((op) | (((uint64_t)(vmpl)) << 16) | (((uint64_t)(apic)) << 32))
@@ -178,9 +225,12 @@ void vc_outb(uint16_t port, uint8_t value);
 uint8_t vc_inb(uint16_t port);
 
 #ifdef CONFIG_VMPL_GHCB
-void vc_init(Ghcb *ghcb_va);
+Ghcb *vc_init(int dune_fd);
 #else
-static inline void vc_init(Ghcb *ghcb_va) {}
+static inline Ghcb *vc_init(int dune_fd)
+{
+    return NULL;
+}
 #endif
 
 #endif

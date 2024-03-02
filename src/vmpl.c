@@ -487,45 +487,6 @@ static int setup_vsyscall()
 #endif
 
 /**
- * Sets up the GHCB.
- * 
- * @return void
- */
-#ifdef CONFIG_VMPL_GHCB
-static int setup_ghcb(struct dune_percpu *percpu)
-{
-    int rc;
-    Ghcb *ghcb;
-    log_info("setup ghcb");
-
-    // 映射ghcb, 用于hypercall
-    ghcb = mmap((void *)GHCB_MMAP_BASE, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                             MAP_SHARED | MAP_FIXED, dune_fd, 0);
-    if (ghcb == MAP_FAILED) {
-        perror("dune: failed to map GHCB");
-        rc = -ENOMEM;
-        goto failed;
-    }
-
-    // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
-    log_debug("dune: GHCB at %p", ghcb);
-    ghcb->sw_exit_code = GHCB_NAE_RUN_VMPL;
-    ghcb->sw_exit_info_1 = RUN_VMPL;
-    ghcb->sw_exit_info_2 = 0;
-
-    percpu->ghcb = ghcb;
-    return 0;
-failed:
-    return rc;
-}
-#else
-static int setup_ghcb(struct dune_percpu *percpu) {
-    log_warn("setup ghcb not supported");
-    return 0;
-}
-#endif
-
-/**
  * @brief  Setup stack for VMPL library
  * @note   
  * @retval None
@@ -825,6 +786,7 @@ static struct dune_percpu *vmpl_alloc_percpu(void)
 	percpu->kfs_base = fs_base;
 	percpu->ufs_base = fs_base;
 	percpu->in_usermode = 1;
+    percpu->ghcb = NULL;
 
 	if (setup_safe_stack(percpu)) {
         log_err("dune: failed to setup safe stack");
@@ -936,12 +898,6 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
 		goto failed;
 	}
 
-    // Setup GHCB for hypercall
-    if ((rc = setup_ghcb(percpu))) {
-		log_err("dune: failed to setup ghcb");
-		goto failed;
-	}
-
     // Setup XSAVE for FPU
     if ((rc = xsave_begin(percpu))) {
 		log_err("dune: failed to setup xsave");
@@ -1034,7 +990,7 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     wrmsr(MSR_LSTAR, (uintptr_t) &__dune_syscall);
 
     // Setup VC communication
-    vc_init(percpu->ghcb);
+    percpu->ghcb = vc_init(dune_fd);
 
     // Setup serial port
     serial_init();

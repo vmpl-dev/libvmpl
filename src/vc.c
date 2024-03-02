@@ -14,6 +14,7 @@
 #include "mm.h"
 #include "log.h"
 #include "vc.h"
+#include "vmpl-dev.h"
 
 static uint64_t HV_FEATURES;
 static __thread Ghcb* this_ghcb = NULL;
@@ -509,9 +510,44 @@ void vc_early_make_pages_private(PhysFrame begin, PhysFrame end) {
 }
 
 #ifdef CONFIG_VMPL_GHCB
-void vc_init(Ghcb *ghcb_va) {
-	PhysAddr ghcb_pa;
-	log_info("setup VC");
+static Ghcb *setup_ghcb(int dune_fd)
+{
+    int rc;
+    Ghcb *ghcb;
+    log_info("setup ghcb");
+
+    // 映射ghcb, 用于hypercall
+    ghcb = mmap((void *)GHCB_MMAP_BASE, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                             MAP_SHARED | MAP_FIXED, dune_fd, 0);
+    if (ghcb == MAP_FAILED) {
+        perror("dune: failed to map GHCB");
+        errno = -ENOMEM;
+        goto failed;
+    }
+
+    // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
+    log_debug("dune: GHCB at %p", ghcb);
+    ghcb->sw_exit_code = GHCB_NAE_RUN_VMPL;
+    ghcb->sw_exit_info_1 = RUN_VMPL;
+    ghcb->sw_exit_info_2 = 0;
+
+    return ghcb;
+failed:
+    return NULL;
+}
+
+Ghcb *vc_init(int dune_fd) {
+    Ghcb *ghcb_va;
+    PhysAddr ghcb_pa;
+
+    log_info("setup GHCB");
+    ghcb_va = setup_ghcb(dune_fd);
+    if (!ghcb_va) {
+        log_err("failed to setup GHCB");
+        return NULL;
+    }
+
+    log_info("setup VC");
 
 	ghcb_pa = (PhysAddr)pgtable_va_to_pa((VirtAddr)ghcb_va);
     log_debug("ghcb_pa: %lx", ghcb_pa);
@@ -519,5 +555,7 @@ void vc_init(Ghcb *ghcb_va) {
     vc_establish_protocol();
     vc_register_ghcb(ghcb_pa);
     vc_set_ghcb(ghcb_va);
+
+    return ghcb_va;
 }
 #endif
