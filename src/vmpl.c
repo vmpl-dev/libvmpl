@@ -581,18 +581,6 @@ failed:
     return rc;
 }
 
-static void vmpl_default_pf_handler(struct dune_tf *tf)
-{
-    long rc = 0;
-    uint64_t addr = read_cr2();
-    rc = vmpl_mm_default_pgflt_handler(addr, tf->err);
-    if (rc == 0) {
-        return;
-    }
-    
-	syscall(ULONG_MAX, T_PF, (unsigned long)tf);
-}
-
 static int setup_mm()
 {
     int rc;
@@ -609,9 +597,6 @@ static int setup_mm()
     // Setup VMPL VM
     rc = vmpl_mm_init(&vmpl_mm);
     assert(rc == 0);
-
-    // Setup Page Fault Handler
-    dune_register_intr_handler(T_PF, vmpl_default_pf_handler);
 
     return 0;
 }

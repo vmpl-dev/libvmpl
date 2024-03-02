@@ -1500,7 +1500,7 @@ struct vmpl_mm_t vmpl_mm = {
  */
 int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 {
-    int rc;
+    int rc = 0;
 
 	pthread_mutex_lock(&vmpl_mm->lock);
 

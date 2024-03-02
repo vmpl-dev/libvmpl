@@ -58,16 +58,6 @@ static dune_syscall_cb syscall_cb;
 static dune_pgflt_cb pgflt_cb;
 static dune_intr_cb intr_cbs[IDT_ENTRIES];
 
-void dune_vm_default_pgflt_handler(struct dune_tf *tf) {
-	if (pgflt_cb) {
-		pgflt_cb(read_cr2(), tf->err, tf);
-	} else {
-		printf("unhandled page fault %lx %lx\n", read_cr2(), tf->err);
-		dune_dump_trap_frame(tf);
-		exit(EXIT_FAILURE);
-	}
-}
-
 int dune_register_intr_handler(int vec, dune_intr_cb cb)
 {
 	if (vec >= IDT_ENTRIES || vec < 0)
@@ -90,7 +80,6 @@ void dune_register_syscall_handler(dune_syscall_cb cb)
 void dune_register_pgflt_handler(dune_pgflt_cb cb)
 {
 	pgflt_cb = cb;
-	dune_register_intr_handler(T_PF, dune_vm_default_pgflt_handler);
 }
 
 #ifdef CONFIG_VMPL_DEBUG
@@ -203,7 +192,22 @@ void dune_trap_handler(int num, struct dune_tf *tf)
 	if (intr_cbs[num]) {
 		intr_cbs[num](tf);
 		return;
-	} else {
+	}
+
+	switch (num) {
+	case T_PF:
+		uintptr_t addr = read_cr2();
+		// VMPL can handle page faults, so we pass them to the VMPL.
+		if (vmpl_mm_default_pgflt_handler(addr, tf->err) == 0)
+			return;
+		// Dune can't handle page faults, so we pass them to the guest OS.
+		if (pgflt_cb) {
+			if (tf->err & PF_ERR_P) {
+				pgflt_cb(addr, tf->err, tf);
+				return;
+			}
+		}
+	default:
 		long ret = syscall(ULONG_MAX, num, (unsigned long)tf);
 		if (ret != 0) {
 			log_err("Unable to handle trap %d, error code %d", num, ret);

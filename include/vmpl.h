@@ -100,6 +100,14 @@ typedef void (*dune_pgflt_cb) (uintptr_t addr, uint64_t fec, struct dune_tf *tf)
 typedef void (*dune_syscall_cb) (struct dune_tf *tf);
 typedef void (*sighandler_t)(int);
 
+#define PF_ERR_P       0x1
+#define PF_ERR_WR      0x2
+#define PF_ERR_US      0x4
+#define PF_ERR_ID      0x10
+#define PF_ERR_PK      0x20
+#define PF_ERR_SS      0x40
+#define PF_ERR_RMP     0x80
+
 #define DUNE_SIGNAL_INTR_BASE 200
 
 #ifdef __cplusplus
