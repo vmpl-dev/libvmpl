@@ -1612,7 +1612,8 @@ ssize_t copy_file_range(int fd_in, loff_t *off_in, int fd_out,
     return hotcalls6(SYS_copy_file_range, fd_in, off_in, fd_out, off_out, len, flags);
 }
 
-ssize_t preadv2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+#if 0
+ssize_t preadv2(int fd, const struct iovec *iov, off_t offset, int iovcnt)
 {
 	init_hook(preadv2)
 	if (unlikely(!need_hotcalls())) {
@@ -1622,7 +1623,7 @@ ssize_t preadv2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 	return hotcalls4(SYS_preadv2, fd, iov, iovcnt, offset);
 }
 
-ssize_t pwritev2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+ssize_t pwritev2(int fd, const struct iovec *iov, off_t offset, int iovcnt)
 {
 	init_hook(pwritev2)
 	if (unlikely(!need_hotcalls())) {
@@ -1631,6 +1632,7 @@ ssize_t pwritev2(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 
 	return hotcalls4(SYS_pwritev2, fd, iov, iovcnt, offset);
 }
+#endif
 
 // Hotcalls wrapper for pkey_alloc
 int pkey_alloc(unsigned int flags, unsigned int init_val)
