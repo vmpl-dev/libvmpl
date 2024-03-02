@@ -7,6 +7,9 @@
 #include <string.h>
 #include <time.h>
 
+#define TIME_FORMAT "%Y-%m-%d %H:%M:%S"
+#define TIME_FORMAT "%d %b %Y %H:%M:%S"
+
 static int log_level = LOG_LEVEL_INFO;
 static bool show_time = false;
 
@@ -100,7 +103,7 @@ void log_message(int level, const char *format, ...) {
         time_t now = time(NULL);
         struct tm *tm = localtime(&now);
         char time_str[64];
-        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm);
+        strftime(time_str, sizeof(time_str), TIME_FORMAT, tm);
         printf("%s[%s] [%s] %s%s\n", level_color_ptr, time_str, level_str_ptr, message, COLOR_RESET);
     } else {
         printf("%s[%s] %s%s\n", level_color_ptr, level_str_ptr, message, COLOR_RESET);
