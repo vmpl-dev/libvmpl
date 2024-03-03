@@ -298,7 +298,7 @@ static void setup_signal(void) { }
  * @param percpu Pointer to the percpu struct.
  * @return 0 on success, otherwise an error code.
  */
-static int setup_vmsa(struct dune_percpu *percpu, struct vmsa_config *config)
+static int setup_vmsa(struct dune_percpu *percpu)
 {
     int rc;
     struct vmpl_segs_t *segs = malloc(sizeof(struct vmpl_segs_t));
@@ -403,14 +403,13 @@ static int setup_cpuset()
 #endif
 
 
+#ifdef CONFIG_DUNE_BOOT
 /**
- * Sets up the system call handler.
  * @note 用ioctl，将MSR_LSATR指向的虚拟地址空间，重新映射到dune_syscall所在的物理页
  * @param percpu Pointer to the percpu struct.
  * 
  * @return void
  */
-#ifdef CONFIG_VMPL_SYSCALL
 static int setup_syscall()
 {
     int rc;
@@ -452,13 +451,6 @@ static int setup_syscall()
 
     return 0;
 }
-#else
-static int setup_syscall()
-{
-    log_warn("vmpl-syscall is not supportted");
-    return 0;
-}
-#endif
 
 /**
  * Sets up the vsyscall handler.
@@ -467,7 +459,6 @@ static int setup_syscall()
  * 
  * @return void
  */
-#ifdef CONFIG_VMPL_VSYSCALL
 static int setup_vsyscall()
 {
     pte_t *pte;
@@ -479,9 +470,31 @@ static int setup_vsyscall()
     return 0;
 }
 #else
+/**
+ * @brief Set the up syscall object for the VMPL library.
+ * @note 
+ * 
+ * @return int 
+ */
+static int setup_syscall()
+{
+    int rc;
+
+    log_info("setup syscall");
+
+    uint64_t *syscall = &__dune_syscall;
+    rc = vmpl_ioctl_set_syscall(dune_fd, (uint64_t)&syscall);
+    if (rc != 0) {
+        log_err("dune: failed to set syscall");
+        return rc;
+    }
+
+    return 0;
+}
+
 static int setup_vsyscall()
 {
-    log_warn("vmpl-vsyscall is not supportted");
+    log_warn("vsyscall is not supportted");
     return 0;
 }
 #endif
@@ -885,7 +898,7 @@ failed:
  * Initializes the VMPL library before the main program starts.
  * This function sets up VMPL2 access permission, builds assert, sets up signal, and sets up IDT.
  */
-static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
+static int vmpl_init_pre(struct dune_percpu *percpu)
 {
     int rc;
 
@@ -893,7 +906,7 @@ static int vmpl_init_pre(struct dune_percpu *percpu, struct vmsa_config *config)
     setup_gdt(percpu);
 
     // Setup segments registers
-    if ((rc = setup_vmsa(percpu, config))) {
+    if ((rc = setup_vmsa(percpu))) {
 		log_err("dune: failed to setup vmsa");
 		goto failed;
 	}
@@ -981,13 +994,6 @@ static int vmpl_init_post(struct dune_percpu *percpu)
 
     // Setup XSAVE for FPU
     xsave_end(percpu);
-
-    // wrfsbase, wrgsbase
-    wrfsbase(percpu->kfs_base);
-    wrgsbase((uint64_t)percpu);
-
-    // wrmsr
-    wrmsr(MSR_LSTAR, (uintptr_t) &__dune_syscall);
 
     // Setup VC communication
     percpu->ghcb = vc_init(dune_fd);
@@ -1083,7 +1089,7 @@ int vmpl_enter(int argc, char *argv[])
     }
 
     // Initialize VMPL library before the main program starts
-    rc = vmpl_init_pre(__percpu, __conf);
+    rc = vmpl_init_pre(__percpu);
     if (rc) {
         log_err("dune: failed to initialize VMPL library");
         goto failed;
@@ -1126,6 +1132,7 @@ void on_dune_syscall(struct vmsa_config *conf)
  * This function must not return. It can either exit(), __dune_go_dune() or
  * __dune_go_linux().
  */
+#ifdef CONFIG_DUNE_BOOT
 void on_dune_exit(struct vmsa_config *conf)
 {
     switch (conf->ret) {
@@ -1133,8 +1140,6 @@ void on_dune_exit(struct vmsa_config *conf)
         printf("on_dune_exit()\n");
         syscall(SYS_exit, conf->status);
         // exit(conf->status);
-    case DUNE_RET_SYSCALL:
-        on_dune_syscall(conf);
 		break;
     case DUNE_RET_INTERRUPT:
 		dune_debug_handle_int(conf);
@@ -1154,3 +1159,29 @@ void on_dune_exit(struct vmsa_config *conf)
 
     exit(EXIT_FAILURE);
 }
+#else
+void on_dune_exit(struct vmsa_config *conf)
+{
+    switch (conf->ret) {
+    case DUNE_RET_EXIT:
+        printf("on_dune_exit()\n");
+        syscall(SYS_exit, conf->status);
+        // exit(conf->status);
+    case DUNE_RET_SYSCALL:
+        on_dune_syscall(conf);
+		break;
+    case DUNE_RET_SIGNAL:
+        printf("on_dune_exit()\n");
+        __dune_go_dune(dune_fd, conf);
+        break;
+    case DUNE_RET_NOENTER:
+        log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
+        break;
+    default:
+        log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
+        break;
+    }
+
+    exit(EXIT_FAILURE);
+}
+#endif

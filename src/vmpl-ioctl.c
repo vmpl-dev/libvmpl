@@ -75,38 +75,11 @@ int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param) {
     return 0;
 }
 
-int vmpl_ioctl_get_layout(int vmpl_fd, struct vmpl_layout *vmsa_layout) {
+int vmpl_ioctl_set_syscall(int vmpl_fd, uint64_t *syscall) {
     int rc;
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_LAYOUT, vmsa_layout);
-    if (rc != 0) {
-        perror("dune: failed to get layout");
-        return rc;
-    }
-
-    // log phys_limit, base_map and base_stack of the layout
-    log_debug("dune: phys_limit at 0x%lx", vmsa_layout->phys_limit);
-    log_debug("dune: base_map at 0x%lx", vmsa_layout->base_map);
-    log_debug("dune: base_stack at 0x%lx", vmsa_layout->base_stack);
-
-    return 0;
-}
-
-int vmpl_ioctl_trap_enable(int vmpl_fd, struct vmpl_trap_config *trap_config) {
-    int rc;
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_TRAP_ENABLE, trap_config);
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SYSCALL, syscall);
     if (rc < 0) {
-        log_err("Failed to enable trap: %s", strerror(errno));
-        return -errno;
-    }
-
-    return 0;
-}
-
-int vmpl_ioctl_trap_disable(int vmpl_fd) {
-    int rc;
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_TRAP_DISABLE);
-    if (rc < 0) {
-        log_err("Failed to disable trap: %s", strerror(errno));
+        log_err("Failed to set syscall: %s", strerror(errno));
         return -errno;
     }
 
@@ -157,6 +130,7 @@ int vmpl_ioctl_vmpl_run(int vmpl_fd, struct vmsa_config *vmsa_config) {
     return rc;
 }
 
+#ifdef CONFIG_DUNE_BOOT
 int dune_ioctl_trap_enable(int dune_fd, struct dune_trap_config *trap_config) {
     int rc;
     rc = ioctl(dune_fd, DUNE_TRAP_ENABLE, trap_config);
@@ -206,3 +180,4 @@ int dune_ioctl_get_layout(int dune_fd, struct dune_layout *layout) {
 
     return 0;
 }
+#endif

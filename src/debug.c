@@ -8,6 +8,7 @@
 #include "debug.h"
 #include "vmpl.h"
 
+#ifdef CONFIG_DUNE_BOOT
 #define X86_EFLAGS_TF (0x100)
 
 static struct dune_trap_regs trap_regs;
@@ -26,20 +27,12 @@ static void dune_trap_enable(__u64 trigger_rip, __u8 delay,
 		.priv = priv,
 	};
 
-#ifdef CONFIG_DUNE_BOOT
 	dune_ioctl_trap_enable(dune_fd, &trap_conf);
-#else
-	vmpl_ioctl_trap_enable(dune_fd, &trap_conf);
-#endif
 }
 
 static void dune_trap_disable()
 {
-#ifdef CONFIG_DUNE_BOOT
 	dune_ioctl_trap_disable(dune_fd);
-#else
-	vmpl_ioctl_trap_disable(dune_fd);
-#endif
 }
 
 static void notify_on_resume(struct dune_trap_regs *regs, void *priv)
@@ -93,3 +86,4 @@ void dune_debug_handle_int(struct dune_config *conf)
 		break;
 	}
 }
+#endif

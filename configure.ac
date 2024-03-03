@@ -117,20 +117,6 @@ AC_ARG_ENABLE([vmpl-seimi],
               [enable_vmpl_seimi=no])
 AM_CONDITIONAL([ENABLE_VMPL_SEIMI], [test "x$enable_vmpl_seimi" = "xyes"])
 
-AC_ARG_ENABLE([vmpl-syscall],
-              [AS_HELP_STRING([--enable-vmpl-syscall],
-                              [Enable syscall support])],
-              [enable_vmpl_syscall=$enableval],
-              [enable_vmpl_syscall=no])
-AM_CONDITIONAL([ENABLE_VMPL_SYSCALL], [test "x$enable_vmpl_syscall" = "xyes"])
-
-AC_ARG_ENABLE([vmpl-vsyscall],
-                [AS_HELP_STRING([--enable-vmpl-vsyscall],
-                                [Enable vsyscall support])],
-                [enable_vmpl_vsyscall=$enableval],
-                [enable_vmpl_vsyscall=no])
-AM_CONDITIONAL([ENABLE_VMPL_VSYSCALL], [test "x$enable_vmpl_vsyscall" = "xyes"])
-
 AC_ARG_ENABLE([vmpl-debug],
               [AS_HELP_STRING([--enable-vmpl-debug],
                               [Enable debug support])],
@@ -223,14 +209,6 @@ fi
 
 if test "x$enable_vmpl_seimi" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_SEIMI], [1], [Enable seimi support])
-fi
-
-if test "x$enable_vmpl_syscall" = "xyes"; then
-    AC_DEFINE([CONFIG_VMPL_SYSCALL], [1], [Enable syscall support])
-fi
-
-if test "x$enable_vmpl_vsyscall" = "xyes"; then
-    AC_DEFINE([CONFIG_VMPL_VSYSCALL], [1], [Enable vsyscall support])
 fi
 
 if test "x$enable_vmpl_debug" = "xyes"; then

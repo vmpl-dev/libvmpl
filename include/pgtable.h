@@ -104,10 +104,6 @@ typedef uint64_t pte_t;
 
 #define padding(level) ((level)*4 + 4)
 
-#define PGTABLE_MMAP_BASE 0x200000000UL /* 8GB */
-#define PGTABLE_MMAP_SIZE 0x180000000UL /* 6GB */
-#define PGTABLE_MMAP_END  (PGTABLE_MMAP_BASE + PGTABLE_MMAP_SIZE)
-
 #define PDADDR(n, i)	(((unsigned long) (i)) << PDSHIFT(n))
 #define PT_DEF_FLAGS   (PTE_P | PTE_W | PTE_U)
 #define PTE_DEF_FLAGS	(PTE_P | PTE_W | PTE_U | PTE_C)
