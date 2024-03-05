@@ -1222,7 +1222,6 @@ int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pke
 	return 0;
 }
 
-#ifdef CONFIG_DUNE_BOOT
 /**
  * @brief Clone a page table.
  * @note  This function is not implemented.
@@ -1273,87 +1272,6 @@ void vmpl_vm_free(pte_t *root)
 
 	put_page(root);
 }
-#else
-/**
- * @brief Clone a page table.
- * @note  This function is not implemented.
- * @param root The root of the page table.
- * @return The new page table root on success, NULL on failure.
- */
-pte_t *vmpl_vm_clone(pte_t *root)
-{
-	int ret;
-	pte_t *new_root;
-	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
-
-	new_root = alloc_zero_page();
-	log_debug("root = %lx, new_root = %lx", root, new_root);
-
-	ret = vmpl_vm_vma_walk(root, vm, &__vmpl_vm_clone_helper, new_root, 3);
-	if (ret < 0) {
-		vmpl_vm_free(new_root);
-		return NULL;
-	}
-
-	return new_root;
-}
-
-pte_t vmpl_vm_clone_pml4(pte_t *root)
-{
-	int i, ret;
-	pte_t *new_root;
-	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
-
-	new_root = alloc_zero_page();
-	log_debug("root = %lx, new_root = %lx", root, new_root);
-
-#if 0
-	void *start_va = (void *)0;
-	void *end_va = (void *)0xFFFFFFFFFFFFFFFF;
-
-	int level = 3;
-	int start_idx = PDX(level, start_va);
-	int end_idx = PDX(level, end_va);
-
-	assert(level >= 0 && level <= NPTLVLS);
-	assert(end_idx < NPTENTRIES);
-
-	for (i = start_idx; i <= end_idx; i++) {
-		pte_t *pte = &root[i];
-
-		if (pte_present(*pte)) {
-			pte_t *new_pte = &new_root[i];
-			*new_pte = *pte;
-		}
-	}
-#else
-	memcpy(new_root, root, PGSIZE);
-#endif
-
-	return new_root;
-}
-
-/**
- * Free the page table and decrement the reference count on any pages.
- * @param root The root of the page table.
- */
-void vmpl_vm_free(pte_t *root)
-{
-	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
-
-	log_debug("root = 0x%lx", root);
-	// XXX: Should only need one page walk
-	// XXX: Hacky - Until I fix ref counting
-#ifdef CONFIG_DUNE_DEPRECATED
-	vmpl_vm_vma_walk(root, vm, &__vmpl_vm_free_helper, NULL, 3);
-#endif
-
-	vmpl_vm_vma_walk(root, vm, &__vmpl_vm_free_helper, NULL, 2);
-	vmpl_vm_vma_walk(root, vm, &__vmpl_vm_free_helper, NULL, 1);
-
-	put_page(root);
-}
-#endif
 
 /**
  * @brief Handle page fault on lazily allocated virtual memory area.
@@ -1725,14 +1643,6 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	log_info("Test load new page table");
 	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
 	log_success("Test load new page table passed");
-
-#if 0
-	// Test vmpl-mm-clone-pml4
-	log_info("Test vmpl-mm-clone-pml4");
-	new_root = vmpl_vm_clone_pml4(vmpl_mm->pgd);
-	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
-	log_success("Test vmpl-mm-clone-pml4 passed");
-#endif
 
 	// Restore the original page table
 	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)vmpl_mm->pgd);

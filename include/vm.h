@@ -9,13 +9,8 @@
 #include <pthread.h>
 
 /* Define beginning and end of VA space */
-#ifdef CONFIG_DUNE_BOOT
 #define VA_START		((void *)0)
 #define VA_END			((void *)-1)
-#else
-#define VA_START	((void *)0x0000000000000000UL)
-#define VA_END		((void *)0x00007fffffffffffUL)
-#endif
 
 /* Define maximum size of self-managed virtual memory area */
 #define MAP_SIZE 		CONFIG_VMPL_VA_START
