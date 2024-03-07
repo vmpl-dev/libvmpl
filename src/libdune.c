@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+#include "apic.h"
 #include "dune.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,7 +8,6 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 
-#ifdef LIBDUNE
 static int dune_puts(const char *buf)
 {
     long ret;
@@ -46,6 +47,36 @@ void * dune_mmap(void *addr, size_t length, int prot,
 void dune_die(void)
 {
     syscall(SYS_exit);
+}
+
+void dune_apic_ipi(uint32_t dest, uint32_t vector)
+{
+    apic_send_ipi(dest, vector);
+}
+
+void dune_apic_eoi(void)
+{
+    apic_eoi();
+}
+
+void dune_apic_init_rt_entry(void)
+{
+    apic_init_rt_entry();
+}
+
+uint32_t dune_apic_id_for_cpu(uint32_t cpu, bool *error)
+{
+    return apic_get_id_for_cpu(cpu, error);
+}
+
+void dune_apic_send_ipi(uint8_t vector, uint32_t dest_apic_id)
+{
+    apic_send_ipi(vector, dest_apic_id);
+}
+
+uint64_t dune_va_to_pa(uint64_t va)
+{
+    return pgtable_va_to_pa(va);
 }
 
 int dune_vm_mprotect(ptent_t *root, void *va, size_t len, int perm)
@@ -108,5 +139,3 @@ int dune_enter()
 {
     return vmpl_enter(1, NULL);
 }
-
-#endif

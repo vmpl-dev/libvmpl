@@ -28,6 +28,7 @@
 
 // environment variables
 bool hotcalls_enabled = false;
+bool vmpl_enabled = false;
 bool run_in_vmpl = false;
 bool run_in_vmpl_process = false;
 bool run_in_vmpl_thread = false;
@@ -37,6 +38,11 @@ static void init_env()
 	if (getenv("HOTCALLS_ENABLED")) {
 		hotcalls_enabled = true;
 		log_debug("hotcalls enabled");
+	}
+
+	if (getenv("VMPL_ENABLED")) {
+		vmpl_enabled = true;
+		log_debug("vmpl enabled");
 	}
 
 	if (getenv("RUN_IN_VMPL")) {
@@ -78,10 +84,18 @@ static int main_hook(int argc, char **argv, char **envp)
 	// Register cleanup function
 	atexit(cleanup);
 
+	// Initialize VMPL
+	if (!vmpl_enabled) {
+		return main_orig(argc, argv, envp);
+	}
+
+	log_debug("initializing vmpl...");
 	int rc = vmpl_init(true);
 	if (rc) {
 		log_err("failed to initialize dune");
 		return rc;
+	} else {
+		log_debug("vmpl initialized!");
 	}
 
 	// Call original main

@@ -5,7 +5,6 @@
 #include "apic.h"
 #include "mm.h"
 
-#ifdef LIBDUNE
 #define PTE_ADDR            pte_addr
 
 typedef pte_t ptent_t;
@@ -36,6 +35,13 @@ extern void * dune_mmap(void *addr, size_t length, int prot,
                         int flags, int fd, off_t offset);
 extern void dune_die(void);
 
+extern void dune_apic_ipi(uint32_t dest, uint32_t vector);
+extern void dune_apic_eoi(void);
+extern void dune_apic_init_rt_entry(void);
+extern uint32_t dune_apic_id_for_cpu(uint32_t cpu, bool *error);
+extern void dune_apic_send_ipi(uint8_t vector, uint32_t dest_apic_id);
+
+extern uint64_t dune_va_to_pa(uint64_t va);
 extern int dune_vm_mprotect(ptent_t *root, void *va, size_t len, int perm);
 extern int dune_vm_map_phys(ptent_t *root, void *va, size_t len, void *pa, int perm);
 extern int dune_vm_map_pages(ptent_t *root, void *va, size_t len, int perm);
@@ -47,7 +53,6 @@ extern struct page * dune_vm_lookup_page(ptent_t *root, void *va);
 
 extern ptent_t * dune_vm_clone(ptent_t *root);
 extern void dune_vm_free(ptent_t *root);
-extern void dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec);
 
 extern int dune_vm_page_walk(ptent_t *root, void *start_va, void *end_va,
 			    page_walk_cb cb, const void *arg);
@@ -75,42 +80,4 @@ static inline int dune_init_and_enter(void)
 	
 	return dune_enter();
 }
-#else
-#define ptent_t             pte_t
-#define PTE_ADDR            pte_addr
-#define load_cr3            pgtable_load_cr3
-#define dune_flush_tlb      flush_tlb
-#define dune_flush_tlb_one  flush_tlb_one
-#define dune_printf         printf
-#define dune_puts           puts
-#define dune_mmap           mmap
-#define dune_die            exit
-#define dune_get_ticks      rdtsc
-
-#define dune_init(map_full)		vmpl_init(map_full)
-#define dune_enter()			vmpl_enter(1, NULL)
-#define dune_init_and_enter()	vmpl_init_and_enter(1, NULL)
-
-#define dune_apic_ipi       apic_send_ipi
-#define dune_apic_eoi       apic_eoi
-#define dune_apic_init_rt_entry apic_init_rt_entry
-#define dune_apic_id_for_cpu    apic_get_id_for_cpu
-#define dune_apic_send_ipi      apic_send_ipi
-
-#define dune_va_to_pa       pgtable_va_to_pa
-#define dune_vm_mprotect	vmpl_vm_mprotect
-#define dune_vm_map_phys	vmpl_vm_map_phys
-#define dune_vm_map_pages	vmpl_vm_map_pages
-#define dune_vm_unmap 		vmpl_vm_munmap
-#define dune_vm_lookup		vmpl_vm_lookup
-
-#define dune_vm_insert_page	vmpl_vm_insert_page
-#define dune_vm_lookup_page	vmpl_vm_lookup_page
-
-#define dune_vm_clone		vmpl_vm_clone
-#define dune_vm_free		vmpl_vm_free
-#define dune_vm_default_pgflt_handler	vmpl_mm_default_pgflt_handler
-
-#define dune_vm_page_walk	vmpl_vm_page_walk
-#endif
 #endif
