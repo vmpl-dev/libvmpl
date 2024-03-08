@@ -174,15 +174,53 @@ void dune_dump_trap_frame(struct dune_tf *tf) { }
 void dune_passthrough_syscall(struct dune_tf *tf)
 {
 	int ret;
-	ret = syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
+	ret = syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
 	tf->rax = ret;
 }
 
+#ifdef CONFIG_VMPL_MM
+/**
+ * @brief System call handler
+ * @note This function is called when a system call is made.
+ * This handler intercepts the system call and calls the appropriate handler.
+ * We intercept mmap, munmap, mprotect, pkey_mprotect, mremap, and clone system calls.
+ * We forward all other system calls to the guest OS.
+ * If the system call is not handled, then the program exits.
+ * @param tf trap frame
+ */
 void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {
 		log_debug("dune: handling syscall %ld", tf->rax);
-		syscall_cb(tf);
+		switch (tf->rax) {
+		case __NR_mmap:
+			mmap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
+			break;
+		case __NR_munmap:
+			munmap(tf->rdi, tf->rsi);
+			break;
+		case __NR_mprotect:
+			mprotect(tf->rdi, tf->rsi, tf->rdx);
+			break;
+		case __NR_pkey_mprotect:
+			pkey_mprotect(tf->rdi, tf->rsi, tf->rdx, tf->r10);
+			break;
+		case __NR_mremap:
+			mremap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8);
+			break;
+		case __NR_pkey_alloc:
+			pkey_alloc(tf->rdi, tf->rsi);
+			break;
+		case __NR_pkey_free:
+			pkey_free(tf->rdi);
+			break;
+		case __NR_clone:
+			clone(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
+			break;
+		defult:
+			syscall_cb(tf);
+		break;
+		}
 	} else {
 		log_err("dune: missing handler for syscall %ld", tf->rax);
 		dune_dump_trap_frame(tf);
@@ -190,59 +228,46 @@ void dune_syscall_handler(struct dune_tf *tf)
 	}
 }
 
-#ifdef CONFIG_VMPL_MM
+/**
+ * @brief Pre page fault handler
+ * @note This function is called when a page fault occurs. We handle the page fault
+ * by duplicating the page if the page is a COW page or allocating the page if the page is lazy allocated.
+ * If the page fault is not handled, then we call the dune page fault callback.
+ * If the dune page fault callback is not registered, then we return -1.
+ * If the page fault is handled, then we return 0.
+ * @param tf trap frame
+ * @return int 0 if the page fault is handled, -1 if the page fault is not handled
+ */
 static int dune_pre_pf_handler(struct dune_tf *tf)
 {
-	int ret;
-	pte_t *ptep, *new_ptep;
-	pte_t old_pte = 0;
-
 	uint64_t fec = tf->err;
+
 	// Reject I/D, PK, RMP, and SS faults
 	if (fec & (PF_ERR_ID | PF_ERR_PK | PF_ERR_RMP | PF_ERR_SS)) {
 		goto failed;
 	}
 
 	uintptr_t addr = read_cr2();
-	uintptr_t cr3 = read_cr3();
-	uintptr_t pgd = pgtable_pa_to_va(pte_addr(cr3));
 
-	// If the page is a COW page, then we need to duplicate the page.
-	if (fec & (PF_ERR_P | PF_ERR_WR | PF_ERR_RSVD)) {
-		if(dune_vm_default_pgflt_handler(addr, fec) == 0)
+	if (fec & PF_ERR_P) {
+#if 0
+		// If the page is a COW page, then we need to duplicate the page.
+		if (fec & (PF_ERR_WR | PF_ERR_RSVD)) {
+			if(dune_vm_default_pgflt_handler(addr, fec) == 0)
+				goto exit;
+		}
+
+		// If the dune page fault callback is registered, then call the callback.
+		if (pgflt_cb) {
+			pgflt_cb(addr, fec, tf);
 			goto exit;
-	}
-
-	// Find the page table entry for the faulting address
-	ret = pgtable_lookup(pgd, (void *)addr, false, &ptep);
-	if (ret == 0) {
-		old_pte = *ptep;
-	}
-
-	// If the page is lazy allocated, then we need to allocate the page.
-	if (!(fec & PF_ERR_P) && pte_vmpl(old_pte)) {
+		}
+#endif
+	} else {
+		// If the page is lazy allocated, then we need to allocate the page.
 		if(vmpl_mm_default_pgflt_handler(addr, fec) == 0)
 			goto exit;
 	}
-
-	// If the dune page fault callback is registered, then call the callback.
-	if (pgflt_cb)
-		pgflt_cb(addr, fec, tf);
-
-	// Check if the page fault callback has handled the fault
-	if (fec & PF_ERR_P) {
-		// The page fault callback has not handled the fault on present page
-		if (*ptep == old_pte)
-			goto failed;
-	} else {
-		// The page fault callback has not handled the fault on a non-present page
-		if (pgtable_lookup(pgd, (void *)addr, false, &ptep) != 0)
-			goto failed;
-	}
-
-	// If the page has been added in the memory pool, then pass
-	if (vmpl_page_is_from_pool(pte_addr(*ptep)))
-		goto exit;
 
 failed:
 	return -1;
@@ -250,6 +275,13 @@ exit:
 	return 0;
 }
 
+/**
+ * @brief Post page fault handler
+ * @note This function is called after a page fault occurs. We handle the page fault
+ * by marking the page as a VMPL page if the page fault is handled.
+ * @param tf trap frame
+ * @return int 0 if the page fault is handled, -1 if the page fault is not handled
+ */
 static int dune_post_pf_handler(struct dune_tf *tf)
 {
 	int ret;
@@ -285,10 +317,6 @@ static int dune_post_pf_handler(struct dune_tf *tf)
 
 	return 0;
 }
-#else
-static int dune_pre_pf_handler(struct dune_tf *tf) { return 0; }
-static int dune_post_pf_handler(struct dune_tf *tf) { return 0; }
-#endif
 
 /**
  * @brief Pre-trap handler
@@ -337,6 +365,15 @@ static int dune_post_trap_handler(int num, struct dune_tf *tf)
 	return ret;
 }
 
+/**
+ * @brief Trap handler for system calls and interrupts
+ * @note This function is called when a interrupt or exception occurs.
+ * This handler intercepts the interrupt or exception and calls the appropriate handler.
+ * We intercept page faults and forward all other interrupts and exceptions to the guest OS.
+ * If the interrupt or exception is not handled, then the program exits.
+ * @param num trap number
+ * @param tf trap frame
+ */
 void dune_trap_handler(int num, struct dune_tf *tf)
 {
 	if (intr_cbs[num]) {
@@ -368,3 +405,40 @@ failed:
 exit:
 	return;
 }
+#else
+/**
+ * @brief Default system call handler
+ * @note This function forwards all system calls to the guest OS.
+ * @param tf trap frame
+ */
+void dune_syscall_handler(struct dune_tf *tf)
+{
+	if (syscall_cb) {
+		log_debug("dune: handling syscall %ld", tf->rax);
+		syscall_cb(tf);
+	} else {
+		log_err("dune: missing handler for syscall %ld", tf->rax);
+		dune_dump_trap_frame(tf);
+		exit(EXIT_FAILURE);
+	}
+}
+
+/**
+ * @brief Default page fault handler
+ * @note This function forwards all interrupts and exceptions to the guest OS.
+ * @param tf trap frame
+ */
+void dune_trap_handler(int num, struct dune_tf *tf)
+{
+	if (intr_cbs[num]) {
+		intr_cbs[num](tf);
+		return;
+	}
+
+	if (syscall(ULONG_MAX, num, (unsigned long)tf) != 0) {
+		log_err("dune: unable to handle trap %d", num);
+		dune_dump_trap_frame(tf);
+		exit(EXIT_FAILURE);
+	}
+}
+#endif
