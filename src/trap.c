@@ -260,8 +260,14 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 		// If the dune page fault callback is registered, then call the callback.
 		if (pgflt_cb) {
 			pgflt_cb(addr, fec, tf);
-			goto exit;
 		}
+
+		pte_t *ptep;
+		uintptr_t cr3 = read_cr3();
+		pte_t *pgd = pgtable_pa_to_va(pte_addr(cr3));
+		// Find the page table entry for the faulting address
+		if (pgtable_lookup(pgd, addr, CREATE_NONE, &ptep) == 0)
+			goto exit;
 #endif
 	} else {
 		// If the page is lazy allocated, then we need to allocate the page.
