@@ -309,6 +309,8 @@ static int __vmpl_vm_mmap_helper(const void *arg, pte_t *pte, void *va)
 		*pte = pte_addr(pa);
 		// Set the present bit on the page table entry.
 		*pte |= PTE_P;
+		// Clear the RSV bit on the page table entry.
+		perm &= ~PTE_VMPL;
 	} else {
 		// Clear the page table entry.
 		*pte = 0;
@@ -1274,55 +1276,25 @@ void vmpl_vm_free(pte_t *root)
 }
 
 /**
- * @brief Handle page fault on lazily allocated virtual memory area.
- * @note This function should be called from the page fault handler.
- * If this page is not present, then we need to allocate a new page.
- * @param addr The address that caused the page fault.
- * @param fec The fault error code.
- * @return 0 on success, non-zero on failure.
- */
-long handle_anonymous_fault(uintptr_t addr, uint64_t fec, pte_t *pte)
-{
-	// Check if the page is already allocated.
-	if (pte_present(*pte)) {
-		return -EEXIST;
-	}
-
-	// Check if the page belongs to vmpl-mm.
-	if (!pte_vmpl(*pte)) {
-		return -ENOENT;
-	}
-
-	// Allocate a new page
-	phys_addr_t pa = alloc_phys_page();
-	if (pa == NULL) {
-		return -ENOMEM;
-	}
-
-	// Map the new page
-	*pte |= pte_addr(pa) | PTE_P;
-
-	// Invalidate TLB
-	vmpl_flush_tlb_one(addr);
-
-	return 0;
-}
-
-/**
  * Handle a page fault.
  * This function should be called from the page fault handler.
  * @param addr The address that caused the page fault.
  * @param fec The fault error code.
  * @return 0 on success, non-zero on failure.
  */
-long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
+long dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 {
+	pte_t *pte = NULL;
 	int rc;
 
 	/*
 	 * Assert on present and reserved bits.
 	 */
 	assert(!(fec & (FEC_P | FEC_RSV)));
+
+	rc = vmpl_vm_lookup(pgroot, (void *)addr, 0, &pte);
+	assert(rc == 0);
+
 	if ((fec & FEC_W) && (*pte & PTE_COW)) {
 		physaddr_t pa = pte_addr(*pte);
 		struct page *pg = vmpl_pa2page(pa);
@@ -1367,42 +1339,35 @@ long handle_cow_pgflt(uintptr_t addr, uint64_t fec, pte_t *pte)
  */
 long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 {
+	pte_t *pte;
 	int rc;
-	void *va_start, *va_end;
-	struct vmpl_vma_t *vma = NULL;
-	struct vmpl_vm_t *vm = &vmpl_mm.vmpl_vm;
-	pte_t *pte = NULL;
+	pte_t perm;
 
-	// Align address
-	va_start = (void *)PAGE_ALIGN_DOWN(addr);
-	va_end = (void *)PAGE_ALIGN_UP(addr + PAGE_SIZE);
-
-	// Check if the faulting address is in the VMPL VM
-	if (va_start < vm->va_start || va_start >= vm->va_end) {
-		return -1;
-	}
-
-	// Find the VMA that contains the faulting address 
-	vma = find_vma_intersection(vm, va_start, va_end);
-	assert(vma != NULL);
-
-	// Find the page table entry for the faulting address
-	rc = pgtable_lookup(vmpl_mm.pgd, (void *)va_start, false, &pte);
+	rc = vmpl_vm_lookup(pgroot, (void *)addr, 0, &pte);
 	assert(rc == 0);
 
-	// If the page is an anonymous page, then we need to allocate a new page.
-	if (vma->flags & MAP_ANONYMOUS) {
-		rc = handle_anonymous_fault(addr, fec, pte);
-		if (!rc)
-			return rc;
+	// Check if the page belongs to vmpl-mm.
+	if (!pte_vmpl(*pte)) {
+		return -ENOENT;
 	}
 
-	// If the page is a COW page, then we need to duplicate the page.
-	rc = handle_cow_pgflt(addr, fec, pte);
-	if (!rc)
-		return rc;
+	// Allocate a new page
+	phys_addr_t pa = alloc_phys_page();
+	if (pa == NULL) {
+		return -ENOMEM;
+	}
 
-	return -1;
+	perm = pte_flags(*pte);
+	perm |= PTE_P;
+	perm &= ~PTE_VMPL;
+
+	// Map the new page
+	*pte = pte_addr(pa) | perm;
+
+	// Invalidate TLB
+	vmpl_flush_tlb_one(addr);
+
+	return 0;
 }
 
 struct vmpl_mm_t vmpl_mm = {

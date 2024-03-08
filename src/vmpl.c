@@ -562,17 +562,35 @@ static int setup_mm()
 
     // Setup Stack
     rc = setup_stack(CONFIG_VMPL_STACK_SIZE);
-    assert(rc == 0);
+    if (rc != 0) {
+        log_err("dune: unable to setup stack");
+        goto failed;
+    }
 
     // Setup Heap
     rc = setup_heap(CONFIG_VMPL_HEAP_SIZE);
-    assert(rc == 0);
+    if (rc != 0) {
+        log_err("dune: unable to setup heap");
+        goto failed;
+    }
+
+    // Lock Memory Pages
+    rc = mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT);
+    if (rc != 0) {
+        log_err("dune: %s", strerror(errno));
+        goto failed;
+    }
 
     // Setup VMPL VM
     rc = vmpl_mm_init(&vmpl_mm);
-    assert(rc == 0);
+    if (rc != 0) {
+        log_err("dune: unable to setup vmpl mm");
+        goto failed;
+    }
 
     return 0;
+failed:
+    return rc;
 }
 
 #ifdef CONFIG_VMPL_XSAVE

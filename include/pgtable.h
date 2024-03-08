@@ -105,7 +105,7 @@ typedef uint64_t pte_t;
 #define padding(level) ((level)*4 + 4)
 
 #define PDADDR(n, i)	(((unsigned long) (i)) << PDSHIFT(n))
-#define PT_DEF_FLAGS   (PTE_P | PTE_W | PTE_U)
+#define PT_DEF_FLAGS   (PTE_P | PTE_W | PTE_U | PTE_C)
 #define PTE_DEF_FLAGS	(PTE_P | PTE_W | PTE_U | PTE_C)
 #define PTE_VMPL_FLAGS  (PTE_W | PTE_U | PTE_C| PTE_VMPL)
 #define LGPGSIZE	(1 << (PGSHIFT + NPTBITS))

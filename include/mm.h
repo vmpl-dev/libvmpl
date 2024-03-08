@@ -100,6 +100,7 @@ struct vmpl_mm_t {
 };
 
 extern struct vmpl_mm_t vmpl_mm;
+extern long dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec);
 extern long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec);
 extern int vmpl_mm_init(struct vmpl_mm_t *mm);
 extern int vmpl_mm_exit(struct vmpl_mm_t *mm);

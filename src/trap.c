@@ -9,12 +9,15 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <assert.h>
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
 
 #include "config.h"
+#include "mmu-x86.h"
 #include "sys.h"
+#include "page.h"
 #include "mm.h"
 #include "vmpl.h"
 #include "log.h"
@@ -187,6 +190,153 @@ void dune_syscall_handler(struct dune_tf *tf)
 	}
 }
 
+#ifdef CONFIG_VMPL_MM
+static int dune_pre_pf_handler(struct dune_tf *tf)
+{
+	int ret;
+	pte_t *ptep, *new_ptep;
+	pte_t old_pte = 0;
+
+	uint64_t fec = tf->err;
+	// Reject I/D, PK, RMP, and SS faults
+	if (fec & (PF_ERR_ID | PF_ERR_PK | PF_ERR_RMP | PF_ERR_SS)) {
+		goto failed;
+	}
+
+	uintptr_t addr = read_cr2();
+	uintptr_t cr3 = read_cr3();
+	uintptr_t pgd = pgtable_pa_to_va(pte_addr(cr3));
+
+	// If the page is a COW page, then we need to duplicate the page.
+	if (fec & (PF_ERR_P | PF_ERR_WR | PF_ERR_RSVD)) {
+		if(dune_vm_default_pgflt_handler(addr, fec) == 0)
+			goto exit;
+	}
+
+	// Find the page table entry for the faulting address
+	ret = pgtable_lookup(pgd, (void *)addr, false, &ptep);
+	if (ret == 0) {
+		old_pte = *ptep;
+	}
+
+	// If the page is lazy allocated, then we need to allocate the page.
+	if (!(fec & PF_ERR_P) && pte_vmpl(old_pte)) {
+		if(vmpl_mm_default_pgflt_handler(addr, fec) == 0)
+			goto exit;
+	}
+
+	// If the dune page fault callback is registered, then call the callback.
+	if (pgflt_cb)
+		pgflt_cb(addr, fec, tf);
+
+	// Check if the page fault callback has handled the fault
+	if (fec & PF_ERR_P) {
+		// The page fault callback has not handled the fault on present page
+		if (*ptep == old_pte)
+			goto failed;
+	} else {
+		// The page fault callback has not handled the fault on a non-present page
+		if (pgtable_lookup(pgd, (void *)addr, false, &ptep) != 0)
+			goto failed;
+	}
+
+	// If the page has been added in the memory pool, then pass
+	if (vmpl_page_is_from_pool(pte_addr(*ptep)))
+		goto exit;
+
+failed:
+	return -1;
+exit:
+	return 0;
+}
+
+static int dune_post_pf_handler(struct dune_tf *tf)
+{
+	int ret;
+	pte_t *ptep, *child_ptep;
+	uint64_t fec = tf->err;
+	uintptr_t addr = read_cr2();
+	// Find the page table entry for the faulting address in the host sthread
+	ret = pgtable_lookup(pgroot, addr, CREATE_NONE, &ptep);
+	if (ret != 0)
+		return -1;
+
+	// Mark the page as a VMPL page if the page fault is handled
+	uint64_t paddr = pte_addr(*ptep);
+	if (!vmpl_page_is_from_pool(paddr))
+		vmpl_page_mark_addr(paddr);
+
+	// If the page fault is handled for another sthread, then copy the page table entry
+	uint64_t cr3 = read_cr3();
+	pte_t *pgd = pgtable_pa_to_va(pte_addr(cr3));
+	// Find the page table entry for the faulting address
+	if (pgd != pgroot) {
+		// Find the page table entry for the faulting address in the child sthread
+		ret = pgtable_lookup(pgd, addr, CREATE_NORMAL, &child_ptep);
+		if (ret != 0)
+			return -1;
+		// Copy the page table entry from the host to the child
+		*child_ptep = *ptep;
+		// Mark the page as a VMPL page in the child sthread
+		vmpl_page_get_addr(paddr);
+		// Invalidate the TLB
+		vmpl_flush_tlb_one(addr);
+	}
+
+	return 0;
+}
+#else
+static int dune_pre_pf_handler(struct dune_tf *tf) { return 0; }
+static int dune_post_pf_handler(struct dune_tf *tf) { return 0; }
+#endif
+
+/**
+ * @brief Pre-trap handler
+ * If the trap is not a page fault, then we do not need to handle the trap.
+ * We can just forward the trap to the guest OS.
+ * @param num trap number
+ * @param tf trap frame
+ * @return int 0 if the trap is handled, -1 if the trap is not handled
+ */
+static int dune_pre_trap_handler(int num, struct dune_tf *tf)
+{
+	int ret;
+
+	switch (num) {
+	case T_PF:
+		ret = dune_pre_pf_handler(tf);
+		break;
+	default:
+		ret = -1;
+		break;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief Post-trap handler
+ * If the trap is not a page fault, then we do not need to do anything.
+ * We can just return back to the program.
+ * @param num trap number
+ * @param tf trap frame
+ * @return int 0 if the trap is handled, -1 if the trap is not handled
+ */
+static int dune_post_trap_handler(int num, struct dune_tf *tf)
+{
+	int ret;
+	switch (num) {
+	case T_PF:
+		ret = dune_post_pf_handler(tf);
+		break;
+	default:
+		ret = 0;
+		break;
+	}
+
+	return ret;
+}
+
 void dune_trap_handler(int num, struct dune_tf *tf)
 {
 	if (intr_cbs[num]) {
@@ -194,25 +344,27 @@ void dune_trap_handler(int num, struct dune_tf *tf)
 		return;
 	}
 
-	switch (num) {
-	case T_PF:
-		uintptr_t addr = read_cr2();
-		// VMPL can handle page faults, so we pass them to the VMPL.
-		if (vmpl_mm_default_pgflt_handler(addr, tf->err) == 0)
-			return;
-		// Dune can't handle page faults, so we pass them to the guest OS.
-		if (pgflt_cb) {
-			if (tf->err & PF_ERR_P) {
-				pgflt_cb(addr, tf->err, tf);
-				return;
-			}
-		}
-	default:
-		long ret = syscall(ULONG_MAX, num, (unsigned long)tf);
-		if (ret != 0) {
-			log_err("Unable to handle trap %d, error code %d", num, ret);
-			dune_dump_trap_frame(tf);
-			exit(EXIT_FAILURE);
-		}
-	}
+	// Call the pre-trap handler before handling the trap in the guest OS
+	int ret = dune_pre_trap_handler(num, tf);
+	if (ret == 0)
+		goto exit;
+
+	// Forward the trap to the guest OS if the pre-trap handler does not handle the trap
+	ret = syscall(ULONG_MAX, num, (unsigned long)tf);
+	if (ret != 0)
+		goto failed;
+
+	// Call the post-trap handler after handling the trap in the guest OS
+	ret = dune_post_trap_handler(num, tf);
+	if (ret == 0)
+		goto exit;
+
+failed:
+	// If the trap is not handled by the pre-trap handler, the guest OS, or 
+	// the post-trap handler, then dump the trap frame and exit.
+	log_err("Unable to handle trap %d, error code %d", num, ret);
+	dune_dump_trap_frame(tf);
+	exit(EXIT_FAILURE);
+exit:
+	return;
 }

@@ -103,6 +103,7 @@ typedef void (*sighandler_t)(int);
 #define PF_ERR_P       0x1
 #define PF_ERR_WR      0x2
 #define PF_ERR_US      0x4
+#define PF_ERR_RSVD    0x8
 #define PF_ERR_ID      0x10
 #define PF_ERR_PK      0x20
 #define PF_ERR_SS      0x40
