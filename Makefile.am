@@ -23,7 +23,6 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/trap.c \
                     src/apic.c \
                     src/elf.c \
-                    src/bitmap.c \
                     src/env.c \
                     src/log.c
 libvmpl_la_CFLAGS = $(AM_CFLAGS)
@@ -49,7 +48,7 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/dune.h \
                     include/sys.h include/syscall.h \
                     include/vc.h \
-                    include/vmpl-ioctl.h \
+                    include/ioctl.h \
                     include/page.h \
                     include/pgtable.h \
                     include/vma.h \
