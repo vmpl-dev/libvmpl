@@ -565,8 +565,6 @@ static inline void wruss(void *addr) {
 #define write_cr4(value) write_cr(cr4, value)
 #define read_xfer() read_cr(xfer)
 #define write_xfer(value) write_cr(xfer, value)
-#define read_xcr0() read_cr(xcr0)
-#define write_xcr0(value) write_cr(xcr0, value)
 
 #define read_rflags() ({ \
     uint64_t value; \
@@ -579,6 +577,26 @@ static inline void wruss(void *addr) {
     asm volatile("pushfq; popq %0" : "=r"(value) : : "memory"); \
     (value & (mask)) == (mask); \
 })
+
+#define XCR_XFEATURE_ENABLED_MASK 0x00000000
+static inline uint64_t read_xcr0() {
+    uint64_t mask;
+    asm volatile (
+        "xgetbv"
+        : "=a" (mask)
+        : "c" (XCR_XFEATURE_ENABLED_MASK)
+    );
+    return mask;
+}
+
+static inline void write_xcr0(uint64_t mask) {
+    asm volatile (
+        "xsetbv" // xsetbv instruction
+        : // no output
+        : "c" (XCR_XFEATURE_ENABLED_MASK), "a" (mask), "d" (mask >> 32)
+        : "memory"
+    );
+}
 
 // Read MSR
 static inline uint64_t rdmsr(uint32_t msr) {
