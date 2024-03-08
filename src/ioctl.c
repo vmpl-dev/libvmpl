@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "vmpl-ioctl.h"
+#include "ioctl.h"
 #include "log.h"
 
 int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint32_t attrs) {

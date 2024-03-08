@@ -1,7 +1,7 @@
 #include <sys/mman.h>
 #include <errno.h>
 
-#include "vmpl-ioctl.h"
+#include "ioctl.h"
 #include "seimi.h"
 #include "log.h"
 

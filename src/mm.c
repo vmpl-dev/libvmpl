@@ -20,7 +20,7 @@
 #include <asm/vsyscall.h>
 
 #include "mmu.h"
-#include "vmpl-ioctl.h"
+#include "ioctl.h"
 #include "page.h"
 #include "vma.h"
 #include "vm.h"

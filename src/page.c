@@ -14,7 +14,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 
-#include "vmpl-ioctl.h"
+#include "ioctl.h"
 #include "svsm-dev.h"
 #include "page.h"
 #include "log.h"

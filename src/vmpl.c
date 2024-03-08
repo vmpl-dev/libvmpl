@@ -36,7 +36,7 @@
 #include "mmu.h"
 #include "apic.h"
 #include "vmpl-dev.h"
-#include "vmpl-ioctl.h"
+#include "ioctl.h"
 #include "vmpl.h"
 #include "page.h"
 #include "pgtable.h"

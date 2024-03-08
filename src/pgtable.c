@@ -15,7 +15,7 @@
 #include <assert.h>
 
 #include "vmpl-dev.h"
-#include "vmpl-ioctl.h"
+#include "ioctl.h"
 #include "sev.h"
 #include "log.h"
 #include "mmu.h"

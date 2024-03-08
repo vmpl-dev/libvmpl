@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <asm-generic/int-ll64.h>
 
-#include "vmpl-ioctl.h"
+#include "ioctl.h"
 #include "debug.h"
 #include "vmpl.h"
 
