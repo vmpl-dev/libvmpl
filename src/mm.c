@@ -1287,13 +1287,9 @@ long dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 	pte_t *pte = NULL;
 	int rc;
 
-	/*
-	 * Assert on present and reserved bits.
-	 */
-	assert(!(fec & (FEC_P | FEC_RSV)));
-
 	rc = vmpl_vm_lookup(pgroot, (void *)addr, 0, &pte);
-	assert(rc == 0);
+	if (rc != 0)
+		return rc;
 
 	if ((fec & FEC_W) && (*pte & PTE_COW)) {
 		physaddr_t pa = pte_addr(*pte);
@@ -1339,16 +1335,33 @@ long dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
  */
 long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 {
+	struct vmpl_vm_t *vmpl_vm = &vmpl_mm.vmpl_vm;
+	void *va_start, *va_end;
 	pte_t *pte;
 	int rc;
 	pte_t perm;
 
-	rc = vmpl_vm_lookup(pgroot, (void *)addr, 0, &pte);
-	assert(rc == 0);
+	// Align address
+	va_start = (void *)PAGE_ALIGN_DOWN(addr);
+	va_end = (void *)PAGE_ALIGN_UP(addr + PAGE_SIZE);
+
+	if (va_start < vmpl_vm->va_start || va_start >= vmpl_vm->va_end) {
+		return -ENOENT;
+	}
+
+	// Find the page table entry for the faulting address
+	rc = vmpl_vm_lookup(pgroot, (void *)va_start, false, &pte);
+	if (rc != 0)
+		return rc;
 
 	// Check if the page belongs to vmpl-mm.
 	if (!pte_vmpl(*pte)) {
 		return -ENOENT;
+	}
+
+	// Check if the page is already allocated.
+	if (pte_present(*pte)) {
+		return -EEXIST;
 	}
 
 	// Allocate a new page
@@ -1358,7 +1371,7 @@ long vmpl_mm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 	}
 
 	perm = pte_flags(*pte);
-	perm |= PTE_P;
+	perm |= (PTE_P | PTE_C);
 	perm &= ~PTE_VMPL;
 
 	// Map the new page
