@@ -32,8 +32,10 @@ extern struct page *pages;
 extern int num_dune_pages;
 extern int num_vmpl_pages;
 
+#define SYSTEM_RAM	0x480000000
 #define PAGEBASE	0x0			/* 0 GB start */
-#define MAX_PAGES	(2ul << 20) /* 8 GB of memory */
+#define PAGE_SHIFT	12
+#define MAX_PAGES	(SYSTEM_RAM >> PAGE_SHIFT) /* 17 GB of memory */
 
 extern void *do_mapping(int fd, uint64_t phys, size_t len);
 static inline void __get_page(struct page *pg)
