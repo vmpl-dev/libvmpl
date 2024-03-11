@@ -527,9 +527,12 @@ static Ghcb *setup_ghcb(int dune_fd)
 
     // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
     log_debug("dune: GHCB at %p", ghcb);
-    ghcb->sw_exit_code = GHCB_NAE_RUN_VMPL;
-    ghcb->sw_exit_info_1 = RUN_VMPL;
-    ghcb->sw_exit_info_2 = 0;
+    memset(ghcb, 0, sizeof(*ghcb));
+    ghcb_set_version(ghcb, GHCB_PROTOCOL_MIN);
+    ghcb_set_usage(ghcb, GHCB_DEFAULT_USAGE);
+    ghcb_set_sw_exit_code(ghcb, GHCB_NAE_RUN_VMPL);
+    ghcb_set_sw_exit_info_1(ghcb, 0);
+    ghcb_set_sw_exit_info_2(ghcb, 0);
 
     return ghcb;
 failed:
