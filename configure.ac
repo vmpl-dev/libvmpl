@@ -81,7 +81,7 @@ AC_ARG_ENABLE([vmpl-signal],
               [AS_HELP_STRING([--enable-vmpl-signal],
                               [Enable signal support])],
               [enable_vmpl_signal=$enableval],
-              [enable_vmpl_signal=yes])
+              [enable_vmpl_signal=no])
 AM_CONDITIONAL([ENABLE_VMPL_SIGNAL], [test "x$enable_vmpl_signal" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-apic],
@@ -125,7 +125,7 @@ AC_ARG_ENABLE([vmpl-debug],
 AM_CONDITIONAL([ENABLE_VMPL_DEBUG], [test "x$enable_vmpl_debug" = "xyes"])
 
 AC_ARG_ENABLE([vmpl-xsave],
-              [AS_HELP_STRING([--enable--vmpl-xsave],
+              [AS_HELP_STRING([--enable-vmpl-xsave],
                               [Enable xsave support])],
               [enable_vmpl_xsave=$enableval],
               [enable_vmpl_xsave=no])

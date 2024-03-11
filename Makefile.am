@@ -3,7 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 # 将config.h包含在编译中
 AM_CPPFLAGS = -I$(top_srcdir)/include -I../vmpl-dev -include config.h
 AM_CFLAGS = -Wall -g -O3 -MD -fPIC
-AM_LDFLAGS = -L. -lvmpl -lhotcalls -ldict
+AM_LDFLAGS = -L. -lvmpl -ldict
 
 # Specify shared libraries to be built
 lib_LTLIBRARIES = libvmpl.la libdunify.la libdune.la
@@ -27,7 +27,6 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/log.c
 libvmpl_la_CFLAGS = $(AM_CFLAGS)
 libvmpl_la_LDFLAGS = -ldl \
-                    -lhotcalls \
                     -ldict \
                     -version-info 1:0:0
 
