@@ -689,9 +689,9 @@ void dune_set_user_fs(unsigned long fs_base)
 }
 
 /**
- * @brief Asserts the offsets of various fields in the vmsa_config struct.
+ * @brief Asserts the offsets of various fields in the dune_config struct.
  * 
- * This function asserts that the offsets of various fields in the vmsa_config struct
+ * This function asserts that the offsets of various fields in the dune_config struct
  * are equal to their corresponding values in the DUNE_ENTER macro. This is done to ensure
  * that the struct is properly aligned and can be used with the Dune library.
  * 
@@ -701,40 +701,40 @@ void vmpl_build_assert(void)
 {
     log_debug("vmpl_build_assert");
     BUILD_ASSERT(IOCTL_DUNE_ENTER == DUNE_ENTER);
-	BUILD_ASSERT(DUNE_CFG_RET == offsetof(struct vmsa_config, ret));
-	BUILD_ASSERT(DUNE_CFG_RAX == offsetof(struct vmsa_config, rax));
-	BUILD_ASSERT(DUNE_CFG_RBX == offsetof(struct vmsa_config, rbx));
-	BUILD_ASSERT(DUNE_CFG_RCX == offsetof(struct vmsa_config, rcx));
-	BUILD_ASSERT(DUNE_CFG_RDX == offsetof(struct vmsa_config, rdx));
-	BUILD_ASSERT(DUNE_CFG_RSI == offsetof(struct vmsa_config, rsi));
-	BUILD_ASSERT(DUNE_CFG_RDI == offsetof(struct vmsa_config, rdi));
-	BUILD_ASSERT(DUNE_CFG_RSP == offsetof(struct vmsa_config, rsp));
-	BUILD_ASSERT(DUNE_CFG_RBP == offsetof(struct vmsa_config, rbp));
-	BUILD_ASSERT(DUNE_CFG_R8 == offsetof(struct vmsa_config, r8));
-	BUILD_ASSERT(DUNE_CFG_R9 == offsetof(struct vmsa_config, r9));
-	BUILD_ASSERT(DUNE_CFG_R10 == offsetof(struct vmsa_config, r10));
-	BUILD_ASSERT(DUNE_CFG_R11 == offsetof(struct vmsa_config, r11));
-	BUILD_ASSERT(DUNE_CFG_R12 == offsetof(struct vmsa_config, r12));
-	BUILD_ASSERT(DUNE_CFG_R13 == offsetof(struct vmsa_config, r13));
-	BUILD_ASSERT(DUNE_CFG_R14 == offsetof(struct vmsa_config, r14));
-	BUILD_ASSERT(DUNE_CFG_R15 == offsetof(struct vmsa_config, r15));
-	BUILD_ASSERT(DUNE_CFG_RIP == offsetof(struct vmsa_config, rip));
-	BUILD_ASSERT(DUNE_CFG_RFLAGS == offsetof(struct vmsa_config, rflags));
-	BUILD_ASSERT(DUNE_CFG_CR3 == offsetof(struct vmsa_config, cr3));
-	BUILD_ASSERT(DUNE_CFG_STATUS == offsetof(struct vmsa_config, status));
-	BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct vmsa_config, vcpu));
+	BUILD_ASSERT(DUNE_CFG_RET == offsetof(struct dune_config, ret));
+	BUILD_ASSERT(DUNE_CFG_RAX == offsetof(struct dune_config, rax));
+	BUILD_ASSERT(DUNE_CFG_RBX == offsetof(struct dune_config, rbx));
+	BUILD_ASSERT(DUNE_CFG_RCX == offsetof(struct dune_config, rcx));
+	BUILD_ASSERT(DUNE_CFG_RDX == offsetof(struct dune_config, rdx));
+	BUILD_ASSERT(DUNE_CFG_RSI == offsetof(struct dune_config, rsi));
+	BUILD_ASSERT(DUNE_CFG_RDI == offsetof(struct dune_config, rdi));
+	BUILD_ASSERT(DUNE_CFG_RSP == offsetof(struct dune_config, rsp));
+	BUILD_ASSERT(DUNE_CFG_RBP == offsetof(struct dune_config, rbp));
+	BUILD_ASSERT(DUNE_CFG_R8 == offsetof(struct dune_config, r8));
+	BUILD_ASSERT(DUNE_CFG_R9 == offsetof(struct dune_config, r9));
+	BUILD_ASSERT(DUNE_CFG_R10 == offsetof(struct dune_config, r10));
+	BUILD_ASSERT(DUNE_CFG_R11 == offsetof(struct dune_config, r11));
+	BUILD_ASSERT(DUNE_CFG_R12 == offsetof(struct dune_config, r12));
+	BUILD_ASSERT(DUNE_CFG_R13 == offsetof(struct dune_config, r13));
+	BUILD_ASSERT(DUNE_CFG_R14 == offsetof(struct dune_config, r14));
+	BUILD_ASSERT(DUNE_CFG_R15 == offsetof(struct dune_config, r15));
+	BUILD_ASSERT(DUNE_CFG_RIP == offsetof(struct dune_config, rip));
+	BUILD_ASSERT(DUNE_CFG_RFLAGS == offsetof(struct dune_config, rflags));
+	BUILD_ASSERT(DUNE_CFG_CR3 == offsetof(struct dune_config, cr3));
+	BUILD_ASSERT(DUNE_CFG_STATUS == offsetof(struct dune_config, status));
+	BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct dune_config, vcpu));
 }
 
 /**
- * Initializes a vmsa_config struct with default values.
+ * Initializes a dune_config struct with default values.
  * 
- * @param conf Pointer to the vmsa_config struct to be initialized.
+ * @param conf Pointer to the dune_config struct to be initialized.
  */
-static struct vmsa_config *vmsa_alloc_config()
+static struct dune_config *vmsa_alloc_config()
 {
     log_debug("vmsa_alloc_config");
-    struct vmsa_config *conf = malloc(sizeof(struct vmsa_config));
-    memset(conf, 0, sizeof(struct vmsa_config));
+    struct dune_config *conf = malloc(sizeof(struct dune_config));
+    memset(conf, 0, sizeof(struct dune_config));
 
     /* NOTE: We don't setup the general purpose registers because __dune_ret
      * will restore them as they were before the __dune_enter call */
@@ -1075,7 +1075,7 @@ static void vmpl_init_banner(void)
 int vmpl_enter(int argc, char *argv[])
 {
     int rc;
-    struct vmsa_config *__conf;
+    struct dune_config *__conf;
     struct dune_percpu *__percpu;
 
 	log_info("vmpl_enter");
@@ -1138,7 +1138,7 @@ failed:
     return -EIO;
 }
 
-void on_dune_syscall(struct vmsa_config *conf)
+void on_dune_syscall(struct dune_config *conf)
 {
     conf->rax = syscall(conf->status, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
     __dune_go_dune(dune_fd, conf);
@@ -1151,7 +1151,7 @@ void on_dune_syscall(struct vmsa_config *conf)
  * __dune_go_linux().
  */
 #ifdef CONFIG_DUNE_BOOT
-void on_dune_exit(struct vmsa_config *conf)
+void on_dune_exit(struct dune_config *conf)
 {
     switch (conf->ret) {
     case DUNE_RET_EXIT:
@@ -1178,7 +1178,7 @@ void on_dune_exit(struct vmsa_config *conf)
     exit(EXIT_FAILURE);
 }
 #else
-void on_dune_exit(struct vmsa_config *conf)
+void on_dune_exit(struct dune_config *conf)
 {
     switch (conf->ret) {
     case DUNE_RET_EXIT:

@@ -119,9 +119,9 @@ int vmpl_ioctl_get_segs(int vmpl_fd, struct vmpl_segs_t *segs) {
     return 0;
 }
 
-int vmpl_ioctl_vmpl_run(int vmpl_fd, struct vmsa_config *vmsa_config) {
+int vmpl_ioctl_vmpl_run(int vmpl_fd, struct dune_config *dune_config) {
     int rc;
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_VMPL_RUN, vmsa_config);
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_VMPL_RUN, dune_config);
     if (rc < 0) {
         log_err("Failed to run VMPL: %s", strerror(errno));
         return -errno;
