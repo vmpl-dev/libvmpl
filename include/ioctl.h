@@ -12,7 +12,6 @@ int vmpl_ioctl_set_user_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size,
 int vmpl_ioctl_get_ghcb(int vmpl_fd, uint64_t *ghcb);
 int vmpl_ioctl_get_cr3(int vmpl_fd, uint64_t *cr3);
 int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param);
-int vmpl_ioctl_set_syscall(int vmpl_fd, uint64_t *syscall);
 int vmpl_ioctl_get_layout(int vmpl_fd, struct dune_layout *layout);
 int vmpl_ioctl_set_seimi(int vmpl_fd, struct vmpl_seimi_t *seimi);
 int vmpl_ioctl_set_config(int vmpl_fd, struct vcpu_config *config);

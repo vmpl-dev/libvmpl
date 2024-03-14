@@ -75,17 +75,6 @@ int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param) {
     return 0;
 }
 
-int vmpl_ioctl_set_syscall(int vmpl_fd, uint64_t *syscall) {
-    int rc;
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SYSCALL, syscall);
-    if (rc < 0) {
-        log_err("Failed to set syscall: %s", strerror(errno));
-        return -errno;
-    }
-
-    return 0;
-}
-
 int vmpl_ioctl_set_seimi(int vmpl_fd, struct vmpl_seimi_t *seimi) {
 	int rc;
 	rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SEIMI, seimi);

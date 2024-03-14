@@ -305,6 +305,7 @@ static int setup_vmsa(struct dune_percpu *percpu)
     memset(config, 0, sizeof(struct vcpu_config));
     log_info("setup vmsa");
 
+    config->lstar = &__dune_syscall;
     config->fs.base = percpu->kfs_base;
     config->gs.base = (uint64_t)percpu;
 
@@ -478,17 +479,7 @@ static int setup_vsyscall()
  */
 static int setup_syscall()
 {
-    int rc;
-
     log_info("setup syscall");
-
-    uint64_t *syscall = &__dune_syscall;
-    rc = vmpl_ioctl_set_syscall(dune_fd, (uint64_t)&syscall);
-    if (rc != 0) {
-        log_err("dune: failed to set syscall");
-        return rc;
-    }
-
     return 0;
 }
 
