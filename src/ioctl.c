@@ -97,22 +97,22 @@ int vmpl_ioctl_set_seimi(int vmpl_fd, struct vmpl_seimi_t *seimi) {
     return 0;
 }
 
-int vmpl_ioctl_set_segs(int vmpl_fd, struct vmpl_segs_t *segs) {
+int vmpl_ioctl_set_config(int vmpl_fd, struct vcpu_config *config) {
     int rc;
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_SEGS, segs);
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_CONFIG, config);
     if (rc < 0) {
-        log_err("Failed to setup segs: %s", strerror(errno));
+        log_err("Failed to setup config: %s", strerror(errno));
         return -errno;
     }
 
     return 0;
 }
 
-int vmpl_ioctl_get_segs(int vmpl_fd, struct vmpl_segs_t *segs) {
+int vmpl_ioctl_get_config(int vmpl_fd, struct vcpu_config *config) {
     int rc;
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_SEGS, segs);
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_CONFIG, config);
     if (rc < 0) {
-        log_err("Failed to get segs: %s", strerror(errno));
+        log_err("Failed to get config: %s", strerror(errno));
         return -errno;
     }
 

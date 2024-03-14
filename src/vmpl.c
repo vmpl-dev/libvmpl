@@ -301,31 +301,31 @@ static void setup_signal(void) { }
 static int setup_vmsa(struct dune_percpu *percpu)
 {
     int rc;
-    struct vmpl_segs_t *segs = malloc(sizeof(struct vmpl_segs_t));
-    memset(segs, 0, sizeof(struct vmpl_segs_t));
+    struct vcpu_config *config = malloc(sizeof(struct vcpu_config));
+    memset(config, 0, sizeof(struct vcpu_config));
     log_info("setup vmsa");
 
-    segs->fs.base = percpu->kfs_base;
-    segs->gs.base = (uint64_t)percpu;
+    config->fs.base = percpu->kfs_base;
+    config->gs.base = (uint64_t)percpu;
 
-    segs->tr.selector = GD_TSS;
-    segs->tr.base = &percpu->tss;
-    segs->tr.limit = sizeof(percpu->tss);
-    segs->tr.attrib = 0x0089; // refer to linux-svsm
+    config->tr.selector = GD_TSS;
+    config->tr.base = &percpu->tss;
+    config->tr.limit = sizeof(percpu->tss);
+    config->tr.attrib = 0x0089; // refer to linux-svsm
 
-    segs->gdtr.base = (uint64_t)&percpu->gdt;
-    segs->gdtr.limit = sizeof(percpu->gdt) - 1;
+    config->gdtr.base = (uint64_t)&percpu->gdt;
+    config->gdtr.limit = sizeof(percpu->gdt) - 1;
 
-    segs->idtr.base = (uint64_t)&idt;
-    segs->idtr.limit = sizeof(idt) - 1;
+    config->idtr.base = (uint64_t)&idt;
+    config->idtr.limit = sizeof(idt) - 1;
 
-    rc = vmpl_ioctl_set_segs(dune_fd, segs);
+    rc = vmpl_ioctl_set_config(dune_fd, config);
     if (rc != 0) {
-        log_err("dune: failed to set segs");
+        log_err("dune: failed to set config");
         goto failed;
     }
 
-    free(segs);
+    free(config);
     return 0;
 failed:
     return rc;
