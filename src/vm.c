@@ -253,6 +253,20 @@ static void insert_vma_callback(struct procmap_entry_t *entry, void *arg) {
 }
 
 /**
+ * @brief Touch a VMA in the VMA dictionary.
+ * @note This function is used by the touch_vma function.
+ * Touch every page in the VMA, such that the VMA is faulted into memory.
+ */
+static void touch_vma_callback(struct vmpl_vma_t *vma, void *arg) {
+	uint64_t addr;
+	if (vma->prot & (PROT_READ | PROT_WRITE | PROT_EXEC)) {
+		for (addr = vma->start; addr < vma->end; addr += PAGE_SIZE) {
+			*(volatile char *)addr;
+		}
+	}
+}
+
+/**
  * Initialize the virtual memory subsystem.
  * This function should be called before any other vmpl_vm_* functions.
  * @param vmpl_vm The vmpl_vm_t structure to initialize.
@@ -289,6 +303,13 @@ int vmpl_vm_init_procmaps(struct vmpl_vm_t *vmpl_vm) {
 	int rc;
 	struct vmpl_vma_t *vma;
 	bool removed, inserted;
+
+	// Touch each VMA in the VMA dictionary
+	rc = parse_procmaps(touch_vma_callback, NULL);
+	if (rc != 0) {
+		perror("parse_procmaps");
+		return -1;
+	}
 
 	// VMPL VMA Initialization
 	rc = parse_procmaps(insert_vma_callback, vmpl_vm);
