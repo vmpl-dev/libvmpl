@@ -8,13 +8,13 @@
 
 int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint32_t attrs) {
     int rc;
-    struct vmpl_data data = {
+    struct vmpl_args_t args = {
         .gva = gva,
         .page_size = page_size,
         .attrs = attrs,
     };
 
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_DATA, &data);
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_PGTABLE_VMPL, &args);
     if (rc < 0) {
         log_err("Failed to setup PGTABLE VMPL: %s", strerror(errno));
         return -errno;
@@ -25,13 +25,13 @@ int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, u
 
 int vmpl_ioctl_set_user_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint32_t attrs) {
     int rc;
-    struct vmpl_data data = {
+    struct vmpl_args_t args = {
         .gva = gva,
         .page_size = page_size,
         .attrs = attrs,
     };
 
-    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_DATA, &data);
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_SET_PAGE_VMPL, &args);
     if (rc < 0) {
         log_err("Failed to setup user VMPL: %s", strerror(errno));
         return -errno;
