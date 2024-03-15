@@ -186,14 +186,14 @@ void pgtable_test(pte_t *pgd, uint64_t va)
 }
 #endif
 
-void pgtable_load_cr3(uint64_t cr3)
+void load_cr3(uint64_t cr3)
 {
     physaddr_t pa;
     pa = pgtable_va_to_pa(pte_addr(cr3));
     cr3 &= ~ADDR_MASK;
     cr3 |= PTE_C;
     cr3 |= pa;
-    load_cr3(cr3);
+    native_load_cr3(cr3);
 }
 
 /**

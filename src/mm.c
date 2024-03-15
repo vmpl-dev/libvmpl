@@ -1619,11 +1619,11 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test load new page table
 	log_info("Test load new page table");
-	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)new_root);
+	load_cr3(CR3_NOFLUSH | (uint64_t)new_root | 1);
 	log_success("Test load new page table passed");
 
 	// Restore the original page table
-	pgtable_load_cr3(CR3_NOFLUSH | (uint64_t)vmpl_mm->pgd);
+	load_cr3(CR3_NOFLUSH | (uint64_t)vmpl_mm->pgd);
 
 	// Test free
 	log_info("Test free");

@@ -819,7 +819,7 @@ static inline void flush_tlb(void)
 			: "rax");
 }
 
-static inline void load_cr3(unsigned long cr3)
+static inline void native_load_cr3(unsigned long cr3)
 {       
         asm("mov %%rax, %%cr3\n" : : "a" (cr3));
 }

@@ -129,7 +129,6 @@ void pgtable_test(pte_t *pgd, uint64_t va);
 #else
 static inline void pgtable_test(pte_t *pgd, uint64_t va) {}
 #endif
-void pgtable_load_cr3(uint64_t cr3);
 pte_t *pgtable_do_mapping(uint64_t phys);
 int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out);
 int pgtable_create(pte_t *root, void *va, pte_t **pte_out);
