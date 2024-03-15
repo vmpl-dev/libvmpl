@@ -210,9 +210,9 @@ void dune_syscall_handler(struct dune_tf *tf)
 		case __NR_clone:
 			clone(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
 			break;
-		defult:
+		default:
 			syscall_cb(tf);
-		break;
+			break;
 		}
 	} else {
 		log_err("dune: missing handler for syscall %ld", tf->rax);
