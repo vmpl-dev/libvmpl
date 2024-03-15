@@ -33,6 +33,8 @@
 #define PTE_PS      BIT_64(7)    /* Page-size */
 #define PTE_PAT     BIT_64(7)    /* PAT */
 #define PTE_G       BIT_64(8)    /* Global */
+#define PTE_COW     BIT_64(9)    /* Copy-on-write */
+#define PTE_VMPL    BIT_64(10)   /* VMPL page */
 #define PTE_AVAIL   GENMASK_ULL(11, 9) /* Available for software use */
 #define PTE_PAT_PS  BIT_64(12) /* Page size */
 #define PTE_C       BIT_64(51)   /* Encrypted page */
@@ -109,6 +111,40 @@ typedef uint64_t pte_t;
 #define PTE_DEF_FLAGS	(PTE_P | PTE_W | PTE_U | PTE_C)
 #define PTE_VMPL_FLAGS  (PTE_W | PTE_U | PTE_C| PTE_VMPL)
 #define LGPGSIZE	(1 << (PGSHIFT + NPTBITS))
+
+/**
+ * @brief Check if the page is a COW page
+ * @note Check if the page is a COW page by checking if the page table entry has
+ * the COW bit set and the read/write bit cleared.
+ * @param pte page table entry
+ * @return true if the page is a COW page, false otherwise
+ */
+static inline bool is_cow_page(pte_t pte)
+{
+	return (pte & (PTE_COW | PTE_W)) == PTE_COW;
+}
+
+/**
+ * @brief Mark the page as a COW page
+ * @note Mark the page as a COW page and clear the read/write bit.
+ * @param ptep page table entry
+ */
+static inline void set_cow_page(pte_t *ptep)
+{
+	*ptep |= PTE_COW;
+	*ptep &= ~PTE_W;
+}
+
+/**
+ * @brief Clear the COW bit from the page table entry
+ * @note Clear the COW bit from the page table entry and set the read/write bit.
+ * @param ptep page table entry
+ */
+static inline void clear_cow_page(pte_t *ptep)
+{
+    *ptep &= ~PTE_COW;
+    *ptep |= PTE_W;
+}
 
 typedef uint64_t PhysAddr;
 typedef uint64_t VirtAddr;

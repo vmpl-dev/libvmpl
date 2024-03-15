@@ -1291,7 +1291,7 @@ long dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 	if (rc != 0)
 		return rc;
 
-	if ((fec & FEC_W) && (*pte & PTE_COW)) {
+	if ((fec & FEC_W) && is_cow_page(*pte)) {
 		physaddr_t pa = pte_addr(*pte);
 		struct page *pg = vmpl_pa2page(pa);
 		pte_t perm = pte_flags(*pte);
