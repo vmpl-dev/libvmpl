@@ -9,13 +9,6 @@
 
 typedef pte_t ptent_t;
 
-static inline unsigned long dune_get_ticks(void)
-{
-	unsigned int a, d;
-	asm volatile("rdtsc" : "=a" (a), "=d" (d));
-	return ((unsigned long) a) | (((unsigned long) d) << 32);
-}
-
 static inline void dune_flush_tlb_one(unsigned long addr)
 {
 	asm ("invlpg (%0)" :: "r" (addr) : "memory");
@@ -30,10 +23,6 @@ static inline void dune_flush_tlb(void)
 // virtual memory
 
 extern void load_cr3(uint64_t cr3);
-extern int dune_printf(const char *fmt, ...);
-extern void * dune_mmap(void *addr, size_t length, int prot,
-                        int flags, int fd, off_t offset);
-extern void dune_die(void);
 
 extern void dune_apic_ipi(uint32_t dest, uint32_t vector);
 extern void dune_apic_eoi(void);

@@ -8,47 +8,6 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 
-static int dune_puts(const char *buf)
-{
-    long ret;
-
-    ret = syscall(SYS_write, STDOUT_FILENO, buf, strlen(buf));
-
-    return ret;
-}
-
-/**
- * dune_printf - a raw low-level printf request that uses a hypercall directly
- *
- * This is intended for working around libc syscall issues.
- */
-int dune_printf(const char *fmt, ...)
-{
-    va_list args;
-    char buf[1024];
-
-    va_start(args, fmt);
-
-    vsprintf(buf, fmt, args);
-
-    return dune_puts(buf);
-}
-
-void * dune_mmap(void *addr, size_t length, int prot,
-	     int flags, int fd, off_t offset)
-{
-    void *ret_addr;
-
-    ret_addr = syscall(SYS_mmap, addr, length, prot, flags, fd, offset);
-
-    return ret_addr;
-}
-
-void dune_die(void)
-{
-    syscall(SYS_exit);
-}
-
 void dune_apic_ipi(uint32_t dest, uint32_t vector)
 {
     apic_send_ipi(dest, vector);

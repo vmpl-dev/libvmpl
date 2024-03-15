@@ -171,13 +171,6 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 void dune_dump_trap_frame(struct dune_tf *tf) { }
 #endif
 
-void dune_passthrough_syscall(struct dune_tf *tf)
-{
-	int ret;
-	ret = syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
-	tf->rax = ret;
-}
-
 #ifdef CONFIG_VMPL_MM
 /**
  * @brief System call handler
@@ -254,12 +247,12 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 		// If the page is a COW page, then we need to duplicate the page.
 		if (fec & (PF_ERR_WR | PF_ERR_RSVD)) {
 			if(dune_vm_default_pgflt_handler(addr, fec) == 0)
-				goto exit;
+					goto exit;
 		}
 
-		// If the dune page fault callback is registered, then call the callback.
-		if (pgflt_cb) {
-			pgflt_cb(addr, fec, tf);
+				// If the dune page fault callback is registered, then call the callback.
+				if (pgflt_cb) {
+					pgflt_cb(addr, fec, tf);
 		}
 
 		pte_t *ptep;
@@ -267,7 +260,7 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 		pte_t *pgd = pgtable_pa_to_va(pte_addr(cr3));
 		// Find the page table entry for the faulting address
 		if (pgtable_lookup(pgd, addr, CREATE_NONE, &ptep) == 0)
-			goto exit;
+						goto exit;
 #endif
 	} else {
 		// If the page is lazy allocated, then we need to allocate the page.

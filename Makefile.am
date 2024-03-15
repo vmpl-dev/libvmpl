@@ -19,6 +19,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/seimi.c \
                     src/ghcb.c src/vc.c \
                     src/dune.S src/vsyscall.S \
+                    src/util.c \
                     src/serial.c \
                     src/trap.c \
                     src/apic.c \

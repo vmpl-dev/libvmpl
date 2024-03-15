@@ -647,24 +647,6 @@ static int xsave_begin(struct dune_percpu *percpu) { return 0; }
 static int xsave_end(struct dune_percpu *percpu) { return 0; }
 #endif
 
-/** 
- * @brief  Dune signal handler registration
- * @note   
- * @retval 0 on success, otherwise an error code.
- */
-sighandler_t dune_signal(int sig, sighandler_t cb)
-{
-    log_info("dune_signal: register signal %d", sig);
-	dune_intr_cb x = (dune_intr_cb)cb; /* XXX */
-
-	if (signal(sig, cb) == SIG_ERR)
-		return SIG_ERR;
-
-	dune_register_intr_handler(DUNE_SIGNAL_INTR_BASE + sig, x);
-
-	return NULL;
-}
-
 unsigned long dune_get_user_fs(void)
 {
 	void *ptr;

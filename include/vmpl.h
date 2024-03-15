@@ -15,6 +15,25 @@
 
 #define MAX_LINE_LENGTH 256
 
+typedef void (*sighandler_t)(int);
+
+// utilities
+
+static inline unsigned long dune_get_ticks(void)
+{
+	unsigned int a, d;
+	asm volatile("rdtsc" : "=a"(a), "=d"(d));
+	return ((unsigned long)a) | (((unsigned long)d) << 32);
+}
+
+extern int dune_printf(const char *fmt, ...);
+extern void dune_die(void);
+extern void *dune_mmap(void *addr, size_t length, int prot, int flags, int fd,
+					   off_t offset);
+extern sighandler_t dune_signal(int sig, sighandler_t cb);
+extern unsigned long dune_get_user_fs(void);
+extern void dune_set_user_fs(unsigned long fs_base);
+
 /*
  * We use the same general GDT layout as Linux so that can we use
  * the same syscall MSR values. In practice only code segments
@@ -138,11 +157,6 @@ extern int dune_jump_to_user(struct dune_tf *tf);
 extern void dune_ret_from_user(int ret) __attribute__((noreturn));
 extern void dune_dump_trap_frame(struct dune_tf *tf);
 extern void dune_passthrough_syscall(struct dune_tf *tf);
-
-// fault handling
-extern sighandler_t dune_signal(int sig, sighandler_t cb);
-extern unsigned long dune_get_user_fs(void);
-extern void dune_set_user_fs(unsigned long fs_base);
 
 // elf helper functions
 #include "elf.h"
