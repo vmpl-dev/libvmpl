@@ -111,13 +111,13 @@ static void dune_dump_stack(struct dune_tf *tf)
 
     // we use printf() because this might
     // have to work even if libc doesn't.
-    printf("dune: Dumping Stack Contents...\n");
+    dune_printf("dune: Dumping Stack Contents...\n");
     for (i = 0; i < STACK_DEPTH; i++) {
         if (!addr_is_mapped(&sp[i])) {
-            printf("dune: reached unmapped addr\n");
+            dune_printf("dune: reached unmapped addr\n");
             break;
         }
-        printf("dune: RSP%+-3d 0x%016lx\n", i * sizeof(long),
+        dune_printf("dune: RSP%+-3d 0x%016lx\n", i * sizeof(long),
                sp[i]);
     }
 }
@@ -130,9 +130,9 @@ static void dune_hexdump(void *x, int len)
 	unsigned char *p = x;
 
 	while (len--)
-		printf("%.2x ", *p++);
+		dune_printf("%.2x ", *p++);
 
-	printf("\n");
+	dune_printf("\n");
 }
 
 static void dump_ip(struct dune_tf *tf)
@@ -140,32 +140,32 @@ static void dump_ip(struct dune_tf *tf)
 	unsigned char *p = (void *)tf->rip;
 	int len = 20;
 
-	printf("dune: code before IP\t");
+	dune_printf("dune: code before IP\t");
 	dune_hexdump(p - len, len);
 
-	printf("dune: code at IP\t");
+	dune_printf("dune: code at IP\t");
 	dune_hexdump(p, len);
 }
 
 void dune_dump_trap_frame(struct dune_tf *tf)
 {
-	// we use printf() because this might
+	// we use dune_printf() because this might
 	// have to work even if libc doesn't.
-	printf("dune: --- Begin Trap Dump ---\n");
-	printf("dune: RIP 0x%016lx\n", tf->rip);
-	printf("dune: CS 0x%02x SS 0x%02x\n", tf->cs, tf->ss);
-	printf("dune: ERR 0x%08x RFLAGS 0x%08lx\n", tf->err, tf->rflags);
-	printf("dune: RAX 0x%016lx RCX 0x%016lx\n", tf->rax, tf->rcx);
-	printf("dune: RDX 0x%016lx RBX 0x%016lx\n", tf->rdx, tf->rbx);
-	printf("dune: RSP 0x%016lx RBP 0x%016lx\n", tf->rsp, tf->rbp);
-	printf("dune: RSI 0x%016lx RDI 0x%016lx\n", tf->rsi, tf->rdi);
-	printf("dune: R8  0x%016lx R9  0x%016lx\n", tf->r8, tf->r9);
-	printf("dune: R10 0x%016lx R11 0x%016lx\n", tf->r10, tf->r11);
-	printf("dune: R12 0x%016lx R13 0x%016lx\n", tf->r12, tf->r13);
-	printf("dune: R14 0x%016lx R15 0x%016lx\n", tf->r14, tf->r15);
+	dune_printf("dune: --- Begin Trap Dump ---\n");
+	dune_printf("dune: RIP 0x%016lx\n", tf->rip);
+	dune_printf("dune: CS 0x%02x SS 0x%02x\n", tf->cs, tf->ss);
+	dune_printf("dune: ERR 0x%08x RFLAGS 0x%08lx\n", tf->err, tf->rflags);
+	dune_printf("dune: RAX 0x%016lx RCX 0x%016lx\n", tf->rax, tf->rcx);
+	dune_printf("dune: RDX 0x%016lx RBX 0x%016lx\n", tf->rdx, tf->rbx);
+	dune_printf("dune: RSP 0x%016lx RBP 0x%016lx\n", tf->rsp, tf->rbp);
+	dune_printf("dune: RSI 0x%016lx RDI 0x%016lx\n", tf->rsi, tf->rdi);
+	dune_printf("dune: R8  0x%016lx R9  0x%016lx\n", tf->r8, tf->r9);
+	dune_printf("dune: R10 0x%016lx R11 0x%016lx\n", tf->r10, tf->r11);
+	dune_printf("dune: R12 0x%016lx R13 0x%016lx\n", tf->r12, tf->r13);
+	dune_printf("dune: R14 0x%016lx R15 0x%016lx\n", tf->r14, tf->r15);
 	dune_dump_stack(tf);
 	dump_ip(tf);
-	printf("dune: --- End Trap Dump ---\n");
+	dune_printf("dune: --- End Trap Dump ---\n");
 }
 #else
 void dune_dump_trap_frame(struct dune_tf *tf) { }
@@ -184,7 +184,7 @@ void dune_dump_trap_frame(struct dune_tf *tf) { }
 void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {
-		log_debug("dune: handling syscall %ld", tf->rax);
+		dune_printf("dune: handling syscall %ld\n", tf->rax);
 		switch (tf->rax) {
 		case __NR_mmap:
 			mmap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
@@ -215,7 +215,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 			break;
 		}
 	} else {
-		log_err("dune: missing handler for syscall %ld", tf->rax);
+		dune_printf("dune: missing handler for syscall %ld\n", tf->rax);
 		dune_dump_trap_frame(tf);
 		exit(EXIT_FAILURE);
 	}
@@ -398,7 +398,7 @@ void dune_trap_handler(int num, struct dune_tf *tf)
 failed:
 	// If the trap is not handled by the pre-trap handler, the guest OS, or 
 	// the post-trap handler, then dump the trap frame and exit.
-	log_err("Unable to handle trap %d, error code %d", num, ret);
+	dune_printf("Unable to handle trap %d, error code %d\n", num, ret);
 	dune_dump_trap_frame(tf);
 	exit(EXIT_FAILURE);
 exit:
@@ -413,10 +413,10 @@ exit:
 void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {
-		log_debug("dune: handling syscall %ld", tf->rax);
+		dune_printf("dune: handling syscall %ld\n", tf->rax);
 		syscall_cb(tf);
 	} else {
-		log_err("dune: missing handler for syscall %ld", tf->rax);
+		dune_printf("dune: missing handler for syscall %ld\n", tf->rax);
 		dune_dump_trap_frame(tf);
 		exit(EXIT_FAILURE);
 	}
@@ -435,7 +435,7 @@ void dune_trap_handler(int num, struct dune_tf *tf)
 	}
 
 	if (syscall(ULONG_MAX, num, (unsigned long)tf) != 0) {
-		log_err("dune: unable to handle trap %d", num);
+		dune_printf("dune: unable to handle trap %d\n", num);
 		dune_dump_trap_frame(tf);
 		exit(EXIT_FAILURE);
 	}
