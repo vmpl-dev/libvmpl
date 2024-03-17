@@ -1130,7 +1130,6 @@ void on_dune_exit(struct dune_config *conf)
 {
     switch (conf->ret) {
     case DUNE_RET_EXIT:
-        printf("on_dune_exit()\n");
         syscall(SYS_exit, conf->status);
         // exit(conf->status);
 		break;
@@ -1139,7 +1138,6 @@ void on_dune_exit(struct dune_config *conf)
 		printf("dune: exit due to interrupt %lld\n", conf->status);
         break;
     case DUNE_RET_SIGNAL:
-        printf("on_dune_exit()\n");
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:
@@ -1157,14 +1155,12 @@ void on_dune_exit(struct dune_config *conf)
 {
     switch (conf->ret) {
     case DUNE_RET_EXIT:
-        printf("on_dune_exit()\n");
         syscall(SYS_exit, conf->status);
         // exit(conf->status);
     case DUNE_RET_SYSCALL:
         on_dune_syscall(conf);
 		break;
     case DUNE_RET_SIGNAL:
-        printf("on_dune_exit()\n");
         __dune_go_dune(dune_fd, conf);
         break;
     case DUNE_RET_NOENTER:
