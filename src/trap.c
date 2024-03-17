@@ -234,38 +234,32 @@ void dune_syscall_handler(struct dune_tf *tf)
 static int dune_pre_pf_handler(struct dune_tf *tf)
 {
 	uint64_t fec = tf->err;
+	uintptr_t addr;
+	pte_t *ptep, old_pte;
 
 	// Reject I/D, PK, RMP, and SS faults
 	if (fec & (PF_ERR_ID | PF_ERR_PK | PF_ERR_RMP | PF_ERR_SS)) {
 		goto failed;
 	}
 
-	uintptr_t addr = read_cr2();
-
+	addr = read_cr2();
 	if (fec & PF_ERR_P) {
-#if 0
-		// If the page is a COW page, then we need to duplicate the page.
-		if (fec & (PF_ERR_WR | PF_ERR_RSVD)) {
-			if(dune_vm_default_pgflt_handler(addr, fec) == 0)
-					goto exit;
-		}
-
+		if (fec & PF_ERR_WR) {
+			// If the page is allocated as a VMPL page, then we need to handle the page fault.
+			struct vmpl_vm_t *vmpl_vm = &vmpl_mm.vmpl_vm;
+			if ((addr >= vmpl_vm->va_start) && (addr < vmpl_vm->va_end)) {
 				// If the dune page fault callback is registered, then call the callback.
 				if (pgflt_cb) {
 					pgflt_cb(addr, fec, tf);
+					goto exit;
+				}
+			}
 		}
-
-		pte_t *ptep;
-		uintptr_t cr3 = read_cr3();
-		pte_t *pgd = pgtable_pa_to_va(pte_addr(cr3));
-		// Find the page table entry for the faulting address
-		if (pgtable_lookup(pgd, addr, CREATE_NONE, &ptep) == 0)
-						goto exit;
-#endif
 	} else {
 		// If the page is lazy allocated, then we need to allocate the page.
-		if(vmpl_mm_default_pgflt_handler(addr, fec) == 0)
+		if(vmpl_mm_default_pgflt_handler(addr, fec) == 0) {
 			goto exit;
+		}
 	}
 
 failed:
@@ -300,6 +294,7 @@ static int dune_post_pf_handler(struct dune_tf *tf)
 	// If the page fault is handled for another sthread, then copy the page table entry
 	uint64_t cr3 = read_cr3();
 	pte_t *pgd = pgtable_pa_to_va(pte_addr(cr3));
+#ifdef CONFIF_VMPL_TRAP
 	// Find the page table entry for the faulting address
 	if (pgd != pgroot) {
 		// Find the page table entry for the faulting address in the child sthread
@@ -308,11 +303,13 @@ static int dune_post_pf_handler(struct dune_tf *tf)
 			return -1;
 		// Copy the page table entry from the host to the child
 		*child_ptep = *ptep;
+		// TODO: Mark the page as a COW page in the child sthread if the page is a COW page.
 		// Mark the page as a VMPL page in the child sthread
 		vmpl_page_get_addr(paddr);
 		// Invalidate the TLB
 		vmpl_flush_tlb_one(addr);
 	}
+#endif
 
 	return 0;
 }

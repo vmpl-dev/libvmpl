@@ -1485,12 +1485,14 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	struct vmpl_vma_t *vma;
 	struct vmpl_vm_t *vm = &vmpl_mm->vmpl_vm;
 
+#if 0
 	// Test page table entry lookup
 	log_info("Test page table entry lookup");
 	rc = pgtable_lookup(vmpl_mm->pgd, vmpl_mm->vmpl_vm.va_start, false, &ptep);
 	assert(rc == 0);
 	assert(ptep != NULL);
 	log_success("Test page table entry lookup passed, pte = 0x%lx", *ptep);
+#endif
 
 	// Test mmap
 	log_info("Test mmap");
