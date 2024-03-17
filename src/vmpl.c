@@ -718,6 +718,8 @@ static struct dune_config *vmsa_alloc_config()
     return conf;
 }
 
+#define SAFE_STACK_SIZE (2048 * 1024)
+
 /**
  * Sets up the safe stack for the VMPL library.
  * 
@@ -730,13 +732,13 @@ static int setup_safe_stack(struct dune_percpu *percpu)
 	char *safe_stack;
 
 	log_info("setup safe stack");
-	safe_stack = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
+	safe_stack = mmap(NULL, SAFE_STACK_SIZE, PROT_READ | PROT_WRITE,
 					  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 	if (safe_stack == MAP_FAILED)
 		return -ENOMEM;
 
-	safe_stack += PGSIZE;
+	safe_stack += SAFE_STACK_SIZE;
 	percpu->tss.tss_iomb = offsetof(struct Tss, tss_iopb);
 
 	for (i = 0; i < 7; i++)
