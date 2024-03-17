@@ -57,7 +57,7 @@ static inline pte_t get_pte_perm(int perm)
 		pte_perm |= PTE_NX;
 	}
 
-	return pte_perm;
+	return pte_perm | PTE_VMPL | PTE_C;
 }
 
 static inline struct page * vmpl_va2page(virtaddr_t va)
@@ -1303,7 +1303,7 @@ long dune_vm_default_pgflt_handler(uintptr_t addr, uint64_t fec)
 		// Check if we can just change permissions
 		if (vmpl_page_is_from_pool(pa) && pg->ref == 1) {
 			*pte = pa | perm;
-			return;
+			return 0;
 		}
 
 		// Duplicate page
@@ -1407,7 +1407,10 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 
     // VMPL Page Management
     rc = page_init(dune_fd);
-    assert(rc == 0);
+	if (rc != 0) {
+		log_err("Failed to initialize page management");
+		goto out;
+	}
 
 	// VMPL-VM Abstraction
 	rc = vmpl_vm_init(&vmpl_mm->vmpl_vm);

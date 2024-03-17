@@ -263,7 +263,7 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
             return -ENOENT;
         p4d = pgtable_alloc();
         log_debug("p4d = %p", p4d);
-        pgd[m] = pte_addr(__pa(p4d)) | PT_DEF_FLAGS;
+        pgd[m] = pte_addr(__pa(p4d)) | PTE_DEF_FLAGS;
         log_debug("pgd[%d] = %lx", m, pgd[m]);
     } else {
         p4d = pgtable_do_mapping(pte_addr(pgd[m]));
@@ -278,7 +278,7 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
         if (!create)
             return -ENOENT;
         pud = pgtable_alloc();
-        p4d[i] = pte_addr(__pa(pud)) | PT_DEF_FLAGS;
+        p4d[i] = pte_addr(__pa(pud)) | PTE_DEF_FLAGS;
     } else {
         pud = pgtable_do_mapping(pte_addr(p4d[i]));
     }
@@ -288,7 +288,7 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
         if (!create)
             return -ENOENT;
         pmd = pgtable_alloc();
-        pud[j] = pte_addr(__pa(pmd)) | PT_DEF_FLAGS;
+        pud[j] = pte_addr(__pa(pmd)) | PTE_DEF_FLAGS;
     } else if (pte_big(pud[j])) {
         *pte_out = &pud[j];
         return 0;
@@ -301,7 +301,7 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
         if (!create)
             return -ENOENT;
         pte = pgtable_alloc();
-        pmd[k] = pte_addr(__pa(pte)) | PT_DEF_FLAGS;
+        pmd[k] = pte_addr(__pa(pte)) | PTE_DEF_FLAGS;
     } else if (pte_big(pmd[k])) {
         *pte_out = &pmd[k];
         return 0;
