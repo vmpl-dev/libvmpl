@@ -1,9 +1,11 @@
 #ifndef __VMPL_H_
 #define __VMPL_H_
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/ucontext.h>
 
 #ifdef __GLIBC__
 #include <asm/prctl.h>
@@ -157,6 +159,9 @@ extern int dune_jump_to_user(struct dune_tf *tf);
 extern void dune_ret_from_user(int ret) __attribute__((noreturn));
 extern void dune_dump_trap_frame(struct dune_tf *tf);
 extern void dune_passthrough_syscall(struct dune_tf *tf);
+
+// ucontext support
+extern void dune_getcontext(ucontext_t *ucp, struct dune_tf *tf);
 
 // syscall filtering
 extern bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
