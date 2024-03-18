@@ -38,3 +38,37 @@ bool apply_syscall_filters(struct dune_tf *tf)
 	}
 	return true;
 }
+
+bool remove_syscall_filter(bool (*filter)(struct dune_tf *tf))
+{
+	struct syscall_filter *current = syscall_filters;
+	struct syscall_filter *prev = NULL;
+
+	while (current) {
+		if (current->filter == filter) {
+			if (prev) {
+				prev->next = current->next;
+			} else {
+				syscall_filters = current->next;
+			}
+			free(current);
+			return true;
+		}
+		prev = current;
+		current = current->next;
+	}
+
+	return false;
+}
+
+void clear_syscall_filters()
+{
+	struct syscall_filter *current = syscall_filters;
+	while (current) {
+		struct syscall_filter *next = current->next;
+		free(current);
+		current = next;
+	}
+	syscall_filters = NULL;
+}
+

@@ -7,6 +7,8 @@
 #ifndef __SYS_FILTER_H__
 #define __SYS_FILTER_H__
 
+#include <stdbool.h>
+
 struct syscall_filter {
 	bool (*filter)(struct dune_tf *tf);
 	struct syscall_filter *next;
@@ -14,5 +16,7 @@ struct syscall_filter {
 
 bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
 bool apply_syscall_filters(struct dune_tf *tf);
+bool remove_syscall_filter(bool (*filter)(struct dune_tf *tf));
+void clear_syscall_filters();
 
 #endif
