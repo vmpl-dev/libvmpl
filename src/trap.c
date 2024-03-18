@@ -268,11 +268,11 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 		goto failed;
 	}
 
+	struct vmpl_vm_t *vmpl_vm = &vmpl_mm.vmpl_vm;
 	addr = read_cr2();
 	if (fec & PF_ERR_P) {
 		if (fec & PF_ERR_WR) {
 			// If the page is allocated as a VMPL page, then we need to handle the page fault.
-			struct vmpl_vm_t *vmpl_vm = &vmpl_mm.vmpl_vm;
 			if ((addr >= vmpl_vm->va_start) && (addr < vmpl_vm->va_end)) {
 				// If the dune page fault callback is registered, then call the callback.
 				if (pgflt_cb) {
@@ -282,9 +282,11 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 			}
 		}
 	} else {
-		// If the page is lazy allocated, then we need to allocate the page.
-		if(vmpl_mm_default_pgflt_handler(addr, fec) == 0) {
-			goto exit;
+		if ((addr >= vmpl_vm->va_start) && (addr < vmpl_vm->va_end)) {
+			// If the page is lazy allocated, then we need to allocate the page.
+			if(vmpl_mm_default_pgflt_handler(addr, fec) == 0) {
+				goto exit;
+			}
 		}
 	}
 
@@ -320,7 +322,6 @@ static int dune_post_pf_handler(struct dune_tf *tf)
 	// If the page fault is handled for another sthread, then copy the page table entry
 	uint64_t cr3 = read_cr3();
 	pte_t *pgd = pgtable_pa_to_va(pte_addr(cr3));
-#ifdef CONFIF_VMPL_TRAP
 	// Find the page table entry for the faulting address
 	if (pgd != pgroot) {
 		// Find the page table entry for the faulting address in the child sthread
@@ -335,7 +336,6 @@ static int dune_post_pf_handler(struct dune_tf *tf)
 		// Invalidate the TLB
 		vmpl_flush_tlb_one(addr);
 	}
-#endif
 
 	return 0;
 }
