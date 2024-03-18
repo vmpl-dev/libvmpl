@@ -37,13 +37,13 @@ AC_DEFINE_UNQUOTED([CONFIG_VMPL_HEAP_SIZE], [$with_vmpl_heap_size], [vmpl heap s
 AC_ARG_WITH([vmpl-va-start], [AS_HELP_STRING([--with-vmpl-va-start],
                                               [Set vmpl va start])],
             [with_vmpl_va_start=$withval],
-            [with_vmpl_va_start=0xF000000000UL])
+            [with_vmpl_va_start=0x3fffff000000UL])
 AC_DEFINE_UNQUOTED([CONFIG_VMPL_VA_START], [$with_vmpl_va_start], [vmpl va start])
 
 AC_ARG_WITH([vmpl-va-size], [AS_HELP_STRING([--with-vmpl-va-size],
                                              [Set vmpl va size])],
             [with_vmpl_va_size=$withval],
-            [with_vmpl_va_size=0x10000000UL])
+            [with_vmpl_va_size=0x4000000UL])
 AC_DEFINE_UNQUOTED([CONFIG_VMPL_VA_SIZE], [$with_vmpl_va_size], [vmpl va size])
 
 AC_ARG_WITH([vmpl-fit-algorithm], [AS_HELP_STRING([--with-vmpl-fit-algorithm],
@@ -141,6 +141,7 @@ AC_ARG_ENABLE([sys-filter], [AS_HELP_STRING([--enable-sys-filter],
                                             [Enable sys filter support])],
               [enable_sys_filter=$enableval],
               [enable_sys_filter=no])
+AM_CONDITIONAL([ENABLE_SYS_FILTER], [test "x$enable_sys_filter" = "xyes"])
 
 AC_ARG_ENABLE([dune-boot],
               [AS_HELP_STRING([--enable-dune-boot],
