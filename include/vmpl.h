@@ -162,6 +162,7 @@ extern void dune_passthrough_syscall(struct dune_tf *tf);
 
 // ucontext support
 extern void dune_getcontext(ucontext_t *ucp, struct dune_tf *tf);
+extern void dune_setcontext(const ucontext_t *ucp, struct dune_tf *tf);
 
 // syscall filtering
 extern bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));

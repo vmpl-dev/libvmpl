@@ -100,3 +100,30 @@ void dune_getcontext(ucontext_t *ucp, struct dune_tf *tf)
     R(16) = tf->rip;
 #undef R
 }
+
+/**
+ * @brief Set a dune_tf from a given ucontext_t (i.e., from userspace state).
+ * Useful for e.g. libunwind of userspace.
+ */
+void dune_setcontext(const ucontext_t *ucp, struct dune_tf *tf)
+{
+#define R(x) (ucp->uc_mcontext.gregs[x])
+    tf->r8  = R(0);
+    tf->r9  = R(1);
+    tf->r10 = R(2);
+    tf->r11 = R(3);
+    tf->r12 = R(4);
+    tf->r13 = R(5);
+    tf->r14 = R(6);
+    tf->r15 = R(7);
+    tf->rdi = R(8);
+    tf->rsi = R(9);
+    tf->rbp = R(10);
+    tf->rbx = R(11);
+    tf->rdx = R(12);
+    tf->rax = R(13);
+    tf->rcx = R(14);
+    tf->rsp = R(15);
+    tf->rip = R(16);
+#undef R
+}
