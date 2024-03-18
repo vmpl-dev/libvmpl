@@ -13,6 +13,7 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <hotcalls/hotcalls.h>
 
 #include "config.h"
 #include "mmu-x86.h"
@@ -192,6 +193,16 @@ void dune_syscall_handler(struct dune_tf *tf)
 		if (!apply_syscall_filters(tf)) {
 			log_debug("dune: syscall blocked by filter\n");
 			return;
+		}
+#endif
+
+#ifdef CONFIG_VMPL_HOTCALLS
+		if (hotcalls_initialized()) {
+			ret = vmpl_hotcalls_call(tf);
+			if (ret != -ENOSYS) {
+				tf->rax = ret;
+				return;
+			}
 		}
 #endif
 

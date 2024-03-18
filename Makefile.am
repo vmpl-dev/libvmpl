@@ -23,6 +23,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/serial.c \
                     src/trap.c \
                     src/sys-filter.c \
+                    src/vmpl-hotcalls.c \
                     src/apic.c \
                     src/elf.c \
                     src/env.c \
@@ -30,6 +31,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
 libvmpl_la_CFLAGS = $(AM_CFLAGS)
 libvmpl_la_LDFLAGS = -ldl \
                     -ldict \
+                    -lhotcalls \
                     -version-info 1:0:0
 
 libdune_la_SOURCES = src/libdune.c

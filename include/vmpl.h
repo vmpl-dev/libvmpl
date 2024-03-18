@@ -161,6 +161,12 @@ extern void dune_passthrough_syscall(struct dune_tf *tf);
 // syscall filtering
 extern bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
 
+// hotcall routines
+void register_hotcall(int syscall);
+void unregister_hotcall(int syscall);
+bool is_hotcall(int syscall);
+int vmpl_hotcalls_call(struct dune_tf *tf);
+
 // elf helper functions
 #include "elf.h"
 struct dune_elf {
