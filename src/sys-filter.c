@@ -7,25 +7,40 @@
 
 static struct syscall_filter *syscall_filters = NULL;
 
-bool register_syscall_filter(bool (*filter)(struct dune_tf *tf))
+bool register_syscall_filter_priority(bool (*filter)(struct dune_tf *tf), filter_priority priority)
 {
 	struct syscall_filter *new_filter = malloc(sizeof(struct syscall_filter));
 	if (!new_filter)
 		return false;
 
 	new_filter->filter = filter;
+	new_filter->priority = priority;
 	new_filter->next = NULL;
 
 	if (!syscall_filters) {
 		syscall_filters = new_filter;
 	} else {
 		struct syscall_filter *current = syscall_filters;
-		while (current->next)
+		struct syscall_filter *prev = NULL;
+		while (current && current->priority <= priority) {
+			prev = current;
 			current = current->next;
-		current->next = new_filter;
+		}
+		if (prev) {
+			prev->next = new_filter;
+			new_filter->next = current;
+		} else {
+			new_filter->next = syscall_filters;
+			syscall_filters = new_filter;
+		}
 	}
 
 	return true;
+}
+
+bool register_syscall_filter(bool (*filter)(struct dune_tf *tf))
+{
+	return register_syscall_filter_priority(filter, NORMAL);
 }
 
 bool apply_syscall_filters(struct dune_tf *tf)

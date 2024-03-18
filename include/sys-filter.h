@@ -9,12 +9,21 @@
 
 #include <stdbool.h>
 
+typedef enum {
+	LOW,
+	NORMAL,
+	MEDIUM,
+	HIGH
+} filter_priority;
+
 struct syscall_filter {
 	bool (*filter)(struct dune_tf *tf);
+	filter_priority priority;
 	struct syscall_filter *next;
 };
 
 bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
+bool register_syscall_filter_priority(bool (*filter)(struct dune_tf *tf), filter_priority priority);
 bool apply_syscall_filters(struct dune_tf *tf);
 bool remove_syscall_filter(bool (*filter)(struct dune_tf *tf));
 void clear_syscall_filters();
