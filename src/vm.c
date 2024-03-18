@@ -2,10 +2,12 @@
 #include "vm.h"
 #include "log.h"
 
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 
 /**
  * @brief  Insert a VMA into the VMA dictionary of the VMPL-VM.
@@ -267,6 +269,23 @@ static void touch_vma_callback(struct vmpl_vma_t *vma, void *arg) {
 }
 
 /**
+ * @brief Associate a pkey with a VMA.
+ * @note This function is used by the associate_pkey function.
+ * @param vma The VMA to associate the pkey with.
+ * @param arg The pkey to associate with the VMA.
+ */
+static void associate_pkey_callback(struct vmpl_vma_t *vma, void *arg) {
+	int ret;
+	uint64_t *pkey = (uint64_t *)arg;
+	if (vma->prot & (PROT_READ | PROT_WRITE | PROT_EXEC)) {
+		ret = pkey_mprotect((void *)vma->start, vma->end - vma->start, vma->prot, *pkey);
+		if (ret != 0) {
+			perror("pkey_mprotect");
+		}
+	}
+}
+
+/**
  * Initialize the virtual memory subsystem.
  * This function should be called before any other vmpl_vm_* functions.
  * @param vmpl_vm The vmpl_vm_t structure to initialize.
@@ -289,7 +308,15 @@ int vmpl_vm_init(struct vmpl_vm_t *vmpl_vm)
 	}
 	log_debug("va_start = 0x%lx, va_end = 0x%lx", va_start, va_start + size);
 
+	// Allocate the Protection Key
+	uint64_t pkey = pkey_alloc(0, 0);
+	if (pkey == -1) {
+		perror("pkey_alloc");
+		return -1;
+	}
+
 	// VMPL VMA Management
+	vmpl_vm->pkey = pkey;
 	vmpl_vm->va_start = va_start;
 	vmpl_vm->va_end = va_start + size;
 	vmpl_vm->fit_algorithm = get_fit_algorithm(CONFIG_VMPL_FIT_ALGORITHM);

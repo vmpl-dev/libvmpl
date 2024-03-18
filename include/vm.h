@@ -19,6 +19,7 @@
 struct vmpl_vm_t {
 	dict *vma_dict;
 	fit_algorithm_t fit_algorithm;
+	uint64_t pkey;
 	uint64_t va_start;
 	uint64_t va_end;
 	uintptr_t phys_limit;
