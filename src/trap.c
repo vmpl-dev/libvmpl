@@ -184,6 +184,7 @@ void dune_dump_trap_frame(struct dune_tf *tf) { }
  */
 void dune_syscall_handler(struct dune_tf *tf)
 {
+	int ret;
 	if (syscall_cb) {
 		dune_printf("dune: handling syscall %ld\n", tf->rax);
 
@@ -196,33 +197,37 @@ void dune_syscall_handler(struct dune_tf *tf)
 
 		switch (tf->rax) {
 		case __NR_mmap:
-			mmap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
+			ret = mmap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
 			break;
 		case __NR_munmap:
-			munmap(tf->rdi, tf->rsi);
+			ret = munmap(tf->rdi, tf->rsi);
 			break;
 		case __NR_mprotect:
-			mprotect(tf->rdi, tf->rsi, tf->rdx);
+			ret = mprotect(tf->rdi, tf->rsi, tf->rdx);
 			break;
 		case __NR_pkey_mprotect:
-			pkey_mprotect(tf->rdi, tf->rsi, tf->rdx, tf->r10);
+			ret = pkey_mprotect(tf->rdi, tf->rsi, tf->rdx, tf->r10);
 			break;
 		case __NR_mremap:
-			mremap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8);
+			ret = mremap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8);
 			break;
 		case __NR_pkey_alloc:
-			pkey_alloc(tf->rdi, tf->rsi);
+			ret = pkey_alloc(tf->rdi, tf->rsi);
 			break;
 		case __NR_pkey_free:
-			pkey_free(tf->rdi);
+			ret = pkey_free(tf->rdi);
 			break;
 		case __NR_clone:
-			clone(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
+			ret = clone(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
 			break;
 		default:
 			syscall_cb(tf);
+			ret = tf->rax;
 			break;
 		}
+
+		// Set the return value of the system call
+		tf->rax = ret;
 	} else {
 		dune_printf("dune: missing handler for syscall %ld\n", tf->rax);
 		dune_dump_trap_frame(tf);
