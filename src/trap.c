@@ -192,6 +192,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 #ifdef CONFIG_SYS_FILTER
 		if (!apply_syscall_filters(tf)) {
 			log_debug("dune: syscall blocked by filter\n");
+			tf->rax = -EPERM;
 			return;
 		}
 #endif
