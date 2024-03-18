@@ -137,6 +137,11 @@ AC_ARG_ENABLE([vmpl-hotcalls], [AS_HELP_STRING([--enable-vmpl-hotcalls],
               [enable_vmpl_hotcalls=no])
 AM_CONDITIONAL([ENABLE_VMPL_HOTCALLS], [test "x$enable_vmpl_hotcalls" = "xyes"])
 
+AC_ARG_ENABLE([sys-filter], [AS_HELP_STRING([--enable-sys-filter],
+                                            [Enable sys filter support])],
+              [enable_sys_filter=$enableval],
+              [enable_sys_filter=no])
+
 AC_ARG_ENABLE([dune-boot],
               [AS_HELP_STRING([--enable-dune-boot],
                               [Enable dune boot support])],
@@ -221,6 +226,10 @@ fi
 
 if test "x$enable_vmpl_hotcalls" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_HOTCALLS], [1], [Enable hotcalls support])
+fi
+
+if test "x$enable_sys_filter" = "xyes"; then
+    AC_DEFINE([CONFIG_SYS_FILTER], [1], [Enable sys filter support])
 fi
 
 if test "x$enable_dune_boot" = "xyes"; then

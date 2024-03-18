@@ -22,6 +22,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/util.c \
                     src/serial.c \
                     src/trap.c \
+                    src/sys-filter.c \
                     src/apic.c \
                     src/elf.c \
                     src/env.c \

@@ -158,6 +158,9 @@ extern void dune_ret_from_user(int ret) __attribute__((noreturn));
 extern void dune_dump_trap_frame(struct dune_tf *tf);
 extern void dune_passthrough_syscall(struct dune_tf *tf);
 
+// syscall filtering
+extern bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
+
 // elf helper functions
 #include "elf.h"
 struct dune_elf {

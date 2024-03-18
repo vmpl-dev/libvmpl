@@ -22,6 +22,7 @@
 #include "vmpl.h"
 #include "log.h"
 #include "vmpl-core.h"
+#include "sys-filter.h"
 
 /**
  * @brief  Exception messages
@@ -185,6 +186,14 @@ void dune_syscall_handler(struct dune_tf *tf)
 {
 	if (syscall_cb) {
 		dune_printf("dune: handling syscall %ld\n", tf->rax);
+
+#ifdef CONFIG_SYS_FILTER
+		if (!apply_syscall_filters(tf)) {
+			log_debug("dune: syscall blocked by filter\n");
+			return;
+		}
+#endif
+
 		switch (tf->rax) {
 		case __NR_mmap:
 			mmap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
