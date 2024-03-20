@@ -32,6 +32,7 @@ bool vmpl_enabled = false;
 bool run_in_vmpl = false;
 bool run_in_vmpl_process = false;
 bool run_in_vmpl_thread = false;
+bool run_in_user_mode = false;
 
 static void init_env()
 {
@@ -59,6 +60,11 @@ static void init_env()
 		run_in_vmpl_thread = true;
 		log_debug("run in vmpl thread");
 	}
+
+	if (getenv("RUN_IN_USER_MODE")) {
+		run_in_user_mode = true;
+		log_debug("run in user mode");
+	}
 }
 
 // Declare original malloc and free
@@ -69,6 +75,35 @@ static void cleanup()
 	if (hotcalls_enabled) {
 		hotcalls_teardown();
 	}
+}
+
+static void user_main()
+{
+	// Call original main
+	int ret = main_orig(0, NULL, NULL);
+
+	// Return from user mode
+	dune_ret_from_user(ret);
+}
+
+/* Utility functions. */
+static int dune_call_user(void *func)
+{
+	int ret;
+	unsigned long sp;
+	struct dune_tf *tf = malloc(sizeof(struct dune_tf));
+	if (!tf)
+		return -ENOMEM;
+
+	asm ("movq %%rsp, %0" : "=r" (sp));
+	sp = (sp - 10000) & ~0xF; // Align rsp to 16 bytes
+	tf->rip = (unsigned long) func;
+	tf->rsp = sp;
+	tf->rflags = 0x0;
+
+	ret = dune_jump_to_user(tf);
+
+	return ret;
 }
 
 static int main_hook(int argc, char **argv, char **envp)
@@ -109,6 +144,15 @@ static int main_hook(int argc, char **argv, char **envp)
 		log_err("failed to initialize dune");
 	} else {
 		log_debug("dune mode entered!");
+	}
+
+	// Run in user mode if requested
+	if (run_in_user_mode) {
+		log_debug("entering user mode...");
+		// Register syscall handler, default to passthrough
+		dune_register_syscall_handler(&dune_passthrough_syscall);
+		// Call user main function in user mode
+		return dune_call_user(&user_main);
 	}
 
 	return main_orig(argc, argv, envp);
