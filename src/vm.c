@@ -166,8 +166,8 @@ struct vmpl_vma_t *find_prev_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma)
  */
 struct vmpl_vma_t *find_next_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
 	struct vmpl_vma_t *next_vma = NULL;
-	assert(vm != NULL);
-	assert(vma != NULL);
+	if (vm == NULL || vma == NULL)
+		return false;
 	pthread_spin_lock(&vm->lock);
 	dict_itor *itor = dict_itor_new(vm->vma_dict);
 	for (dict_itor_first(itor); dict_itor_valid(itor); dict_itor_next(itor)) {
@@ -191,8 +191,9 @@ struct vmpl_vma_t *find_next_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
  */
 bool remove_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
 	dict_remove_result result;
-	assert(vm != NULL);
-	assert(vma != NULL);
+	if (vm == NULL || vma == NULL)
+		return false;
+
 	pthread_spin_lock(&vm->lock);
 	result = dict_remove(vm->vma_dict, vma);
 	pthread_spin_unlock(&vm->lock);
@@ -210,10 +211,8 @@ bool remove_vma(struct vmpl_vm_t *vm, struct vmpl_vma_t *vma) {
 struct vmpl_vma_t *alloc_vma_range(struct vmpl_vm_t *vm, uint64_t va_start, size_t size) {
 	struct vmpl_vma_t *vma;
 
-	assert(vm != NULL);
-	assert(va_start >= vm->va_start);
-	assert(va_start < vm->va_end);
-	assert(va_start + size <= vm->va_end);
+	if ((vm == NULL) || (va_start < vm->va_start) || (va_start >= vm->va_end) || (va_start + size > vm->va_end))
+		return NULL;
 
 	log_trace("va_start = 0x%lx, va_end = 0x%lx, size = 0x%lx", va_start, vm->va_end, size);
 	va_start = vm->fit_algorithm(vm->vma_dict, size, va_start, vm->va_end);
