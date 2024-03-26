@@ -173,7 +173,6 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 void dune_dump_trap_frame(struct dune_tf *tf) { }
 #endif
 
-#ifdef CONFIG_VMPL_MM
 /**
  * @brief System call handler
  * @note This function is called when a system call is made.
@@ -187,7 +186,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 {
 	int ret;
 	if (syscall_cb) {
-		dune_printf("dune: handling syscall %ld\n", tf->rax);
+		log_debug("dune: handling syscall %ld\n", tf->rax);
 
 #ifdef CONFIG_SYS_FILTER
 		if (!apply_syscall_filters(tf)) {
@@ -208,6 +207,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 #endif
 
 		switch (tf->rax) {
+#ifdef CONFIG_VMPL_MM
 		case __NR_mmap:
 			ret = mmap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
 			break;
@@ -232,6 +232,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 		case __NR_clone:
 			ret = clone(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
 			break;
+#endif
 		default:
 			syscall_cb(tf);
 			ret = tf->rax;
@@ -247,6 +248,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 	}
 }
 
+#ifdef CONFIG_VMPL_MM
 /**
  * @brief Pre page fault handler
  * @note This function is called when a page fault occurs. We handle the page fault
@@ -339,6 +341,10 @@ static int dune_post_pf_handler(struct dune_tf *tf)
 
 	return 0;
 }
+#else
+static int dune_pre_pf_handler(struct dune_tf *tf) { return -1; }
+static int dune_post_pf_handler(struct dune_tf *tf) { return 0; }
+#endif
 
 /**
  * @brief Pre-trap handler
@@ -427,40 +433,3 @@ failed:
 exit:
 	return;
 }
-#else
-/**
- * @brief Default system call handler
- * @note This function forwards all system calls to the guest OS.
- * @param tf trap frame
- */
-void dune_syscall_handler(struct dune_tf *tf)
-{
-	if (syscall_cb) {
-		dune_printf("dune: handling syscall %ld\n", tf->rax);
-		syscall_cb(tf);
-	} else {
-		dune_printf("dune: missing handler for syscall %ld\n", tf->rax);
-		dune_dump_trap_frame(tf);
-		exit(EXIT_FAILURE);
-	}
-}
-
-/**
- * @brief Default page fault handler
- * @note This function forwards all interrupts and exceptions to the guest OS.
- * @param tf trap frame
- */
-void dune_trap_handler(int num, struct dune_tf *tf)
-{
-	if (intr_cbs[num]) {
-		intr_cbs[num](tf);
-		return;
-	}
-
-	if (syscall(ULONG_MAX, num, (unsigned long)tf) != 0) {
-		dune_printf("dune: unable to handle trap %d\n", num);
-		dune_dump_trap_frame(tf);
-		exit(EXIT_FAILURE);
-	}
-}
-#endif
