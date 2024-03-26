@@ -45,6 +45,7 @@
 #include "vc.h"
 #include "serial.h"
 #include "log.h"
+#include "debug.h"
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 #define XSAVE_SIZE 4096
@@ -1125,13 +1126,14 @@ void on_dune_syscall(struct dune_config *conf)
  * This function must not return. It can either exit(), __dune_go_dune() or
  * __dune_go_linux().
  */
-#ifdef CONFIG_DUNE_BOOT
 void on_dune_exit(struct dune_config *conf)
 {
     switch (conf->ret) {
     case DUNE_RET_EXIT:
         syscall(SYS_exit, conf->status);
-        // exit(conf->status);
+        break;
+    case DUNE_RET_SYSCALL:
+        on_dune_syscall(conf);
 		break;
     case DUNE_RET_INTERRUPT:
 		dune_debug_handle_int(conf);
@@ -1150,27 +1152,3 @@ void on_dune_exit(struct dune_config *conf)
 
     exit(EXIT_FAILURE);
 }
-#else
-void on_dune_exit(struct dune_config *conf)
-{
-    switch (conf->ret) {
-    case DUNE_RET_EXIT:
-        syscall(SYS_exit, conf->status);
-        // exit(conf->status);
-    case DUNE_RET_SYSCALL:
-        on_dune_syscall(conf);
-		break;
-    case DUNE_RET_SIGNAL:
-        __dune_go_dune(dune_fd, conf);
-        break;
-    case DUNE_RET_NOENTER:
-        log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
-        break;
-    default:
-        log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
-        break;
-    }
-
-    exit(EXIT_FAILURE);
-}
-#endif
