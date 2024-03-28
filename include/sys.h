@@ -578,24 +578,36 @@ static inline void wruss(void *addr) {
     (value & (mask)) == (mask); \
 })
 
+#define XSAVE_SIZE 4096
 #define XCR_XFEATURE_ENABLED_MASK 0x00000000
-static inline uint64_t read_xcr0() {
-    uint64_t mask;
-    asm volatile (
-        "xgetbv"
-        : "=a" (mask)
-        : "c" (XCR_XFEATURE_ENABLED_MASK)
-    );
-    return mask;
+#define XCR_XFEATURE_IN_USE_MASK  0x00000001
+
+static inline uint64_t xgetbv(uint32_t i) {
+    uint32_t eax, edx;
+    __asm__ __volatile__("xgetbv"
+
+                 : "=a"(eax), "=d"(edx)
+                 : "c"(i)
+                 : "memory");
+
+    return eax | ((uint64_t)edx << 32);
 }
 
-static inline void write_xcr0(uint64_t mask) {
-    asm volatile (
-        "xsetbv" // xsetbv instruction
-        : // no output
-        : "c" (XCR_XFEATURE_ENABLED_MASK), "a" (mask), "d" (mask >> 32)
-        : "memory"
-    );
+static inline void xsetbv(uint32_t i, uint64_t value) {
+    uint32_t edx = value >> 32;
+    uint32_t eax = (uint32_t)value;
+    __asm__ __volatile__("xsetbv"
+                 :
+                 : "a"(eax), "d"(edx), "c"(i)
+                 : "memory");
+}
+
+inline void xsave(void *region) {
+    __asm__ __volatile__("xsave (%0)" ::"a"(region));
+}
+
+static inline void xrstor(void const *region) {
+    __asm__ __volatile__("xrstor (%0)" ::"a"(region));
 }
 
 // Read MSR

@@ -586,57 +586,33 @@ failed:
 }
 
 #ifdef CONFIG_VMPL_XSAVE
-#define XSAVE_SIZE 4096
-#define XCR_XFEATURE_ENABLED_MASK 0x00000000
 // The XSAVE instruction requires 64-byte alignment for state buffers
 static int xsave_begin(struct dune_percpu *percpu)
 {
     log_info("xsave begin");
-    unsigned long long mask = 0x07;
-    asm volatile (
-        "xgetbv"
-        : "=a" (mask)
-        : "c" (XCR_XFEATURE_ENABLED_MASK)
-    );
+    percpu->xsave_mask = xgetbv(XCR_XFEATURE_ENABLED_MASK);
 
-    log_debug("xsave mask: %llx", mask);
+    log_debug("xsave mask: %llx", percpu->xsave_mask);
     percpu->xsave_area = memalign(64, XSAVE_SIZE);
     if (!percpu->xsave_area) {
         perror("dune: failed to allocate xsave area");
         return -ENOMEM;
     }
 
-    memset(percpu->xsave_area, 0, XSAVE_SIZE);
     log_debug("xsave area at %lx", percpu->xsave_area);
-    asm volatile (
-        ".byte 0x48, 0x0f, 0xae, 0x27"
-        :
-        : "D" (percpu->xsave_area), "a" (mask), "d" (0x00)
-        : "memory"
-    );
-
-    percpu->xsave_mask = mask;
+    memset(percpu->xsave_area, 0, XSAVE_SIZE);
+    xsave(percpu->xsave_area);
 
     return 0;
 }
 
 static int xsave_end(struct dune_percpu *percpu)
 {
-    unsigned long long mask = percpu->xsave_mask;
-    asm volatile (
-        "xsetbv" // xsetbv instruction
-        : // no output
-        : "c" (XCR_XFEATURE_ENABLED_MASK), "a" (mask), "d" (mask >> 32)
-        : "memory"
-    );
+    // Restore the XSAVE state
+    xsetbv(XCR_XFEATURE_ENABLED_MASK, percpu->xsave_mask);
+    xrstor(percpu->xsave_area);
 
-    asm volatile (
-        ".byte 0x48, 0x0f, 0xae, 0x2f" // xrstor instruction
-        :
-        : "D" (percpu->xsave_area), "a" (mask), "d" (0x00)
-        : "memory"
-    );
-
+    // Free the XSAVE area
     free(percpu->xsave_area);
     percpu->xsave_area = NULL;
 
