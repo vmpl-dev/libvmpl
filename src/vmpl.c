@@ -46,6 +46,7 @@
 #include "serial.h"
 #include "log.h"
 #include "debug.h"
+#include "fpu.h"
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 #define XSAVE_SIZE 4096
@@ -61,6 +62,7 @@ struct dune_percpu {
 	struct Tss tss;
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
+    struct fpu_area *fpu;
     char *xsave_area;
     uint64_t xsave_mask;
     int pkey;
@@ -620,8 +622,27 @@ static int xsave_end(struct dune_percpu *percpu)
     return 0;
 }
 #else
-static int xsave_begin(struct dune_percpu *percpu) { return 0; }
-static int xsave_end(struct dune_percpu *percpu) { return 0; }
+static int xsave_begin(struct dune_percpu *percpu)
+{
+    log_info("xsave begin");
+    percpu->fpu = memalign(64, sizeof(struct fpu_area));
+    if (!percpu->fpu) {
+        perror("dune: failed to allocate fpu area");
+        return -ENOMEM;
+    }
+
+    dune_fpu_init(percpu->fpu);
+    dune_fpu_save(percpu->fpu);
+    return 0;
+}
+
+static int xsave_end(struct dune_percpu *percpu)
+{
+    dune_fpu_load(percpu->fpu);
+
+    log_info("xsave end");
+    return 0;
+}
 #endif
 
 unsigned long dune_get_user_fs(void)
