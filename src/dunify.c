@@ -291,12 +291,14 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 				ret = hotcalls_mmap(addr, length, prot, flags, fd, offset);
 			}
 			log_debug("mmap_orig returned %p", ret);
+#ifdef CONFIG_INSERT_VMA
 			// Insert vma in VMPL-VM
 			if (MAP_FAILED != ret) {
 				struct vmpl_vma_t *vma;
 				vma = vmpl_vma_create(ret, length, prot, flags, fd, offset);
 				insert_vma(&vmpl_mm.vmpl_vm, vma);
 			}
+#endif
 		}
 	}
 
@@ -331,6 +333,7 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 			} else {
 				ret = hotcalls_mremap(old_address, old_size, new_size, flags, new_address);
 			}
+#ifdef CONFIG_INSERT_VMA
 			// Update vma in VMPL-VM
 			if (MAP_FAILED != ret) {
 				struct vmpl_vma_t *old_vma, *new_vma;
@@ -340,6 +343,7 @@ void *mremap(void *old_address, size_t old_size, size_t new_size, int flags, ...
 				insert_vma(&vmpl_mm.vmpl_vm, new_vma);
 				vmpl_vma_free(old_vma);
 			}
+#endif
 		}
 	}
 
@@ -365,12 +369,14 @@ int mprotect(void *addr, size_t len, int prot)
 			} else {
 				ret = hotcalls_mprotect(addr, len, prot);
 			}
+#ifdef CONFIG_INSERT_VMA
 			// Update vma in VMPL-VM
 			if (0 == ret) {
 				struct vmpl_vma_t *vma;
 				vma = find_vma_exact(&vmpl_mm.vmpl_vm, addr);
 				vma->prot = prot;
 			}
+#endif
 		}
 	}
 
@@ -396,12 +402,14 @@ int pkey_mprotect(void *addr, size_t len, int prot, int pkey)
 			} else {
 				ret = hotcalls_pkey_mprotect(addr, len, prot, pkey);
 			}
+#ifdef CONFIG_INSERT_VMA
 			// Update vma in VMPL-VM
 			if (0 == ret) {
 				struct vmpl_vma_t *vma;
 				vma = find_vma_exact(&vmpl_mm.vmpl_vm, addr);
 				vma->prot = prot;
 			}
+#endif
 		}
 	}
 
@@ -427,6 +435,7 @@ int munmap(void *addr, size_t length)
 			} else {
 				ret = hotcalls_munmap(addr, length);
 			}
+#ifdef CONFIG_INSERT_VMA
 			// Remove vma from VMPL-VM
 			if (0 == ret) {
 				struct vmpl_vma_t *vma;
@@ -434,6 +443,7 @@ int munmap(void *addr, size_t length)
 				remove_vma(&vmpl_mm.vmpl_vm, vma);
 				vmpl_vma_free(vma);
 			}
+#endif
 		}
 	}
 
