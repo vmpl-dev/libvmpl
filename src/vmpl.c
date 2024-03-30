@@ -588,13 +588,14 @@ failed:
 }
 
 #ifdef CONFIG_VMPL_XSAVE
-// The XSAVE instruction requires 64-byte alignment for state buffers
+#include <x86intrin.h>
 static int xsave_begin(struct dune_percpu *percpu)
 {
     log_info("xsave begin");
-    percpu->xsave_mask = xgetbv(XCR_XFEATURE_ENABLED_MASK);
+    percpu->xsave_mask = _xgetbv(0);
 
     log_debug("xsave mask: %llx", percpu->xsave_mask);
+    // The XSAVE instruction requires 64-byte alignment for state buffers
     percpu->xsave_area = memalign(64, XSAVE_SIZE);
     if (!percpu->xsave_area) {
         perror("dune: failed to allocate xsave area");
@@ -603,7 +604,7 @@ static int xsave_begin(struct dune_percpu *percpu)
 
     log_debug("xsave area at %lx", percpu->xsave_area);
     memset(percpu->xsave_area, 0, XSAVE_SIZE);
-    xsave(percpu->xsave_area);
+    _xsave64(percpu->xsave_area, percpu->xsave_mask);
 
     return 0;
 }
@@ -611,8 +612,8 @@ static int xsave_begin(struct dune_percpu *percpu)
 static int xsave_end(struct dune_percpu *percpu)
 {
     // Restore the XSAVE state
-    xsetbv(XCR_XFEATURE_ENABLED_MASK, percpu->xsave_mask);
-    xrstor(percpu->xsave_area);
+    _xsetbv(0, percpu->xsave_mask);
+    _xrstor64(percpu->xsave_area, percpu->xsave_mask);
 
     // Free the XSAVE area
     free(percpu->xsave_area);
