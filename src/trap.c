@@ -184,7 +184,7 @@ void dune_dump_trap_frame(struct dune_tf *tf) { }
  */
 void dune_syscall_handler(struct dune_tf *tf)
 {
-	int ret;
+	long ret;
 	if (syscall_cb) {
 		log_debug("dune: handling syscall %ld\n", tf->rax);
 
@@ -209,7 +209,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 		switch (tf->rax) {
 #ifdef CONFIG_VMPL_MM
 		case __NR_mmap:
-			ret = mmap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
+			ret = mmap(tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
 			break;
 		case __NR_munmap:
 			ret = munmap(tf->rdi, tf->rsi);
@@ -218,10 +218,10 @@ void dune_syscall_handler(struct dune_tf *tf)
 			ret = mprotect(tf->rdi, tf->rsi, tf->rdx);
 			break;
 		case __NR_pkey_mprotect:
-			ret = pkey_mprotect(tf->rdi, tf->rsi, tf->rdx, tf->r10);
+			ret = pkey_mprotect(tf->rdi, tf->rsi, tf->rdx, tf->rcx);
 			break;
 		case __NR_mremap:
-			ret = mremap(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8);
+			ret = mremap(tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8);
 			break;
 		case __NR_pkey_alloc:
 			ret = pkey_alloc(tf->rdi, tf->rsi);
@@ -230,7 +230,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 			ret = pkey_free(tf->rdi);
 			break;
 		case __NR_clone:
-			ret = clone(tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
+			ret = clone(tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
 			break;
 #endif
 		default:

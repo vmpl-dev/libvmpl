@@ -59,7 +59,7 @@ void dune_die(void)
  */
 void dune_passthrough_syscall(struct dune_tf *tf)
 {
-	tf->rax = syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
+	tf->rax = syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
 }
 
 sighandler_t dune_signal(int sig, sighandler_t cb)
