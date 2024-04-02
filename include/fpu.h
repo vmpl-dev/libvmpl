@@ -2,6 +2,7 @@
  * fpu.h - x86 floating point, MMX, SSE, and AVX support for Dune
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 
