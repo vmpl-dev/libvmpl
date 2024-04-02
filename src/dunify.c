@@ -77,17 +77,17 @@ static void cleanup()
 	}
 }
 
-static void user_main()
+static void user_main(int argc, char **argv, char **envp)
 {
 	// Call original main
-	int ret = main_orig(0, NULL, NULL);
+	int ret = main_orig(argc, argv, envp);
 
 	// Return from user mode
 	dune_ret_from_user(ret);
 }
 
 /* Utility functions. */
-static int dune_call_user(void *func)
+static int dune_call_user(void *func, int argc, char **argv, char **envp)
 {
 	int ret;
 	unsigned long sp;
@@ -96,10 +96,13 @@ static int dune_call_user(void *func)
 		return -ENOMEM;
 
 	asm ("movq %%rsp, %0" : "=r" (sp));
-	sp = (sp - 10000) & ~0xF; // Align rsp to 16 bytes
+	sp = sp - 0x10008;
 	tf->rip = (unsigned long) func;
 	tf->rsp = sp;
 	tf->rflags = 0x0;
+	tf->rdi = argc;
+	tf->rsi = (unsigned long) argv;
+	tf->rdx = (unsigned long) envp;
 
 	ret = dune_jump_to_user(tf);
 
@@ -152,7 +155,7 @@ static int main_hook(int argc, char **argv, char **envp)
 		// Register syscall handler, default to passthrough
 		dune_register_syscall_handler(&dune_passthrough_syscall);
 		// Call user main function in user mode
-		return dune_call_user(&user_main);
+		return dune_call_user(&user_main, argc, argv, envp);
 	}
 
 	return main_orig(argc, argv, envp);
