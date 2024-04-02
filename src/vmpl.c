@@ -606,6 +606,7 @@ static int xsave_begin(struct dune_percpu *percpu)
     memset(percpu->xsave_area, 0, XSAVE_SIZE);
     _xsave64(percpu->xsave_area, percpu->xsave_mask);
 
+    dune_fpu_dump((struct fpu_area *)percpu->xsave_area);
     return 0;
 }
 
@@ -634,6 +635,7 @@ static int xsave_begin(struct dune_percpu *percpu)
 
     dune_fpu_init(percpu->fpu);
     dune_fpu_save(percpu->fpu);
+    dune_fpu_dump((struct fpu_area *)percpu->xsave_area);
     return 0;
 }
 

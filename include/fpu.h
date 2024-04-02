@@ -74,9 +74,24 @@ static inline void fpu_xrstor(struct fpu_area *fp, uint64_t mask)
 static inline void dune_fpu_init(struct fpu_area *fp)
 {
 	memset(fp, 0, sizeof(struct fpu_area));
-	fp->xsave.fxsave.cwd = 0x0040;
-	fp->xsave.fxsave.twd = 0x5555;
+	fp->xsave.fxsave.cwd = 0x37f;
+	fp->xsave.fxsave.twd = 0xffff;
 	fp->xsave.fxsave.mxcsr = 0x1f80;
+}
+
+static inline void dune_fpu_dump(struct fpu_area *fpu)
+{
+    printf("fpu: cwd: %x swd: %x, twd: %x\n", fpu->xsave.fxsave.cwd, fpu->xsave.fxsave.swd, fpu->xsave.fxsave.twd);
+    printf("fpu: fop: %x rip: %lx rdp: %x\n", fpu->xsave.fxsave.fop, fpu->xsave.fxsave.rip, fpu->xsave.fxsave.rdp);
+    printf("fpu: mxcsr: %x mxcsr_mask: %x\n", fpu->xsave.fxsave.mxcsr, fpu->xsave.fxsave.mxcsr_mask);
+    printf("fpu: st0: %f st1: %f st2: %f st3: %f st4: %f st5: %f st6: %f st7: %f\n",
+           fpu->xsave.fxsave.st_regs[0], fpu->xsave.fxsave.st_regs[1], fpu->xsave.fxsave.st_regs[2],
+           fpu->xsave.fxsave.st_regs[3], fpu->xsave.fxsave.st_regs[4], fpu->xsave.fxsave.st_regs[5],
+           fpu->xsave.fxsave.st_regs[6], fpu->xsave.fxsave.st_regs[7]);
+    printf("fpu: xmm0: %f xmm1: %f xmm2: %f xmm3: %f xmm4: %f xmm5: %f xmm6: %f xmm7: %f\n",
+            fpu->xsave.fxsave.xmm_regs[0], fpu->xsave.fxsave.xmm_regs[1], fpu->xsave.fxsave.xmm_regs[2],
+            fpu->xsave.fxsave.xmm_regs[3], fpu->xsave.fxsave.xmm_regs[4], fpu->xsave.fxsave.xmm_regs[5],
+            fpu->xsave.fxsave.xmm_regs[6], fpu->xsave.fxsave.xmm_regs[7]);
 }
 
 /*
