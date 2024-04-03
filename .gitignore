@@ -26,6 +26,7 @@ depcomp
 .deps
 .dirstamp
 .libs
+.history
 include/config.h
 install-sh
 libtool

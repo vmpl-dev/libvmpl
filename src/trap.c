@@ -210,27 +210,23 @@ void dune_syscall_handler(struct dune_tf *tf)
 #ifdef CONFIG_VMPL_MM
 		case __NR_mmap:
 			ret = mmap(tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
+			ret = (ret == -1) ? -errno : ret;
 			break;
 		case __NR_munmap:
 			ret = munmap(tf->rdi, tf->rsi);
+			ret = (ret == -1) ? -errno : ret;
 			break;
 		case __NR_mprotect:
 			ret = mprotect(tf->rdi, tf->rsi, tf->rdx);
+			ret = (ret == -1) ? -errno : ret;
 			break;
 		case __NR_pkey_mprotect:
 			ret = pkey_mprotect(tf->rdi, tf->rsi, tf->rdx, tf->rcx);
+			ret = (ret == -1) ? -errno : ret;
 			break;
 		case __NR_mremap:
 			ret = mremap(tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8);
-			break;
-		case __NR_pkey_alloc:
-			ret = pkey_alloc(tf->rdi, tf->rsi);
-			break;
-		case __NR_pkey_free:
-			ret = pkey_free(tf->rdi);
-			break;
-		case __NR_clone:
-			ret = clone(tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
+			ret = (ret == -1) ? -errno : ret;
 			break;
 #endif
 		default:

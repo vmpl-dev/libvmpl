@@ -1,6 +1,6 @@
 ## Build:
 ```bash
-./configure --enable-vmpl-signal --enable-vmpl-test --with-vmpl-va-size=0x8000000UL --with-vmpl-fit-algorithm=0
+./configure --prefix=/usr/local/musl/ --enable-sys-filter --enable-vmpl-cpuset --enable-vmpl-ghcb --enable-vmpl-hotcalls --enable-vmpl-signal --enable-vmpl-debug
 ```
 
 ## Install:

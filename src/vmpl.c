@@ -554,6 +554,7 @@ static int setup_mm()
     int rc;
     log_info("setup mm");
 
+#if 0
     // Setup Stack
     rc = setup_stack(CONFIG_VMPL_STACK_SIZE);
     if (rc != 0) {
@@ -567,6 +568,7 @@ static int setup_mm()
         log_err("dune: unable to setup heap");
         goto failed;
     }
+#endif
 
     // Lock Memory Pages
     rc = mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT);
