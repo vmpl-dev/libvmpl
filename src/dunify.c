@@ -134,8 +134,17 @@ static void user_main(int argc, char **argv, char **envp)
 	dune_ret_from_user(ret);
 }
 
+struct user_args {
+	unsigned long arg1;
+	unsigned long arg2;
+	unsigned long arg3;
+	unsigned long arg4;
+	unsigned long arg5;
+	unsigned long arg6;
+};
+
 /* Utility functions. */
-static int dune_call_user(void *func, int argc, char **argv, char **envp)
+static int dune_call_user(void *func, struct user_args *args)
 {
 	int ret;
 	unsigned long sp;
@@ -148,13 +157,52 @@ static int dune_call_user(void *func, int argc, char **argv, char **envp)
 	tf->rip = (unsigned long) func;
 	tf->rsp = sp;
 	tf->rflags = 0x0;
-	tf->rdi = argc;
-	tf->rsi = (unsigned long) argv;
-	tf->rdx = (unsigned long) envp;
 
+	// Function arguments
+	tf->rdi = args->arg1;
+	tf->rsi = args->arg2;
+	tf->rdx = args->arg3;
+	tf->rcx = args->arg4;
+	tf->r8 = args->arg5;
+	tf->r9 = args->arg6;
+
+	log_debug("entering user mode...");
+
+	// Register syscall handler, default to passthrough
+	dune_register_syscall_handler(&dune_passthrough_syscall);
+
+	// Jump to user mode
 	ret = dune_jump_to_user(tf);
 
 	return ret;
+}
+
+static int dune_call_user_main(void *func, int argc, char **argv, char **envp)
+{
+	struct user_args args = {
+		.arg1 = argc,
+		.arg2 = (unsigned long) argv,
+		.arg3 = (unsigned long) envp,
+		.arg4 = 0,
+		.arg5 = 0,
+		.arg6 = 0,
+	};
+
+	return dune_call_user(func, &args);
+}
+
+static int dune_call_user_thread(void *func, void *arg)
+{
+	struct user_args args = {
+		.arg1 = (unsigned long) arg,
+		.arg2 = 0,
+		.arg3 = 0,
+		.arg4 = 0,
+		.arg5 = 0,
+		.arg6 = 0,
+	};
+
+	return dune_call_user(func, &args);
 }
 
 static int main_hook(int argc, char **argv, char **envp)
@@ -199,11 +247,8 @@ static int main_hook(int argc, char **argv, char **envp)
 
 	// Run in user mode if requested
 	if (run_in_user_mode) {
-		log_debug("entering user mode...");
-		// Register syscall handler, default to passthrough
-		dune_register_syscall_handler(&dune_passthrough_syscall);
 		// Call user main function in user mode
-		return dune_call_user(&user_main, argc, argv, envp);
+		return dune_call_user_main(&user_main, argc, argv, envp);
 	}
 
 	return main_orig(argc, argv, envp);
@@ -265,6 +310,19 @@ struct start_args {
 	void *arg;
 };
 
+static void user_thread(void *arg)
+{
+	struct start_args *args = (struct start_args *)arg;
+
+	// Call user thread function
+	void *rc = args->start_routine(args->arg);
+
+	free(args); // Free args allocated in pthread_create hook before returning.
+
+	// Return from user mode
+	dune_ret_from_user(rc);
+}
+
 void *start_orig(void *arg)
 {
 	struct start_args *args = (struct start_args *)arg;
@@ -274,6 +332,11 @@ void *start_orig(void *arg)
 		log_err("failed to initialize dune");
 	} else {
 		log_debug("dune mode entered");
+	}
+
+	if (run_in_user_mode) {
+		// Call user main function in user mode
+		return dune_call_user_thread(user_thread, args);
 	}
 
 	void *rc = args->start_routine(args->arg);
