@@ -66,6 +66,7 @@ struct dune_percpu {
     char *xsave_area;
     uint64_t xsave_mask;
     int pkey;
+    int vcpu_fd;
 } __attribute__((packed));
 
 static uint64_t gdt_template[NR_GDT_ENTRIES] = {
@@ -323,12 +324,20 @@ static int setup_vmsa(struct dune_percpu *percpu)
     config->idtr.base = (uint64_t)&idt;
     config->idtr.limit = sizeof(idt) - 1;
 
-    rc = vmpl_ioctl_set_config(dune_fd, config);
+    rc = vmpl_ioctl_create_vcpu(dune_fd, config);
+    if (rc < 0) {
+        log_err("dune: failed to create vcpu");
+        goto failed;
+    }
+
+    int vcpu_fd = rc;
+    rc = vmpl_ioctl_set_config(vcpu_fd, config);
     if (rc != 0) {
         log_err("dune: failed to set config");
         goto failed;
     }
 
+    percpu->vcpu_fd = vcpu_fd;
     free(config);
     return 0;
 failed:
@@ -1095,7 +1104,7 @@ int vmpl_enter(int argc, char *argv[])
     dump_configs(__percpu);
 
     // Initialize VMPL library
-    rc = __dune_enter(dune_fd, __conf);
+    rc = __dune_enter(__percpu->vcpu_fd, __conf);
     if (rc) {
         perror("dune: entry to Dune mode failed");
         goto failed;
@@ -1119,7 +1128,7 @@ failed:
 void on_dune_syscall(struct dune_config *conf)
 {
     conf->rax = syscall(conf->status, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
-    __dune_go_dune(dune_fd, conf);
+    __dune_go_dune(percpu->vcpu_fd, conf);
 }
 
 /**
@@ -1142,7 +1151,7 @@ void on_dune_exit(struct dune_config *conf)
 		printf("dune: exit due to interrupt %lld\n", conf->status);
         break;
     case DUNE_RET_SIGNAL:
-        __dune_go_dune(dune_fd, conf);
+        __dune_go_dune(percpu->vcpu_fd, conf);
         break;
     case DUNE_RET_NOENTER:
         log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);

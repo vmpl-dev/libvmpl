@@ -40,6 +40,17 @@ int vmpl_ioctl_set_user_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint
     return 0;
 }
 
+int vmpl_ioctl_create_vcpu(int vmpl_fd, struct vcpu_config *config) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_CREATE_VCPU, config);
+    if (rc < 0) {
+        log_err("Failed to create VCPU: %s", strerror(errno));
+        return -errno;
+    }
+
+    return rc;
+}
+
 int vmpl_ioctl_get_ghcb(int vmpl_fd, uint64_t *ghcb) {
     int rc;
     rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_GHCB, ghcb);

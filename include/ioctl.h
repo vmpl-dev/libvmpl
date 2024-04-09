@@ -9,6 +9,7 @@ int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size,
                                 uint32_t attrs);
 int vmpl_ioctl_set_user_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size,
 							 uint32_t attrs);
+int vmpl_ioctl_create_vcpu(int vmpl_fd, struct vcpu_config *config);
 int vmpl_ioctl_get_ghcb(int vmpl_fd, uint64_t *ghcb);
 int vmpl_ioctl_get_cr3(int vmpl_fd, uint64_t *cr3);
 int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param);
