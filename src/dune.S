@@ -4,6 +4,7 @@
 
 #define __ASSEMBLY__
 #include "vmpl-core.h"
+#include "syscall_vmpl.h"
 
 #define USE_RDWRGSFS 1
 
@@ -294,18 +295,8 @@ __dune_syscall:
 	testq $1, %gs:IN_USERMODE
 	jnz 1f
 	pushq	%r11
-	push %rax
-	push %rcx
-	push %rdx
-	mov $0xc0010130, %ecx
-	mov $16, %eax
-	xor %edx, %edx
-	wrmsr
-	pop %rdx
-    pop %rcx
-	pop %rax
 	popfq
-	vmgexit
+	VMPL_SYSCALL
 	jmp	*%rcx
 
 1:

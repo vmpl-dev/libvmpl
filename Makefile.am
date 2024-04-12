@@ -24,6 +24,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/trap.c \
                     src/sys-filter.c \
                     src/vmpl-hotcalls.c \
+                    src/syscall_vmpl.c \
                     src/apic.c \
                     src/elf.c \
                     src/env.c \
