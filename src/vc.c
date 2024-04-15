@@ -518,7 +518,7 @@ static Ghcb *setup_ghcb(int dune_fd)
 
     // 映射ghcb, 用于hypercall
     ghcb = mmap((void *)GHCB_MMAP_BASE, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                             MAP_SHARED | MAP_FIXED, dune_fd, 0);
+                             MAP_SHARED | MAP_FIXED | MAP_POPULATE, dune_fd, 0);
     if (ghcb == MAP_FAILED) {
         perror("dune: failed to map GHCB");
         errno = -ENOMEM;

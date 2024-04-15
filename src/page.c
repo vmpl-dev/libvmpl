@@ -33,7 +33,7 @@ void* do_mapping(int fd, uint64_t phys, size_t len)
 {
     void *addr;
     addr = mmap((void *)(PGTABLE_MMAP_BASE + phys), len,
-                PROT_READ | PROT_WRITE, MAP_SHARED, fd, phys);
+                PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, phys);
     if (addr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
     }
