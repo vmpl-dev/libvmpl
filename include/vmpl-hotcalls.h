@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/uio.h>
@@ -17,12 +18,27 @@
 #define __alias(name) __attribute__((alias(#name)))
 typedef unsigned long syscall_arg_t;
 
+static long __sysret(long ret)
+{
+    if (ret > -4096 && ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+static inline long __hotcalls_call(hotcall_args_t *args)
+{
+    return __sysret(hotcalls_call(args));
+}
+
 static inline long hotcalls0(syscall_arg_t sysnr)
 {
     hotcall_args_t args = {
         .sysnr = sysnr,
     };
-    return hotcalls_call(&args);
+    return __hotcalls_call(&args);
 }
 static inline long hotcalls1(syscall_arg_t sysnr, syscall_arg_t arg1)
 {
@@ -30,7 +46,7 @@ static inline long hotcalls1(syscall_arg_t sysnr, syscall_arg_t arg1)
         .sysnr = sysnr,
         .rdi = arg1,
     };
-    return hotcalls_call(&args);
+    return __hotcalls_call(&args);
 }
 static inline long hotcalls2(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_arg_t arg2)
 {
@@ -39,7 +55,7 @@ static inline long hotcalls2(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_ar
         .rdi = arg1,
         .rsi = arg2,
     };
-    return hotcalls_call(&args);
+    return __hotcalls_call(&args);
 }
 static inline long hotcalls3(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_arg_t arg2, syscall_arg_t arg3)
 {
@@ -49,7 +65,7 @@ static inline long hotcalls3(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_ar
         .rsi = arg2,
         .rdx = arg3,
     };
-    return hotcalls_call(&args);
+    return __hotcalls_call(&args);
 }
 static inline long hotcalls4(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_arg_t arg2,
                              syscall_arg_t arg3, syscall_arg_t arg4)
@@ -61,7 +77,7 @@ static inline long hotcalls4(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_ar
         .rdx = arg3,
         .r10 = arg4,
     };
-    return hotcalls_call(&args);
+    return __hotcalls_call(&args);
 }
 static inline long hotcalls5(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_arg_t arg2,
                              syscall_arg_t arg3, syscall_arg_t arg4, syscall_arg_t arg5)
@@ -74,7 +90,7 @@ static inline long hotcalls5(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_ar
         .r10 = arg4,
         .r8 = arg5,
     };
-    return hotcalls_call(&args);
+    return __hotcalls_call(&args);
 }
 static inline long hotcalls6(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_arg_t arg2, syscall_arg_t arg3, 
                              syscall_arg_t arg4, syscall_arg_t arg5, syscall_arg_t arg6)
@@ -88,7 +104,7 @@ static inline long hotcalls6(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_ar
         .r8 = arg5,
         .r9 = arg6,
     };
-    return hotcalls_call(&args);
+    return __hotcalls_call(&args);
 }
 
 /* Memory */
