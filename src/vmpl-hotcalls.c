@@ -42,7 +42,7 @@ int vmpl_hotcalls_call(struct dune_tf *tf)
         .rdi = tf->rdi,
         .rsi = tf->rsi,
         .rdx = tf->rdx,
-        .r10 = tf->r10,
+        .r10 = tf->rcx,
         .r8 = tf->r8,
         .r9 = tf->r9,
     };
