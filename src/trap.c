@@ -229,6 +229,9 @@ void dune_syscall_handler(struct dune_tf *tf)
 			ret = (ret == -1) ? -errno : ret;
 			break;
 #endif
+		case __NR_madvise:
+			ret = 0;
+			break;
 		default:
 			syscall_cb(tf);
 			ret = tf->rax;

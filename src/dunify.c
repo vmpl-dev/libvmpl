@@ -130,6 +130,10 @@ static void user_main(int argc, char **argv, char **envp)
 	// Call original main
 	int ret = main_orig(argc, argv, envp);
 
+	// Flush stdout and stderr
+	fflush(stdout);
+	fflush(stderr);
+
 	// Return from user mode
 	dune_ret_from_user(ret);
 }

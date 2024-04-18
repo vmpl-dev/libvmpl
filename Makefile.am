@@ -40,6 +40,7 @@ libdune_la_LDFLAGS = -lvmpl
 
 libdunify_la_SOURCES = src/dunify.c \
                     src/hotcalls.c
+libdunify_la_CFLAGS = $(AM_CFLAGS)
 libdunify_la_LDFLAGS = -fPIC -shared \
                     -ldl \
                     -lvmpl \

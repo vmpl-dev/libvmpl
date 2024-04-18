@@ -1,6 +1,8 @@
 #ifndef __VMPL_H_
 #define __VMPL_H_
 
+#pragma once
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdint.h>
