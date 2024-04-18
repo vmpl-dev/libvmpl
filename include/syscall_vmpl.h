@@ -9,7 +9,7 @@
     push %rdi
     mov %rax, %rdi
     mov %rsp, %rsi
-    call vmpl_syscall
+    call __vmpl_syscall
     pop %rdi
     pop %rsi
     pop %rdx
