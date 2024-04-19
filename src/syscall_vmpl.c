@@ -5,5 +5,5 @@ struct syscall_args_t {
 } __attribute__((packed));
 
 long __vmpl_syscall(long sys_nr, struct syscall_args_t *args) {
-    syscall(sys_nr, args->a0, args->a1, args->a2, args->a3, args->a4, args->a5);
+    return syscall(sys_nr, args->a0, args->a1, args->a2, args->a3, args->a4, args->a5);
 }
