@@ -18,7 +18,7 @@
 #define __alias(name) __attribute__((alias(#name)))
 typedef unsigned long syscall_arg_t;
 
-static long __sysret(long ret)
+static inline long __sysret(long ret)
 {
     if (ret > -4096 && ret < 0) {
         errno = -ret;
@@ -106,6 +106,8 @@ static inline long hotcalls6(syscall_arg_t sysnr, syscall_arg_t arg1, syscall_ar
     };
     return __hotcalls_call(&args);
 }
+
+int vmpl_hotcalls_callv(long nr, ...);
 
 /* Memory */
 #define hotcalls_mmap(addr, length, prot, flags, fd, offset) \

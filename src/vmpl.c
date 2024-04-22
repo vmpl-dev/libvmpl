@@ -47,9 +47,11 @@
 #include "log.h"
 #include "debug.h"
 #include "fpu.h"
+#include "vmpl-hotcalls.h"
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 #define XSAVE_SIZE 4096
+typedef long (*hotcall_func_t)(long, ...);
 
 int dune_fd;
 
@@ -62,6 +64,7 @@ struct dune_percpu {
 	struct Tss tss;
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
+    hotcall_func_t hotcall;
     struct fpu_area *fpu;
     char *xsave_area;
     uint64_t xsave_mask;
@@ -1011,6 +1014,9 @@ static int vmpl_init_post(struct dune_percpu *percpu)
 
     // Setup VC communication
     percpu->ghcb = vc_init(dune_fd);
+
+    // Setup Hotcalls
+    percpu->hotcall = &vmpl_hotcalls_callv;
 
     // Setup serial port
     serial_init();

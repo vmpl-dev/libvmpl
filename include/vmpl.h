@@ -170,6 +170,7 @@ extern void dune_setcontext(const ucontext_t *ucp, struct dune_tf *tf);
 extern bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
 
 // hotcall routines
+int init_hotcalls(void);
 void register_hotcall(int syscall);
 void unregister_hotcall(int syscall);
 bool is_hotcall(int syscall);
