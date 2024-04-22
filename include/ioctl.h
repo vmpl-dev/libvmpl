@@ -5,6 +5,7 @@
 
 #include "vmpl-dev.h"
 
+int vmpl_ioctl_create_vm(int vmpl_fd);
 int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size,
                                 uint32_t attrs);
 int vmpl_ioctl_set_user_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size,

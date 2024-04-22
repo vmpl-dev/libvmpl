@@ -6,6 +6,17 @@
 #include "ioctl.h"
 #include "log.h"
 
+int vmpl_ioctl_create_vm(int vmpl_fd) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_CREATE_VM);
+    if (rc < 0) {
+        log_err("Failed to create VMPL: %s", strerror(errno));
+        return -errno;
+    }
+
+    return rc;
+}
+
 int vmpl_ioctl_set_pgtable_vmpl(int vmpl_fd, uint64_t gva, uint64_t page_size, uint32_t attrs) {
     int rc;
     struct vmpl_args_t args = {
