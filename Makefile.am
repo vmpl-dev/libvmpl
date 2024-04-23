@@ -8,7 +8,6 @@ AM_LDFLAGS = -L. -lvmpl -ldict
 # Specify shared libraries to be built
 lib_LTLIBRARIES = libvmpl.la libdunify.la libdune.la
 libvmpl_la_SOURCES = src/vmpl.c \
-                    src/sys.c \
                     src/debug.c \
                     src/ioctl.c \
                     src/page.c \
@@ -38,8 +37,7 @@ libvmpl_la_LDFLAGS = -ldl \
 libdune_la_SOURCES = src/libdune.c
 libdune_la_LDFLAGS = -lvmpl
 
-libdunify_la_SOURCES = src/dunify.c \
-                    src/hotcalls.c
+libdunify_la_SOURCES = src/dunify.c
 libdunify_la_CFLAGS = $(AM_CFLAGS)
 libdunify_la_LDFLAGS = -fPIC -shared \
                     -ldl \
@@ -59,7 +57,6 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/vma.h \
                     include/vm.h \
                     include/mm.h \
-                    include/vmpl-hotcalls.h \
                     include/seimi.h \
                     include/apic.h \
                     include/elf.h \
