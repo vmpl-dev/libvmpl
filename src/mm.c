@@ -676,6 +676,8 @@ static int unmap_vma(void *va_start, void *va_end)
 		assert(removed == true);
 		vmpl_vma_free(vma);
 	}
+
+	return 0;
 }
 
 /**
