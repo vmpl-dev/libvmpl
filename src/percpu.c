@@ -495,29 +495,38 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     return 0;
 }
 
-static struct dune_config *vmsa_alloc_config()
-{
-    log_debug("vmsa_alloc_config");
-    struct dune_config *conf = malloc(sizeof(struct dune_config));
-    memset(conf, 0, sizeof(struct dune_config));
-
-    /* NOTE: We don't setup the general purpose registers because __dune_ret
-     * will restore them as they were before the __dune_enter call */
-    conf->rip = (uint64_t) &__dune_ret;
-    conf->rsp = 0;
-    conf->rflags = 0x202;
-
-    return conf;
-}
-
-int vmpl_init_percpu(struct dune_percpu *percpu)
+static int __do_dune_enter(int vcpu_fd)
 {
     int rc;
-    struct dune_config *config = vmsa_alloc_config();
+    struct dune_config *config = malloc(sizeof(struct dune_config));
     if (!config) {
         log_err("dune: failed to allocate config struct");
         return -ENOMEM;
     }
+
+    memset(config, 0, sizeof(struct dune_config));
+    /* NOTE: We don't setup the general purpose registers because __dune_ret
+     * will restore them as they were before the __dune_enter call */
+    config->rip = (uint64_t) &__dune_ret;
+    config->rsp = 0;
+    config->rflags = 0x202;
+
+    // Initialize VMPL library
+    rc = __dune_enter(vcpu_fd, config);
+    if (rc) {
+        perror("dune: entry to Dune mode failed");
+        goto failed;
+    }
+
+    return 0;
+failed:
+    free(config);
+    return rc;
+}
+
+int do_dune_enter(struct dune_percpu *percpu)
+{
+    int rc;
 
     rc = vmpl_init_pre(percpu);
     if (rc) {
@@ -528,10 +537,9 @@ int vmpl_init_percpu(struct dune_percpu *percpu)
     // Dump configs
     dump_configs(percpu);
 
-    // Initialize VMPL library
-    rc = __dune_enter(percpu->vcpu_fd, config);
+    rc = __do_dune_enter(percpu->vcpu_fd);
     if (rc) {
-        perror("dune: entry to Dune mode failed");
+        log_err("dune: failed to enter Dune mode");
         goto failed;
     }
 
@@ -542,6 +550,5 @@ int vmpl_init_percpu(struct dune_percpu *percpu)
 failed:
     log_err("dune: failed to enter Dune mode");
     vmpl_free_percpu(percpu);
-    free(config);
     return -EIO;
 }

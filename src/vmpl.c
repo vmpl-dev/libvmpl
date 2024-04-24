@@ -327,7 +327,6 @@ static void vmpl_init_exit(void)
 {
     log_info("vmpl_init_exit");
     vmpl_mm_exit(&vmpl_mm);
-    vmpl_free_percpu(percpu);
     apic_cleanup();
 }
 
@@ -379,7 +378,7 @@ int vmpl_enter(int argc, char *argv[])
         log_debug("dune: fork case");
     }
 
-    rc = vmpl_init_percpu(__percpu);
+    rc = do_dune_enter(__percpu);
     if (rc != 0) {
         goto failed;
     }
