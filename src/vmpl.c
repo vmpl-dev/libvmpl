@@ -51,13 +51,6 @@ int dune_fd;
 
 static __thread struct dune_percpu *percpu;
 
-/**
- * @brief Sets up signal handling for the VMPL library.
- * 
- * This function disables signals until better support is available.
- * 
- * @return void
- */
 #ifdef CONFIG_VMPL_SIGNAL
 static void setup_signal(void)
 {
@@ -91,11 +84,6 @@ static void setup_signal(void)
 static void setup_signal(void) { }
 #endif
 
-/**
- * Sets up the CPU set.
- * 
- * @return 0 on success, otherwise an error code.
- */
 #ifdef CONFIG_VMPL_CPUSET
 static int get_cpu_count()
 {
@@ -164,12 +152,6 @@ static int setup_cpuset()
 
 
 #ifdef CONFIG_DUNE_BOOT
-/**
- * @note 用ioctl，将MSR_LSATR指向的虚拟地址空间，重新映射到dune_syscall所在的物理页
- * @param percpu Pointer to the percpu struct.
- * 
- * @return void
- */
 static int setup_syscall()
 {
     int rc;
@@ -212,13 +194,6 @@ static int setup_syscall()
     return 0;
 }
 
-/**
- * Sets up the vsyscall handler.
- * @note 用ioctl，将vsyscall指向的虚拟地址空间，重新映射到dune_vsyscall所在的物理页
- * @param percpu Pointer to the percpu struct.
- * 
- * @return void
- */
 static int setup_vsyscall()
 {
     pte_t *pte;
@@ -230,12 +205,6 @@ static int setup_vsyscall()
     return 0;
 }
 #else
-/**
- * @brief Set the up syscall object for the VMPL library.
- * @note 
- * 
- * @return int 
- */
 static int setup_syscall()
 {
     log_info("setup syscall");
@@ -249,11 +218,6 @@ static int setup_vsyscall()
 }
 #endif
 
-/**
- * @brief  Setup stack for VMPL library
- * @note   
- * @retval None
- */
 static int setup_stack(size_t stack_size)
 {
     int rc;
@@ -326,14 +290,12 @@ static int setup_mm()
     }
 #endif
 
-    // Lock Memory Pages
     rc = mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT);
     if (rc != 0) {
         log_err("dune: %s", strerror(errno));
         goto failed;
     }
 
-    // Setup VMPL VM
     rc = vmpl_mm_init(&vmpl_mm);
     if (rc != 0) {
         log_err("dune: unable to setup vmpl mm");
@@ -359,15 +321,6 @@ void dune_set_user_fs(unsigned long fs_base)
 	     [ufs_base]"i"(offsetof(struct dune_percpu, ufs_base)));
 }
 
-/**
- * @brief Asserts the offsets of various fields in the dune_config struct.
- * 
- * This function asserts that the offsets of various fields in the dune_config struct
- * are equal to their corresponding values in the DUNE_ENTER macro. This is done to ensure
- * that the struct is properly aligned and can be used with the Dune library.
- * 
- * @return void
- */
 void vmpl_build_assert(void)
 {
     log_debug("vmpl_build_assert");
@@ -396,11 +349,6 @@ void vmpl_build_assert(void)
 	BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct dune_config, vcpu));
 }
 
-/**
- * Initializes a dune_config struct with default values.
- * 
- * @param conf Pointer to the dune_config struct to be initialized.
- */
 static struct dune_config *vmsa_alloc_config()
 {
     log_debug("vmsa_alloc_config");
@@ -418,11 +366,6 @@ static struct dune_config *vmsa_alloc_config()
 
 bool vmpl_booted = false;
 
-/**
- * @brief  Initializes the VMPL library.
- * @note   Common initialization for both pre and post
- * @retval 0 on success, otherwise an error code.
- */
 int vmpl_init(bool map_full)
 {
     int rc;
@@ -431,7 +374,6 @@ int vmpl_init(bool map_full)
     log_init();
     log_info("vmpl_init");
 
-    // Open dune_fd
     vmpl_fd = open("/dev/" RUN_VMPL_DEV_NAME, O_RDWR);
     if (vmpl_fd == -1) {
         perror("Failed to open /dev/" RUN_VMPL_DEV_NAME);
@@ -439,7 +381,6 @@ int vmpl_init(bool map_full)
         goto failed;
     }
 
-    // Create vmpl-vm
     dune_fd = vmpl_ioctl_create_vm(vmpl_fd);
     if (dune_fd < 0) {
         log_err("dune: failed to create vm");
@@ -447,43 +388,35 @@ int vmpl_init(bool map_full)
         goto failed;
     }
 
-    // Setup CPU set
     if ((rc = setup_cpuset())) {
         log_err("dune: unable to setup CPU set");
         goto failed;
     }
 
-    // Setup Memory Management
 	if ((rc = setup_mm())) {
         log_err("dune: unable to setup memory management");
         goto failed;
     }
 
-    // Setup SEIMI for Intra-Process Isolation
     if ((rc = setup_seimi(dune_fd))) {
 		log_err("dune: unable to setup SEIMI");
 		goto failed;
 	}
 
-    // Setup syscall handler
     if ((rc = setup_syscall())) {
         log_err("dune: unable to setup syscall handler");
         goto failed;
     }
 
-    // Setup vsyscall handler
     if ((rc = setup_vsyscall()) && map_full) {
         log_err("dune: unable to setup vsyscall handler");
         goto failed;
     }
 
-    // Setup signal
     setup_signal();
 
-    // Setup IDT
     setup_idt();
 
-    // Setup APIC
     if ((rc = apic_setup())) {
         perror("dune: failed to setup APIC");
 		rc = -ENOMEM;
@@ -497,13 +430,6 @@ failed:
     close(dune_fd);
     return rc;
 }
-
-/**
- * Initializes the VMPL library after the main program has started.
- * This function sets up the necessary system calls for the library to function properly.
- *
- * @return 0 on success, -1 on failure.
- */
 
 static void vmpl_init_exit(void)
 {
@@ -524,12 +450,6 @@ static inline void vmpl_init_stats(void) { }
 #endif
 
 #ifdef CONFIG_VMPL_TEST
-/**
- * Initializes a test for the VMPL library.
- * This function writes a banner to the standard output and exits.
- *
- * @return 0 on success.
- */
 static int vmpl_init_test(void)
 {
     vmpl_mm_test(&vmpl_mm);
@@ -548,11 +468,6 @@ static void vmpl_init_banner(void)
     return 0;
 }
 
-/**
- * Initializes the VMPL library and enters the VMPL mode.
- * 
- * @return 0 if successful, otherwise an error code.
- */
 int vmpl_enter(int argc, char *argv[])
 {
     int rc;
@@ -561,12 +476,9 @@ int vmpl_enter(int argc, char *argv[])
 
 	log_info("vmpl_enter");
 
-	// Build assert
     vmpl_build_assert();
 
-    // Check if percpu is already allocated
     if (!percpu) {
-        // Allocate percpu struct for VMPL library
         __percpu = vmpl_alloc_percpu();
         if (!__percpu) {
             rc = -ENOMEM;
@@ -574,12 +486,10 @@ int vmpl_enter(int argc, char *argv[])
             goto failed;
         }
     } else {
-        // fork case (second time)
         __percpu = percpu;
         log_debug("dune: fork case");
     }
 
-    // Allocate config struct for VMPL library
     __conf = vmsa_alloc_config();
     if (!__conf) {
         log_err("dune: failed to allocate config struct");
