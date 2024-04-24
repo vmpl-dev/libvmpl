@@ -1,7 +1,6 @@
 #ifndef __VMPL_MM_H_
 #define __VMPL_MM_H_
 
-#include "sys.h"
 #include "pgtable.h"
 #include "vm.h"
 

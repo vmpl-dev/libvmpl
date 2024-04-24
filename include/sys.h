@@ -4,67 +4,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <cpuid.h>
+#include <asm/processor-flags.h>
 
 #define BIT(bit) (1ULL << (bit))
-
-// 3.1 System-Control Registers
-
-// 3.1.1 CR0 Register
-#define CR0_PE BIT(0) /* Protected mode enable */
-#define CR0_MP BIT(1) /* Monitor coprocessor */
-#define CR0_EM BIT(2) /* Emulate FPU */
-#define CR0_TS BIT(3) /* Task switched */
-#define CR0_ET BIT(4) /* Extension type */
-#define CR0_NE BIT(5) /* Numeric error */
-#define CR0_WP BIT(16) /* Write protect */
-#define CR0_AM BIT(18) /* Alignment mask */
-#define CR0_NW BIT(29) /* Not write-through */
-#define CR0_CD BIT(30) /* Cache disable */
-#define CR0_PG BIT(31) /* Paging enable */
-
-// 3.1.2 CR2 and CR3 Registers
-#define CR3_PWT BIT(3) /* Page-level write-through */
-#define CR3_PCD BIT(4) /* Page-level cache disable */
-
-// 3.1.3 CR4 Register
-#define CR4_VME BIT(0) /* Virtual-8086 mode extensions */
-#define CR4_PSE BIT(4) /* Page size extensions */
-#define CR4_PAE BIT(5) /* Physical address extensions */
-#define CR4_MCE BIT(6) /* Machine check exception */
-#define CR4_PGE BIT(7) /* Page global enable */
-#define CR4_PCE BIT(8) /* Performance monitoring counter enable */
-#define CR4_OSFXSR BIT(9) /* OS support for FXSAVE and FXRSTOR instructions */
-#define CR4_OSXMMEXCPT BIT(10) /* OS support for unmasked SIMD floating-point exceptions */
-#define CR4_VMXE BIT(13) /* Virtual machine extensions enable */
-#define CR4_SMXE BIT(14) /* Safer mode extensions enable */
-#define CR4_FSGSBASE BIT(16) /* Enable the instructions RDFSBASE, RDGSBASE, WRFSBASE, and WRGSBASE */
-#define CR4_PCIDE BIT(17) /* Process-context identifiers enable */
-#define CR4_OSXSAVE BIT(18) /* XSAVE and processor extended states enable */
-#define CR4_SMEP BIT(20) /* Supervisor mode execution protection enable */
-#define CR4_SMAP BIT(21) /* Supervisor mode access prevention enable */
-#define CR4_PKE BIT(22) /* Protection-key enable */
-
-// 3.1.5 CR8 (Task Priority Register, TPR)
-#define CR8_TPR BIT(4) /* Task priority register */
-
-// 3.1.6 RFLAGS Register
-#define RFLAGS_CF BIT(0) /* Carry flag */
-#define RFLAGS_PF BIT(2) /* Parity flag */
-#define RFLAGS_AF BIT(4) /* Auxiliary carry flag */
-#define RFLAGS_ZF BIT(6) /* Zero flag */
-#define RFLAGS_SF BIT(7) /* Sign flag */
-#define RFLAGS_TF BIT(8) /* Trap flag */
-#define RFLAGS_IF BIT(9) /* Interrupt enable flag */
-#define RFLAGS_DF BIT(10) /* Direction flag */
-#define RFLAGS_OF BIT(11) /* Overflow flag */
-#define RFLAGS_IOPL BIT(12) | BIT(13) /* I/O privilege level */
-#define RFLAGS_NT BIT(14) /* Nested task */
-#define RFLAGS_RF BIT(16) /* Resume flag */
-#define RFLAGS_VM BIT(17) /* Virtual 8086 mode */
-#define RFLAGS_AC BIT(18) /* Alignment check */
-#define RFLAGS_VIF BIT(19) /* Virtual interrupt flag */
-#define RFLAGS_VIP BIT(20) /* Virtual interrupt pending */
-#define RFLAGS_ID BIT(21) /* ID flag */
 
 // 3.1.7 Extended Feature Enable Register (EFER)
 #define EFER	   0xc0000080 /* MSR number */

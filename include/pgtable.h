@@ -8,7 +8,6 @@
 #include <errno.h>
 
 #include "config.h"
-#include "sys.h"
 
 #define GENMASK_ULL(h, l) \
     (((~0ULL) << (l)) & (~0ULL >> (64 - 1 - (h))))
