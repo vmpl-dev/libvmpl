@@ -42,7 +42,33 @@
 #include "log.h"
 #include "debug.h"
 
-#define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
+#define BUILD_ASSERT(cond) _Static_assert(cond, #cond)
+
+BUILD_ASSERT(IOCTL_DUNE_ENTER == DUNE_ENTER);
+BUILD_ASSERT(DUNE_CFG_RET == offsetof(struct dune_config, ret));
+BUILD_ASSERT(DUNE_CFG_RAX == offsetof(struct dune_config, rax));
+BUILD_ASSERT(DUNE_CFG_RBX == offsetof(struct dune_config, rbx));
+BUILD_ASSERT(DUNE_CFG_RCX == offsetof(struct dune_config, rcx));
+BUILD_ASSERT(DUNE_CFG_RDX == offsetof(struct dune_config, rdx));
+BUILD_ASSERT(DUNE_CFG_RSI == offsetof(struct dune_config, rsi));
+BUILD_ASSERT(DUNE_CFG_RDI == offsetof(struct dune_config, rdi));
+BUILD_ASSERT(DUNE_CFG_RSP == offsetof(struct dune_config, rsp));
+BUILD_ASSERT(DUNE_CFG_RBP == offsetof(struct dune_config, rbp));
+BUILD_ASSERT(DUNE_CFG_R8 == offsetof(struct dune_config, r8));
+BUILD_ASSERT(DUNE_CFG_R9 == offsetof(struct dune_config, r9));
+BUILD_ASSERT(DUNE_CFG_R10 == offsetof(struct dune_config, r10));
+BUILD_ASSERT(DUNE_CFG_R11 == offsetof(struct dune_config, r11));
+BUILD_ASSERT(DUNE_CFG_R12 == offsetof(struct dune_config, r12));
+BUILD_ASSERT(DUNE_CFG_R13 == offsetof(struct dune_config, r13));
+BUILD_ASSERT(DUNE_CFG_R14 == offsetof(struct dune_config, r14));
+BUILD_ASSERT(DUNE_CFG_R15 == offsetof(struct dune_config, r15));
+BUILD_ASSERT(DUNE_CFG_RIP == offsetof(struct dune_config, rip));
+BUILD_ASSERT(DUNE_CFG_RFLAGS == offsetof(struct dune_config, rflags));
+BUILD_ASSERT(DUNE_CFG_CR3 == offsetof(struct dune_config, cr3));
+BUILD_ASSERT(DUNE_CFG_STATUS == offsetof(struct dune_config, status));
+BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct dune_config, vcpu));
+BUILD_ASSERT(DUNE_PERCPU_GHCB == offsetof(struct dune_percpu, ghcb));
+BUILD_ASSERT(DUNE_PERCPU_HOTCALL == offsetof(struct dune_percpu, hotcall));
 
 int dune_fd;
 
@@ -235,36 +261,6 @@ static int setup_mm()
     return 0;
 failed:
     return rc;
-}
-
-void vmpl_build_assert(void)
-{
-    log_debug("vmpl_build_assert");
-    BUILD_ASSERT(IOCTL_DUNE_ENTER == DUNE_ENTER);
-	BUILD_ASSERT(DUNE_CFG_RET == offsetof(struct dune_config, ret));
-	BUILD_ASSERT(DUNE_CFG_RAX == offsetof(struct dune_config, rax));
-	BUILD_ASSERT(DUNE_CFG_RBX == offsetof(struct dune_config, rbx));
-	BUILD_ASSERT(DUNE_CFG_RCX == offsetof(struct dune_config, rcx));
-	BUILD_ASSERT(DUNE_CFG_RDX == offsetof(struct dune_config, rdx));
-	BUILD_ASSERT(DUNE_CFG_RSI == offsetof(struct dune_config, rsi));
-	BUILD_ASSERT(DUNE_CFG_RDI == offsetof(struct dune_config, rdi));
-	BUILD_ASSERT(DUNE_CFG_RSP == offsetof(struct dune_config, rsp));
-	BUILD_ASSERT(DUNE_CFG_RBP == offsetof(struct dune_config, rbp));
-	BUILD_ASSERT(DUNE_CFG_R8 == offsetof(struct dune_config, r8));
-	BUILD_ASSERT(DUNE_CFG_R9 == offsetof(struct dune_config, r9));
-	BUILD_ASSERT(DUNE_CFG_R10 == offsetof(struct dune_config, r10));
-	BUILD_ASSERT(DUNE_CFG_R11 == offsetof(struct dune_config, r11));
-	BUILD_ASSERT(DUNE_CFG_R12 == offsetof(struct dune_config, r12));
-	BUILD_ASSERT(DUNE_CFG_R13 == offsetof(struct dune_config, r13));
-	BUILD_ASSERT(DUNE_CFG_R14 == offsetof(struct dune_config, r14));
-	BUILD_ASSERT(DUNE_CFG_R15 == offsetof(struct dune_config, r15));
-	BUILD_ASSERT(DUNE_CFG_RIP == offsetof(struct dune_config, rip));
-	BUILD_ASSERT(DUNE_CFG_RFLAGS == offsetof(struct dune_config, rflags));
-	BUILD_ASSERT(DUNE_CFG_CR3 == offsetof(struct dune_config, cr3));
-	BUILD_ASSERT(DUNE_CFG_STATUS == offsetof(struct dune_config, status));
-	BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct dune_config, vcpu));
-    BUILD_ASSERT(DUNE_PERCPU_GHCB == offsetof(struct dune_percpu, ghcb));
-    BUILD_ASSERT(DUNE_PERCPU_HOTCALL == offsetof(struct dune_percpu, hotcall));
 }
 
 static struct dune_config *vmsa_alloc_config()
