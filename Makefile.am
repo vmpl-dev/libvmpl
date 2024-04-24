@@ -50,7 +50,7 @@ libdunify_la_LDFLAGS = -fPIC -shared \
 pkgincludedir = $(includedir)/vmpl
 pkginclude_HEADERS = include/vmpl.h \
                     include/dune.h \
-                    include/sys.h include/syscall.h \
+                    include/sys.h \
                     include/vc.h \
                     include/ioctl.h \
                     include/page.h \

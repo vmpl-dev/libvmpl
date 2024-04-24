@@ -9,7 +9,6 @@
 #endif
 #include "config.h"
 #include "sys.h"
-// #include "syscall.h"
 #include "pgtable.h"
 #include "mm.h"
 #include "log.h"
