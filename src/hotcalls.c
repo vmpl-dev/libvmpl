@@ -1,8 +1,12 @@
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <errno.h>
 #include <sys/syscall.h>
 #include <asm-generic/unistd.h>
 #include <hotcalls/hotcalls.h>
 #include "vmpl.h"
+#include "hotcalls.h"
 
 // Define the maximum number of system calls
 #define MAX_SYSCALLS __NR_syscalls
@@ -35,7 +39,7 @@ bool is_hotcall(int syscall) {
 	return false;
 }
 
-int vmpl_hotcalls_call(struct dune_tf *tf)
+long vmpl_hotcalls_call(struct dune_tf *tf)
 {
     hotcall_args_t args = {
         .sysnr = tf->rax,
@@ -52,4 +56,31 @@ int vmpl_hotcalls_call(struct dune_tf *tf)
 	}
 
 	return hotcalls_call(&args);
+}
+
+int exec_hotcall(long nr, ...)
+{
+	va_list args;
+	hotcall_args_t hotcall_args = {
+		.sysnr = nr,
+	};
+
+	va_start(args, nr);
+	hotcall_args.rdi = va_arg(args, long);
+	hotcall_args.rsi = va_arg(args, long);
+	hotcall_args.rdx = va_arg(args, long);
+	hotcall_args.r10 = va_arg(args, long);
+	hotcall_args.r8 = va_arg(args, long);
+	hotcall_args.r9 = va_arg(args, long);
+	va_end(args);
+
+	if (!is_hotcall(nr)) {
+		return -ENOSYS;
+	}
+
+	if (!hotcalls_initialized()) {
+		return -ENOSYS;
+	}
+
+	return hotcalls_call(&hotcall_args);
 }

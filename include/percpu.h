@@ -22,12 +22,16 @@ struct dune_percpu {
 	struct Tss tss;
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
+	hotcall_t hotcall;
     struct fpu_area *fpu;
     char *xsave_area;
     uint64_t xsave_mask;
     int pkey;
     int vcpu_fd;
 } __attribute__((packed));
+
+#define DUNE_PERCPU_GHCB    216
+#define DUNE_PERCPU_HOTCALL 224
 
 #define ISR_LEN 16
 #define SAFE_STACK_SIZE (2048 * 1024)

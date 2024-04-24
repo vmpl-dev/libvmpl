@@ -263,6 +263,8 @@ void vmpl_build_assert(void)
 	BUILD_ASSERT(DUNE_CFG_CR3 == offsetof(struct dune_config, cr3));
 	BUILD_ASSERT(DUNE_CFG_STATUS == offsetof(struct dune_config, status));
 	BUILD_ASSERT(DUNE_CFG_VCPU == offsetof(struct dune_config, vcpu));
+    BUILD_ASSERT(DUNE_PERCPU_GHCB == offsetof(struct dune_percpu, ghcb));
+    BUILD_ASSERT(DUNE_PERCPU_HOTCALL == offsetof(struct dune_percpu, hotcall));
 }
 
 static struct dune_config *vmsa_alloc_config()

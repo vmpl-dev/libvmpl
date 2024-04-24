@@ -488,6 +488,9 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     // Setup VC communication
     percpu->ghcb = vc_init(dune_fd);
 
+    // Setup hotcall
+    percpu->hotcall = &exec_hotcall;
+
     // Setup serial port
     serial_init();
 

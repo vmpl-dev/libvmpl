@@ -173,7 +173,7 @@ extern bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
 void register_hotcall(int syscall);
 void unregister_hotcall(int syscall);
 bool is_hotcall(int syscall);
-int vmpl_hotcalls_call(struct dune_tf *tf);
+long vmpl_hotcalls_call(struct dune_tf *tf);
 
 // elf helper functions
 #include "elf.h"
