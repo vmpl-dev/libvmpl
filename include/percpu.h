@@ -9,7 +9,7 @@
 
 #include "config.h"
 #include "mmu.h"
-#include "vc.h"
+#include "ghcb.h"
 #include "hotcalls.h"
 #include "vmpl.h"
 

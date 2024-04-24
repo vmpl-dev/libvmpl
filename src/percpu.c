@@ -1,10 +1,95 @@
+#define _GNU_SOURCE
 #include <x86intrin.h>
+#include <sched.h>
+#include <syscall.h>
+#include <sys/syscall.h>
 
 #include "vmpl-dev.h"
 #include "fpu.h"
+#include "vc.h"
 #include "serial.h"
 #include "log.h"
 #include "percpu.h"
+
+unsigned long dune_get_user_fs(void)
+{
+	void *ptr;
+	asm("movq %%gs:%c[ufs_base], %0" : "=r"(ptr) :
+	    [ufs_base]"i"(offsetof(struct dune_percpu, ufs_base)) : "memory");
+	return (unsigned long) ptr;
+}
+
+void dune_set_user_fs(unsigned long fs_base)
+{
+	asm ("movq %0, %%gs:%c[ufs_base]" : : "r"(fs_base),
+	     [ufs_base]"i"(offsetof(struct dune_percpu, ufs_base)));
+}
+
+#ifdef CONFIG_VMPL_CPUSET
+static int get_cpu_count()
+{
+    int rc;
+    long nprocs;
+    log_info("get cpu count");
+
+    nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+    if (nprocs < 0) {
+        perror("dune: failed to get cpu count");
+        rc = -EINVAL;
+        goto failed;
+    }
+
+    log_debug("dune: %ld cpus online", nprocs);
+    return nprocs;
+failed:
+    return rc;
+}
+
+static int alloc_cpu()
+{
+	static int current_cpu = 0;
+	static int cpu_count = 0;
+    log_info("alloc cpu");
+    if (current_cpu == 0) {
+        current_cpu = sched_getcpu();
+	}
+    if (cpu_count == 0) {
+        cpu_count = get_cpu_count();
+        assert(cpu_count > 0);
+    }
+
+	current_cpu = (current_cpu + 1) % cpu_count;
+	int cpu = current_cpu;
+	return cpu;
+}
+
+static int setup_cpuset()
+{
+    int cpu;
+    cpu_set_t cpuset;
+
+    log_info("setup cpuset");
+
+    cpu = alloc_cpu();
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu, &cpuset);
+
+    if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
+        perror("sched_setaffinity");
+        return 1;
+    }
+
+    log_debug("dune: running on CPU %d", cpu);
+    log_info("Thread %d bound to CPU %d", gettid(), cpu);
+
+    return 0;
+}
+#else
+static int setup_cpuset()
+{
+    return 0;
+}
+#endif
 
 static uint64_t gdt_template[NR_GDT_ENTRIES] = {
     0,
@@ -313,6 +398,12 @@ static int xsave_end(struct dune_percpu *percpu)
 static int vmpl_init_pre(struct dune_percpu *percpu)
 {
     int rc;
+
+    // Setup CPU set for the thread
+    if ((rc = setup_cpuset())) {
+        log_err("dune: unable to setup CPU set");
+        goto failed;
+    }
 
     // Setup GDT for hypercall
     setup_gdt(percpu);
