@@ -40,4 +40,4 @@ struct dune_percpu {
 void setup_idt(void);
 struct dune_percpu *vmpl_alloc_percpu(void);
 void vmpl_free_percpu(struct dune_percpu *percpu);
-int vmpl_init_percpu(struct dune_percpu *percpu, struct dune_config *config);
+int vmpl_init_percpu(struct dune_percpu *percpu);

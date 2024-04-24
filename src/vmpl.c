@@ -263,21 +263,6 @@ failed:
     return rc;
 }
 
-static struct dune_config *vmsa_alloc_config()
-{
-    log_debug("vmsa_alloc_config");
-    struct dune_config *conf = malloc(sizeof(struct dune_config));
-    memset(conf, 0, sizeof(struct dune_config));
-
-    /* NOTE: We don't setup the general purpose registers because __dune_ret
-     * will restore them as they were before the __dune_enter call */
-    conf->rip = (uint64_t) &__dune_ret;
-    conf->rsp = 0;
-    conf->rflags = 0x202;
-
-    return conf;
-}
-
 bool vmpl_booted = false;
 
 int vmpl_init(bool map_full)
@@ -380,12 +365,9 @@ static void vmpl_init_banner(void)
 int vmpl_enter(int argc, char *argv[])
 {
     int rc;
-    struct dune_config *__conf;
     struct dune_percpu *__percpu;
 
 	log_info("vmpl_enter");
-
-    vmpl_build_assert();
 
     if (!percpu) {
         __percpu = vmpl_alloc_percpu();
@@ -399,14 +381,7 @@ int vmpl_enter(int argc, char *argv[])
         log_debug("dune: fork case");
     }
 
-    __conf = vmsa_alloc_config();
-    if (!__conf) {
-        log_err("dune: failed to allocate config struct");
-        rc = -ENOMEM;
-        goto failed;
-    }
-
-    rc = vmpl_init_percpu(__percpu, __conf);
+    rc = vmpl_init_percpu(__percpu);
     if (rc != 0) {
         goto failed;
     }

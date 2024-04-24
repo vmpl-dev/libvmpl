@@ -497,9 +497,29 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     return 0;
 }
 
-int vmpl_init_percpu(struct dune_percpu *percpu, struct dune_config *config)
+static struct dune_config *vmsa_alloc_config()
+{
+    log_debug("vmsa_alloc_config");
+    struct dune_config *conf = malloc(sizeof(struct dune_config));
+    memset(conf, 0, sizeof(struct dune_config));
+
+    /* NOTE: We don't setup the general purpose registers because __dune_ret
+     * will restore them as they were before the __dune_enter call */
+    conf->rip = (uint64_t) &__dune_ret;
+    conf->rsp = 0;
+    conf->rflags = 0x202;
+
+    return conf;
+}
+
+int vmpl_init_percpu(struct dune_percpu *percpu)
 {
     int rc;
+    struct dune_config *config = vmsa_alloc_config();
+    if (!config) {
+        log_err("dune: failed to allocate config struct");
+        return -ENOMEM;
+    }
 
     rc = vmpl_init_pre(percpu);
     if (rc) {
@@ -524,5 +544,6 @@ int vmpl_init_percpu(struct dune_percpu *percpu, struct dune_config *config)
 failed:
     log_err("dune: failed to enter Dune mode");
     vmpl_free_percpu(percpu);
+    free(config);
     return -EIO;
 }
