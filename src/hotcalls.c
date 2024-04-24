@@ -15,7 +15,7 @@
 static uint64_t hotcalls_bitmap[MAX_SYSCALLS / 64 + 1] = { 0 };
 
 // Register a system call as a hotcall
-void register_hotcall(int syscall) {
+void register_hotcall(long syscall) {
 	if (syscall >= 0 && syscall < MAX_SYSCALLS) {
 		uint64_t mask = 1ULL << (syscall % 64);
 		hotcalls_bitmap[syscall / 64] |= mask;
@@ -23,7 +23,7 @@ void register_hotcall(int syscall) {
 }
 
 // Unregister a system call as a hotcall
-void unregister_hotcall(int syscall) {
+void unregister_hotcall(long syscall) {
 	if (syscall >= 0 && syscall < MAX_SYSCALLS) {
 		uint64_t mask = ~(1ULL << (syscall % 64));
 		hotcalls_bitmap[syscall / 64] &= mask;
@@ -31,7 +31,7 @@ void unregister_hotcall(int syscall) {
 }
 
 // Check if a system call is a hotcall
-bool is_hotcall(int syscall) {
+bool is_hotcall(long syscall) {
 	if (syscall >= 0 && syscall < MAX_SYSCALLS) {
 		uint64_t mask = 1ULL << (syscall % 64);
 		return (hotcalls_bitmap[syscall / 64] & mask) != 0;
@@ -58,7 +58,7 @@ long vmpl_hotcalls_call(struct dune_tf *tf)
 	return hotcalls_call(&args);
 }
 
-int exec_hotcall(long nr, ...)
+long exec_hotcall(long nr, ...)
 {
 	va_list args;
 	hotcall_args_t hotcall_args = {

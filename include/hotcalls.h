@@ -14,6 +14,6 @@
 typedef long (*hotcall_t)(long, ...);
 
 // Define the exported hotcall functions
-extern int exec_hotcall(long nr, ...);
+extern long exec_hotcall(long nr, ...);
 
 #endif
