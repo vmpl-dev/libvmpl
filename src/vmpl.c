@@ -263,8 +263,6 @@ failed:
     return rc;
 }
 
-bool vmpl_booted = false;
-
 int vmpl_init(bool map_full)
 {
     int rc;

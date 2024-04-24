@@ -203,7 +203,6 @@ extern int dune_elf_iter_ph(struct dune_elf *elf, dune_elf_phcb cb);
 extern int dune_elf_load_ph(struct dune_elf *elf, Elf64_Phdr *phdr, off_t off);
 
 // vmpl initialization
-extern bool vmpl_booted;
 extern int vmpl_init(bool map_full);
 extern int vmpl_enter(int argc, char *argv[]);
 /**

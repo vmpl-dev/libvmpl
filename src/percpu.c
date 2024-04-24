@@ -492,8 +492,6 @@ static int vmpl_init_post(struct dune_percpu *percpu)
     // Setup serial port
     serial_init();
 
-    // Finish setup
-    vmpl_booted = true;
     return 0;
 }
 
