@@ -124,13 +124,6 @@ AC_ARG_ENABLE([vmpl-debug],
               [enable_vmpl_debug=no])
 AM_CONDITIONAL([ENABLE_VMPL_DEBUG], [test "x$enable_vmpl_debug" = "xyes"])
 
-AC_ARG_ENABLE([vmpl-xsave],
-              [AS_HELP_STRING([--enable-vmpl-xsave],
-                              [Enable xsave support])],
-              [enable_vmpl_xsave=$enableval],
-              [enable_vmpl_xsave=no])
-AM_CONDITIONAL([ENABLE_VMPL_XSAVE], [test "x$enable_vmpl_xsave" = "xyes"])
-
 AC_ARG_ENABLE([vmpl-hotcalls], [AS_HELP_STRING([--enable-vmpl-hotcalls],
                                                [Enable hotcalls support])],
               [enable_vmpl_hotcalls=$enableval],
@@ -219,10 +212,6 @@ fi
 
 if test "x$enable_vmpl_debug" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_DEBUG], [1], [Enable debug support])
-fi
-
-if test "x$enable_vmpl_xsave" = "xyes"; then
-    AC_DEFINE([CONFIG_VMPL_XSAVE], [1], [Enable xsave support])
 fi
 
 if test "x$enable_vmpl_hotcalls" = "xyes"; then

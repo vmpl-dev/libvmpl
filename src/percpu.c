@@ -335,42 +335,7 @@ void vmpl_free_percpu(struct dune_percpu *percpu)
     munmap(percpu, PGSIZE);
 }
 
-#ifdef CONFIG_VMPL_XSAVE
-static int xsave_begin(struct dune_percpu *percpu)
-{
-    log_info("xsave begin");
-    percpu->xsave_mask = _xgetbv(0);
-
-    log_debug("xsave mask: %llx", percpu->xsave_mask);
-    // The XSAVE instruction requires 64-byte alignment for state buffers
-    percpu->xsave_area = memalign(64, XSAVE_SIZE);
-    if (!percpu->xsave_area) {
-        perror("dune: failed to allocate xsave area");
-        return -ENOMEM;
-    }
-
-    log_debug("xsave area at %lx", percpu->xsave_area);
-    memset(percpu->xsave_area, 0, XSAVE_SIZE);
-    _xsave64(percpu->xsave_area, percpu->xsave_mask);
-
-    dune_fpu_dump((struct fpu_area *)percpu->xsave_area);
-    return 0;
-}
-
-static int xsave_end(struct dune_percpu *percpu)
-{
-    // Restore the XSAVE state
-    _xsetbv(0, percpu->xsave_mask);
-    _xrstor64(percpu->xsave_area, percpu->xsave_mask);
-
-    // Free the XSAVE area
-    free(percpu->xsave_area);
-    percpu->xsave_area = NULL;
-
-    log_info("xsave end");
-    return 0;
-}
-#else
+#ifdef CONFIG_DUNE_BOOT
 static int xsave_begin(struct dune_percpu *percpu)
 {
     log_info("xsave begin");
@@ -393,39 +358,7 @@ static int xsave_end(struct dune_percpu *percpu)
     log_info("xsave end");
     return 0;
 }
-#endif
 
-static int vmpl_init_pre(struct dune_percpu *percpu)
-{
-    int rc;
-
-    // Setup CPU set for the thread
-    if ((rc = setup_cpuset())) {
-        log_err("dune: unable to setup CPU set");
-        goto failed;
-    }
-
-    // Setup GDT for hypercall
-    setup_gdt(percpu);
-
-    // Setup segments registers
-    if ((rc = setup_vmsa(percpu))) {
-		log_err("dune: failed to setup vmsa");
-		goto failed;
-	}
-
-    // Setup XSAVE for FPU
-    if ((rc = xsave_begin(percpu))) {
-		log_err("dune: failed to setup xsave");
-		goto failed;
-	}
-
-    return 0;
-failed:
-	return rc;
-}
-
-#ifdef CONFIG_DUNE_BOOT
 static int dune_boot(struct dune_percpu *percpu)
 {
 	struct tptr _idtr, _gdtr;
@@ -475,7 +408,72 @@ static int dune_boot(struct dune_percpu *percpu)
 }
 #else
 static int dune_boot(struct dune_percpu *percpu) { return 0; }
+
+static int xsave_begin(struct dune_percpu *percpu)
+{
+    log_info("xsave begin");
+    percpu->xsave_mask = _xgetbv(0);
+
+    log_debug("xsave mask: %llx", percpu->xsave_mask);
+    // The XSAVE instruction requires 64-byte alignment for state buffers
+    percpu->xsave_area = memalign(64, XSAVE_SIZE);
+    if (!percpu->xsave_area) {
+        perror("dune: failed to allocate xsave area");
+        return -ENOMEM;
+    }
+
+    log_debug("xsave area at %lx", percpu->xsave_area);
+    memset(percpu->xsave_area, 0, XSAVE_SIZE);
+    _xsave64(percpu->xsave_area, percpu->xsave_mask);
+
+    dune_fpu_dump((struct fpu_area *)percpu->xsave_area);
+    return 0;
+}
+
+static int xsave_end(struct dune_percpu *percpu)
+{
+    // Restore the XSAVE state
+    _xsetbv(0, percpu->xsave_mask);
+    _xrstor64(percpu->xsave_area, percpu->xsave_mask);
+
+    // Free the XSAVE area
+    free(percpu->xsave_area);
+    percpu->xsave_area = NULL;
+
+    log_info("xsave end");
+    return 0;
+}
 #endif
+
+static int vmpl_init_pre(struct dune_percpu *percpu)
+{
+    int rc;
+
+    // Setup CPU set for the thread
+    if ((rc = setup_cpuset())) {
+        log_err("dune: unable to setup CPU set");
+        goto failed;
+    }
+
+    // Setup GDT for hypercall
+    setup_gdt(percpu);
+
+    // Setup segments registers
+    if ((rc = setup_vmsa(percpu))) {
+		log_err("dune: failed to setup vmsa");
+		goto failed;
+	}
+
+    // Setup XSAVE for FPU
+    if ((rc = xsave_begin(percpu))) {
+		log_err("dune: failed to setup xsave");
+		goto failed;
+	}
+
+    return 0;
+failed:
+	return rc;
+}
 
 static int vmpl_init_post(struct dune_percpu *percpu)
 {
