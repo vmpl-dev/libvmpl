@@ -33,61 +33,8 @@ bool run_in_vmpl_process = false;
 bool run_in_vmpl_thread = false;
 bool run_in_user_mode = false;
 
-static size_t load_hotcalls(char *hotcalls_conf)
-{
-	// Load hotcalls configuration from file.
-	FILE *fp;
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-	char syscall_name[64];
-	int syscall;
-	size_t nr_hotcalls = 0;
-
-	if (hotcalls_conf == NULL) {
-		log_warn("HOTCALLS_CONFIG_FILE not set");
-		return 0;
-	}
-
-	fp = fopen(hotcalls_conf, "r");
-	if (fp == NULL) {
-		log_err("failed to open %s", hotcalls_conf);
-		return 0;
-	}
-
-	while ((read = getline(&line, &len, fp)) != -1) {
-		if (line[0] == '#' || line[0] == '\n') {
-			continue;
-		}
-		sscanf(line, "define %s %d", syscall_name, &syscall);
-		log_debug("registering hotcall %s %d", syscall_name, syscall);
-		register_hotcall(syscall);
-		nr_hotcalls++;
-	}
-
-	if (nr_hotcalls == 0) {
-		log_warn("no hotcalls registered");
-	} else {
-		log_info("registered %lu hotcalls", nr_hotcalls);
-	}
-
-	if (line) {
-		free(line);
-	}
-
-	fclose(fp);
-
-	return nr_hotcalls;
-}
-
 static void init_env()
 {
-	char *hotcalls_conf = getenv("HOTCALLS_CONFIG_FILE");
-	if (load_hotcalls(hotcalls_conf) > 0) {
-		hotcalls_enabled = true;
-		log_debug("hotcalls enabled");
-	}
-
 	if (getenv("VMPL_ENABLED")) {
 		vmpl_enabled = true;
 		log_debug("vmpl enabled");
@@ -116,13 +63,6 @@ static void init_env()
 
 // Declare original malloc and free
 static int (*main_orig)(int, char **, char **);
-
-static void cleanup()
-{
-	if (hotcalls_enabled) {
-		hotcalls_teardown();
-	}
-}
 
 static void user_main(int argc, char **argv, char **envp)
 {
@@ -213,14 +153,6 @@ static int main_hook(int argc, char **argv, char **envp)
 	// Initialize environment variables
 	init_env();
 
-	// Initialize hotcalls
-	if (hotcalls_enabled) {
-		hotcalls_setup(1);
-	}
-
-	// Register cleanup function
-	atexit(cleanup);
-
 	// Initialize VMPL
 	if (!vmpl_enabled) {
 		return main_orig(argc, argv, envp);
@@ -286,14 +218,6 @@ pid_t fork()
 	// Call original fork
 	pid = fork_orig();
 	if (pid == 0) {
-		// Initialize hotcalls
-		if (hotcalls_enabled) {
-			hotcalls_setup(1);
-		}
-
-		// Register cleanup function
-		atexit(cleanup);
-
 		if (run_in_vmpl_process) {
 			log_debug("entering dune mode...");
 			int ret = vmpl_init_and_enter(1, NULL);
@@ -363,7 +287,7 @@ int pthread_create(pthread_t *restrict res,
 	// Call original pthread_create if not running in VMPL thread or hotcalls is not
 	// initialized yet (i.e., we are in the main thread). Otherwise, create a VMPL thread.
 	// Note that we need to create a VMPL thread for hotcalls to work.
-	if (!run_in_vmpl_thread ||(hotcalls_enabled && !hotcalls_initialized())) {
+	if (!run_in_vmpl_thread || !hotcalls_initialized()) {
 		return pthread_create_orig(res, attrp, entry, arg);
 	}
 

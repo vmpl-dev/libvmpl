@@ -7,6 +7,7 @@
 #include "sys.h"
 #include "globals.h"
 #include "ghcb.h"
+#include "percpu.h"
 
 #define RUN_VMPL Vmpl0
 
@@ -225,11 +226,11 @@ void vc_outb(uint16_t port, uint8_t value);
 uint8_t vc_inb(uint16_t port);
 
 #ifdef CONFIG_VMPL_GHCB
-Ghcb *vc_init(int dune_fd);
+int vc_init(struct dune_percpu *percpu);
 #else
-static inline Ghcb *vc_init(int dune_fd)
+static inline int vc_init(struct dune_percpu *percpu)
 {
-    return NULL;
+    return 0;
 }
 #endif
 

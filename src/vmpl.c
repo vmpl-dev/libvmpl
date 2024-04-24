@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/syscall.h>
 
 #include "config.h"
 #include "percpu.h"
@@ -304,6 +305,8 @@ int vmpl_init(bool map_full)
         log_err("dune: unable to setup vsyscall handler");
         goto failed;
     }
+
+    setup_hotcalls();
 
     setup_signal();
 

@@ -538,7 +538,7 @@ failed:
     return NULL;
 }
 
-Ghcb *vc_init(int dune_fd) {
+int vc_init(struct dune_percpu *percpu) {
     Ghcb *ghcb_va;
     PhysAddr ghcb_pa;
 
@@ -546,7 +546,7 @@ Ghcb *vc_init(int dune_fd) {
     ghcb_va = setup_ghcb(dune_fd);
     if (!ghcb_va) {
         log_err("failed to setup GHCB");
-        return NULL;
+        return -1;
     }
 
     log_info("setup VC");
@@ -558,6 +558,7 @@ Ghcb *vc_init(int dune_fd) {
     vc_register_ghcb(ghcb_pa);
     vc_set_ghcb(ghcb_va);
 
-    return ghcb_va;
+    percpu->ghcb = ghcb_va;
+    return 0;
 }
 #endif

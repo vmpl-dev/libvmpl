@@ -19,6 +19,7 @@
 #include <sys/mman.h>
 #include <asm/vsyscall.h>
 
+#include "sys.h"
 #include "mmu.h"
 #include "ioctl.h"
 #include "page.h"

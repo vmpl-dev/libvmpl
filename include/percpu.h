@@ -1,3 +1,6 @@
+#ifndef __PERCPU_H__
+#define __PERCPU_H__
+
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
@@ -10,7 +13,6 @@
 #include "config.h"
 #include "mmu.h"
 #include "ghcb.h"
-#include "hotcalls.h"
 #include "vmpl.h"
 
 struct dune_percpu {
@@ -39,4 +41,13 @@ struct dune_percpu {
 
 void setup_idt(void);
 struct dune_percpu *vmpl_alloc_percpu(void);
+#ifdef CONFIG_VMPL_HOTCALLS
+void hotcalls_enable(struct dune_percpu *percpu);
+#else
+static inline void hotcalls_enable(struct dune_percpu *percpu) {
+	percpu->hotcall = NULL;
+}
+#endif
 int do_dune_enter(struct dune_percpu *percpu);
+
+#endif
