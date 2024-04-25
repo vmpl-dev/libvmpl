@@ -38,6 +38,7 @@ struct dune_percpu {
 #define SAFE_STACK_SIZE (2048 * 1024)
 #define XSAVE_SIZE 4096
 
+extern __thread struct dune_percpu *percpu;
 void setup_idt(void);
 struct dune_percpu *vmpl_alloc_percpu(void);
 #ifdef CONFIG_VMPL_HOTCALLS
@@ -47,6 +48,6 @@ static inline void hotcalls_enable(struct dune_percpu *percpu) {
 	percpu->hotcall = NULL;
 }
 #endif
-int do_dune_enter(struct dune_percpu *percpu);
+int do_dune_enter();
 
 #endif

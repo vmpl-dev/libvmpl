@@ -66,8 +66,6 @@ BUILD_ASSERT(DUNE_PERCPU_HOTCALL == offsetof(struct dune_percpu, hotcall));
 
 int dune_fd;
 
-static __thread struct dune_percpu *percpu;
-
 int setup_vm()
 {
     int vmpl_fd;
@@ -174,23 +172,10 @@ static void vmpl_init_banner(void)
 int vmpl_enter(int argc, char *argv[])
 {
     int rc;
-    struct dune_percpu *__percpu;
 
 	log_info("vmpl_enter");
 
-    if (!percpu) {
-        __percpu = vmpl_alloc_percpu();
-        if (!__percpu) {
-            rc = -ENOMEM;
-            log_err("dune: failed to allocate percpu struct");
-            goto failed;
-        }
-    } else {
-        __percpu = percpu;
-        log_debug("dune: fork case");
-    }
-
-    rc = do_dune_enter(__percpu);
+    rc = do_dune_enter();
     if (rc != 0) {
         goto failed;
     }
@@ -199,48 +184,8 @@ int vmpl_enter(int argc, char *argv[])
     vmpl_init_banner();
     vmpl_init_stats();
 
-    percpu = __percpu;
     return 0;
 failed:
     log_err("dune: failed to enter VMPL mode");
     return rc;
-}
-
-void on_dune_syscall(struct dune_config *conf)
-{
-    conf->rax = syscall(conf->status, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
-    __dune_go_dune(percpu->vcpu_fd, conf);
-}
-
-/**
- * on_dune_exit - handle Dune exits
- *
- * This function must not return. It can either exit(), __dune_go_dune() or
- * __dune_go_linux().
- */
-void on_dune_exit(struct dune_config *conf)
-{
-    switch (conf->ret) {
-    case DUNE_RET_EXIT:
-        syscall(SYS_exit, conf->status);
-        break;
-    case DUNE_RET_SYSCALL:
-        on_dune_syscall(conf);
-		break;
-    case DUNE_RET_INTERRUPT:
-		dune_debug_handle_int(conf);
-		printf("dune: exit due to interrupt %lld\n", conf->status);
-        break;
-    case DUNE_RET_SIGNAL:
-        __dune_go_dune(percpu->vcpu_fd, conf);
-        break;
-    case DUNE_RET_NOENTER:
-        log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
-        break;
-    default:
-        log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
-        break;
-    }
-
-    exit(EXIT_FAILURE);
 }
