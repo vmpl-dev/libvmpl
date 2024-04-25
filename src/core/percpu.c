@@ -286,34 +286,13 @@ struct dune_percpu *vmpl_alloc_percpu(void)
 	unsigned long fs_base, gs_base;
 
     log_debug("vmpl_alloc_percpu");
-#ifdef ARCH_GET_FS
-	if (arch_prctl(ARCH_GET_FS, &fs_base) == -1) {
-		log_err("dune: failed to get FS register");
-		return NULL;
-	}
-    log_debug("dune: FS base at 0x%lx with arch_prctl", fs_base);
-
-    if (arch_prctl(ARCH_GET_GS, &gs_base) == -1) {
-        log_err("dune: failed to get GS register");
-        return NULL;
-    }
-    log_debug("dune: GS base at 0x%lx with arch_prctl", gs_base);
-#else
-
-    // rdfsbase
-    asm volatile("rdfsbase %0" : "=r"(fs_base));
-    log_debug("dune: FS base at 0x%lx with rdfsbase", fs_base);
-
-    // rdgsbase
-    asm volatile("rdgsbase %0" : "=r"(gs_base));
-    log_debug("dune: GS base at 0x%lx with rdgsbase", gs_base);
-#endif
-
 	percpu = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
 				  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (percpu == MAP_FAILED)
 		return NULL;
 
+    fs_base = rdfsbase();
+    gs_base = rdgsbase();
 	percpu->kfs_base = fs_base;
 	percpu->ufs_base = fs_base;
 	percpu->in_usermode = 1;
