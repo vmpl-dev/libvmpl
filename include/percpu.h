@@ -35,7 +35,6 @@ struct dune_percpu {
 #define DUNE_PERCPU_GHCB    216
 #define DUNE_PERCPU_HOTCALL 224
 
-#define ISR_LEN 16
 #define SAFE_STACK_SIZE (2048 * 1024)
 #define XSAVE_SIZE 4096
 

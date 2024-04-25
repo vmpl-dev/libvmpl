@@ -34,6 +34,7 @@
 #include "seimi.h"
 #include "log.h"
 #include "debug.h"
+#include "idt.h"
 
 #define BUILD_ASSERT(cond) _Static_assert(cond, #cond)
 

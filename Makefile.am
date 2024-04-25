@@ -14,6 +14,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/core/percpu.c \
                     src/core/signals.c \
                     src/core/apic.c \
+                    src/core/idt.c \
                     src/core/trap.c \
                     src/core/debug.c \
                     src/mm/page.c \
