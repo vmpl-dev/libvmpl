@@ -110,4 +110,5 @@ extern void vmpl_mm_test(struct vmpl_mm_t *mm);
 static inline void vmpl_mm_test(struct vmpl_mm_t *mm) {}
 #endif
 
+int setup_mm();
 #endif

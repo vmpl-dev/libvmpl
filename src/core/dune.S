@@ -4,7 +4,7 @@
 
 #define __ASSEMBLY__
 #include "vmpl-core.h"
-#include "syscall_vmpl.h"
+#include "syscall.h"
 
 #define USE_RDWRGSFS 1
 

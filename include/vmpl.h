@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <signal.h>
 #include <sys/ucontext.h>
 
 #ifdef __GLIBC__

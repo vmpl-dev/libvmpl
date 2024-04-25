@@ -1657,3 +1657,25 @@ void vmpl_mm_test(struct vmpl_mm_t *vmpl_mm)
 	log_success("VMPL-MM Test Passed");
 }
 #endif
+
+int setup_mm()
+{
+    int rc;
+    log_info("setup mm");
+
+    rc = mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT);
+    if (rc != 0) {
+        log_err("dune: %s", strerror(errno));
+        goto failed;
+    }
+
+    rc = vmpl_mm_init(&vmpl_mm);
+    if (rc != 0) {
+        log_err("dune: unable to setup vmpl mm");
+        goto failed;
+    }
+
+    return 0;
+failed:
+    return rc;
+}

@@ -8,27 +8,30 @@ AM_LDFLAGS = -L. -lvmpl -ldict
 # Specify shared libraries to be built
 lib_LTLIBRARIES = libvmpl.la libdunify.la libdune.la
 libvmpl_la_SOURCES = src/vmpl.c \
-                    src/percpu.c \
-                    src/debug.c \
-                    src/ioctl.c \
-                    src/page.c \
-                    src/pgtable.c \
-                    src/vma.c \
-                    src/vm.c \
-                    src/mm.c \
-                    src/seimi.c \
-                    src/ghcb.c src/vc.c \
-                    src/dune.S src/vsyscall.S \
-                    src/util.c \
-                    src/serial.c \
-                    src/trap.c \
-                    src/sys-filter.c \
-                    src/hotcalls.c \
-                    src/syscall_vmpl.c \
-                    src/apic.c \
-                    src/elf.c \
-                    src/env.c \
-                    src/log.c
+                    src/core/dune.S \
+                    src/core/ioctl.c \
+                    src/core/percpu.c \
+                    src/core/signals.c \
+                    src/core/apic.c \
+                    src/core/trap.c \
+                    src/core/debug.c \
+                    src/mm/page.c \
+                    src/mm/pgtable.c \
+                    src/mm/vma.c \
+                    src/mm/vm.c \
+                    src/mm/mm.c \
+                    src/syscall/hotcalls.c \
+                    src/syscall/syscall.c \
+                    src/syscall/vsyscall.S \
+                    src/vc/ghcb.c \
+                    src/vc/vc.c \
+                    src/vc/serial.c \
+                    src/security/seimi.c \
+                    src/security/sys-filter.c \
+                    src/utils/util.c \
+                    src/utils/elf.c \
+                    src/utils/env.c \
+                    src/utils/log.c
 libvmpl_la_CFLAGS = $(AM_CFLAGS)
 libvmpl_la_LDFLAGS = -ldl \
                     -ldict \
