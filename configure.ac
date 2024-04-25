@@ -22,18 +22,6 @@ AC_CONFIG_SRCDIR([src])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_MACRO_DIRS([m4])
 
-AC_ARG_WITH([vmpl-stack-size], [AS_HELP_STRING([--with-vmpl-stack-size],
-                                                [Set vmpl stack size])],
-            [with_vmpl_stack_size=$withval],
-            [with_vmpl_stack_size=0x4000000UL])
-AC_DEFINE_UNQUOTED([CONFIG_VMPL_STACK_SIZE], [$with_vmpl_stack_size], [vmpl stack size])
-
-AC_ARG_WITH([vmpl-heap-size], [AS_HELP_STRING([--with-vmpl-heap-size],
-                                               [Set vmpl heap size])],
-            [with_vmpl_heap_size=$withval],
-            [with_vmpl_heap_size=0x200000000UL])
-AC_DEFINE_UNQUOTED([CONFIG_VMPL_HEAP_SIZE], [$with_vmpl_heap_size], [vmpl heap size])
-
 AC_ARG_WITH([vmpl-va-start], [AS_HELP_STRING([--with-vmpl-va-start],
                                               [Set vmpl va start])],
             [with_vmpl_va_start=$withval],

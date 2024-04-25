@@ -175,77 +175,10 @@ static int setup_vsyscall()
 }
 #endif
 
-static int setup_stack(size_t stack_size)
-{
-    int rc;
-	const rlim_t kStackSize = stack_size;
-	struct rlimit rl;
-	log_info("setup stack");
-
-    rc = getrlimit(RLIMIT_STACK, &rl);
-    if (rc != 0) {
-        perror("dune: failed to get stack size");
-        goto failed;
-    }
-
-    if (rl.rlim_cur < kStackSize) {
-        rl.rlim_cur = kStackSize;
-        rc = setrlimit(RLIMIT_STACK, &rl);
-        if (rc != 0) {
-            perror("dune: failed to set stack size");
-            goto failed;
-        }
-    }
-
-    return 0;
-failed:
-    return rc;
-}
-
-static int setup_heap(size_t increase_size)
-{
-    int rc;
-    struct rlimit rl;
-    log_info("setup heap");
-
-    rc = getrlimit(RLIMIT_DATA, &rl);
-    if (rc != 0) {
-        perror("dune: failed to get heap size");
-        goto failed;
-    }
-
-    rl.rlim_cur += increase_size;
-    rc = setrlimit(RLIMIT_DATA, &rl);
-    if (rc != 0) {
-        perror("dune: failed to set heap size");
-        goto failed;
-    }
-
-    return 0;
-failed:
-    return rc;
-}
-
 static int setup_mm()
 {
     int rc;
     log_info("setup mm");
-
-#if 0
-    // Setup Stack
-    rc = setup_stack(CONFIG_VMPL_STACK_SIZE);
-    if (rc != 0) {
-        log_err("dune: unable to setup stack");
-        goto failed;
-    }
-
-    // Setup Heap
-    rc = setup_heap(CONFIG_VMPL_HEAP_SIZE);
-    if (rc != 0) {
-        log_err("dune: unable to setup heap");
-        goto failed;
-    }
-#endif
 
     rc = mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT);
     if (rc != 0) {
