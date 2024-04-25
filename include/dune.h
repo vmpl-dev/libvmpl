@@ -3,7 +3,7 @@
 
 #include "vmpl.h"
 #include "apic.h"
-#include "mm.h"
+#include "pgtable.h"
 
 #define PTE_ADDR            pte_addr
 

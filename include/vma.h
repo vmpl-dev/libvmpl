@@ -7,27 +7,6 @@
 #include <sys/mman.h>
 #include <dict/dict.h>
 
-#define PERM_NONE  	    0	    /* no access */
-#define PERM_R		    0x0001	/* read permission */
-#define PERM_W		    0x0002	/* write permission */
-#define PERM_X		    0x0004	/* execute permission */
-#define PERM_U		    0x0008	/* user-level permission */
-#define PERM_UC		    0x0010  /* make uncachable */
-#define PERM_COW	    0x0020	/* COW flag */
-#define PERM_USR1	    0x1000  /* User flag 1 */
-#define PERM_USR2	    0x2000  /* User flag 2 */
-#define PERM_USR3	    0x3000  /* User flag 3 */
-#define PERM_BIG	    0x0100	/* Use large pages */
-#define PERM_BIG_1GB	0x0200	/* Use large pages (1GB) */
-
-// Helper Macros
-#define PERM_SCODE	(PERM_R | PERM_X)
-#define PERM_STEXT	(PERM_R | PERM_W)
-#define PERM_SSTACK	PERM_STEXT
-#define PERM_UCODE	(PERM_R | PERM_U | PERM_X)
-#define PERM_UTEXT	(PERM_R | PERM_U | PERM_W)
-#define PERM_USTACK	PERM_UTEXT
-
 #define VMPL_VMA_TYPE_FILE      1
 #define VMPL_VMA_TYPE_ANONYMOUS 2
 #define VMPL_VMA_TYPE_HEAP		3

@@ -55,12 +55,7 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/dune.h \
                     include/sys.h \
                     include/vc.h \
-                    include/ioctl.h \
-                    include/page.h \
                     include/pgtable.h \
-                    include/vma.h \
-                    include/vm.h \
-                    include/mm.h \
                     include/seimi.h \
                     include/apic.h \
                     include/elf.h \

@@ -23,8 +23,6 @@
 #define vmpl_flush_tlb_one  flush_tlb_one
 #define vmpl_flush_tlb      flush_tlb
 
-#define CR3_NOFLUSH	(1UL << 63)
-
 #define VMPL_VM_MAP_PHYS_FMT	"start = 0x%lx, end = 0x%lx, perm = 0x%lx"
 #define VMPL_VM_MAP_PAGES_FMT	"start = 0x%lx, end = 0x%lx, perm = 0x%lx"
 #define VMPL_VM_MMAP_FMT		"start = 0x%lx, end = 0x%lx, perm = 0x%lx, flags = 0x%lx, fd = %d, offset = 0x%lx"
@@ -69,27 +67,6 @@ struct mremap_arg_t {
 
 typedef uintptr_t phys_addr_t;
 typedef uintptr_t virt_addr_t;
-
-extern int vmpl_vm_map_phys(pte_t *root, void *va, size_t len, void *pa, int perm);
-extern int vmpl_vm_map_pages(pte_t *root, void *va, size_t len, int perm);
-extern int vmpl_vm_insert_page(pte_t *root, void *va, struct page *pg, int perm);
-extern struct page * vmpl_vm_lookup_page(pte_t *root, void *va);
-extern int vmpl_vm_lookup(pte_t *root, void *va, int create, pte_t **pte_out);
-
-typedef int (*page_walk_cb)(const void *arg, pte_t *ptep, void *va);
-extern int vmpl_vm_page_walk(pte_t *root, void *start_va, void *end_va,
-			    page_walk_cb cb, const void *arg);
-
-extern void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
-                  int fd, off_t offset);
-extern int vmpl_vm_munmap(pte_t *root, void *addr, size_t length);
-extern void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
-							size_t new_size, int flags, ...);
-extern int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot);
-extern int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pkey);
-
-extern pte_t * vmpl_vm_clone(pte_t *root);
-extern void vmpl_vm_free(pte_t *root);
 
 struct vmpl_mm_t {
 	pte_t *pgd;

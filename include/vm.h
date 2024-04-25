@@ -8,10 +8,6 @@
 #include <dict/dict.h>
 #include <pthread.h>
 
-/* Define beginning and end of VA space */
-#define VA_START		((void *)0)
-#define VA_END			((void *)-1)
-
 /* Define maximum size of self-managed virtual memory area */
 #define MAP_SIZE 		CONFIG_VMPL_VA_START
 

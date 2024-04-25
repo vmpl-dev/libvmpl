@@ -178,6 +178,57 @@ bool is_hotcall(long syscall);
 long vmpl_hotcalls_call(struct dune_tf *tf);
 void setup_hotcalls();
 
+// virtual memory routines
+typedef uint64_t pte_t;
+
+#define PERM_NONE  	    0	    /* no access */
+#define PERM_R		    0x0001	/* read permission */
+#define PERM_W		    0x0002	/* write permission */
+#define PERM_X		    0x0004	/* execute permission */
+#define PERM_U		    0x0008	/* user-level permission */
+#define PERM_UC		    0x0010  /* make uncachable */
+#define PERM_COW	    0x0020	/* COW flag */
+#define PERM_USR1	    0x1000  /* User flag 1 */
+#define PERM_USR2	    0x2000  /* User flag 2 */
+#define PERM_USR3	    0x3000  /* User flag 3 */
+#define PERM_BIG	    0x0100	/* Use large pages */
+#define PERM_BIG_1GB	0x0200	/* Use large pages (1GB) */
+
+// Helper Macros
+#define PERM_SCODE	(PERM_R | PERM_X)
+#define PERM_STEXT	(PERM_R | PERM_W)
+#define PERM_SSTACK	PERM_STEXT
+#define PERM_UCODE	(PERM_R | PERM_U | PERM_X)
+#define PERM_UTEXT	(PERM_R | PERM_U | PERM_W)
+#define PERM_USTACK	PERM_UTEXT
+
+/* Define beginning and end of VA space */
+#define VA_START		((void *)0)
+#define VA_END			((void *)-1)
+
+#define CR3_NOFLUSH	(1UL << 63)
+
+extern int vmpl_vm_map_phys(pte_t *root, void *va, size_t len, void *pa, int perm);
+extern int vmpl_vm_map_pages(pte_t *root, void *va, size_t len, int perm);
+extern int vmpl_vm_insert_page(pte_t *root, void *va, struct page *pg, int perm);
+extern struct page * vmpl_vm_lookup_page(pte_t *root, void *va);
+extern int vmpl_vm_lookup(pte_t *root, void *va, int create, pte_t **pte_out);
+
+typedef int (*page_walk_cb)(const void *arg, pte_t *ptep, void *va);
+extern int vmpl_vm_page_walk(pte_t *root, void *start_va, void *end_va,
+			    page_walk_cb cb, const void *arg);
+
+extern void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset);
+extern int vmpl_vm_munmap(pte_t *root, void *addr, size_t length);
+extern void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
+							size_t new_size, int flags, ...);
+extern int vmpl_vm_mprotect(pte_t *root, void *addr, size_t len, int prot);
+extern int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, int pkey);
+
+extern pte_t *vmpl_vm_clone(pte_t *root);
+extern void vmpl_vm_free(pte_t *root);
+
 // elf helper functions
 #include "elf.h"
 struct dune_elf {

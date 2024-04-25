@@ -27,6 +27,7 @@
 #include "vm.h"
 #include "mm.h"
 #include "log.h"
+#include "vmpl.h"
 
 static struct perm_map_t perm_maps[] = {
 	{PERM_R, PTE_P},
