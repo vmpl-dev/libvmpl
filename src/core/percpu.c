@@ -30,7 +30,7 @@ static int get_cpu_count()
 {
     int rc;
     long nprocs;
-    log_info("get cpu count");
+    log_debug("get cpu count");
 
     nprocs = sysconf(_SC_NPROCESSORS_ONLN);
     if (nprocs < 0) {
@@ -49,7 +49,7 @@ static int alloc_cpu()
 {
 	static int current_cpu = 0;
 	static int cpu_count = 0;
-    log_info("alloc cpu");
+    log_debug("alloc cpu");
     if (current_cpu == 0) {
         current_cpu = sched_getcpu();
 	}
