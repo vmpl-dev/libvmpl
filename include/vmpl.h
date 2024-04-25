@@ -268,6 +268,11 @@ extern int dune_elf_load_ph(struct dune_elf *elf, Elf64_Phdr *phdr, off_t off);
 // vmpl initialization
 extern int vmpl_init(bool map_full);
 extern int vmpl_enter(int argc, char *argv[]);
+
+// user mode entry
+int dune_call_user_main(void *func, int argc, char **argv, char **envp);
+int dune_call_user_thread(void *func, void *arg);
+
 /**
  * vmpl_init_and_enter - initializes libvmpl and enters "VMPL mode"
  * 

@@ -10,6 +10,7 @@ lib_LTLIBRARIES = libvmpl.la libdunify.la libdune.la
 libvmpl_la_SOURCES = src/vmpl.c \
                     src/core/dune.S \
                     src/core/ioctl.c \
+                    src/core/user.c \
                     src/core/percpu.c \
                     src/core/signals.c \
                     src/core/apic.c \
@@ -46,7 +47,6 @@ libdunify_la_CFLAGS = $(AM_CFLAGS)
 libdunify_la_LDFLAGS = -fPIC -shared \
                     -ldl \
                     -lvmpl \
-                    -lhotcalls \
                     -version-info 1:0:0
 
 # Specify headers to be installed
