@@ -87,7 +87,6 @@ long exec_hotcall(long nr, ...)
 	return hotcalls_call(&hotcall_args);
 }
 
-#ifdef CONFIG_VMPL_HOTCALLS
 static size_t load_hotcalls(char *hotcalls_conf)
 {
 	// Load hotcalls configuration from file.
@@ -161,6 +160,7 @@ void setup_hotcalls()
 	}
 }
 
+#ifdef CONFIG_VMPL_HOTCALLS
 void hotcalls_enable(struct dune_percpu *percpu)
 {
 	percpu->hotcall = exec_hotcall;
