@@ -21,6 +21,8 @@
 #include "page.h"
 #include "mm.h"
 #include "vmpl.h"
+#include "vc.h"
+#include "percpu.h"
 #include "log.h"
 #include "vmpl-core.h"
 #include "sys-filter.h"
@@ -244,7 +246,6 @@ void dune_syscall_handler(struct dune_tf *tf)
 	}
 }
 
-#ifdef CONFIG_VMPL_MM
 /**
  * @brief Pre page fault handler
  * @note This function is called when a page fault occurs. We handle the page fault
@@ -270,6 +271,15 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 	addr = read_cr2();
 	if (fec & PF_ERR_P) {
 		if (fec & PF_ERR_WR) {
+#ifdef CONFIG_VMPL_GHCB
+		// If the page is a GHCB page, we should first clear the percpu GHCB page address, such that
+		// we fall back to the default MSR protocol. Then we register the GHCB page.
+		if ((addr & PAGE_MASK) == (uint64_t)GHCB_MMAP_BASE) {
+			if (vc_init_percpu(percpu) == 0)
+				goto exit;
+		}
+#endif
+#ifdef CONFIG_VMPL_MM
 			// If the page is allocated as a VMPL page, then we need to handle the page fault.
 			if ((addr >= vmpl_vm->va_start) && (addr < vmpl_vm->va_end)) {
 				// If the dune page fault callback is registered, then call the callback.
@@ -278,14 +288,17 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 					goto exit;
 				}
 			}
+#endif
 		}
 	} else {
+#ifdef CONFIG_VMPL_MM
 		if ((addr >= vmpl_vm->va_start) && (addr < vmpl_vm->va_end)) {
 			// If the page is lazy allocated, then we need to allocate the page.
 			if(vmpl_mm_default_pgflt_handler(addr, fec) == 0) {
 				goto exit;
 			}
 		}
+#endif
 	}
 
 failed:
@@ -303,6 +316,7 @@ exit:
  */
 static int dune_post_pf_handler(struct dune_tf *tf)
 {
+#ifdef CONFIG_VMPL_MM
 	int ret;
 	pte_t *ptep, *child_ptep;
 	uint64_t fec = tf->err;
@@ -334,13 +348,10 @@ static int dune_post_pf_handler(struct dune_tf *tf)
 		// Invalidate the TLB
 		vmpl_flush_tlb_one(addr);
 	}
+#endif
 
 	return 0;
 }
-#else
-static int dune_pre_pf_handler(struct dune_tf *tf) { return -1; }
-static int dune_post_pf_handler(struct dune_tf *tf) { return 0; }
-#endif
 
 /**
  * @brief Pre-trap handler

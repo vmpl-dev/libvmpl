@@ -561,4 +561,44 @@ int vc_init(struct dune_percpu *percpu) {
     percpu->ghcb = ghcb_va;
     return 0;
 }
+
+int vc_init_percpu(struct dune_percpu *percpu)
+{
+    Ghcb *ghcb_va;
+    pte_t *ptep;
+    PhysAddr ghcb_pa;
+    uint64_t value;
+
+    // Save original GHCB page address
+    ghcb_va = percpu->ghcb;
+    // Switch to the default MSR protocol
+    percpu->ghcb = NULL;
+
+    // Look up the page table entry for the faulting address
+    if (pgtable_lookup(pgroot, ghcb_va, CREATE_NONE, &ptep) != 0)
+        goto failed;
+
+    // Obtain physical address of the page
+    ghcb_pa = pte_addr(*ptep);
+    // Read the GHCB page and check if it is valid
+    rdmsrl(MSR_AMD64_SEV_ES_GHCB, value);
+    /// If the GHCB page is not registered, register it
+    if (value == ghcb_pa)
+        goto restore_ghcb;
+
+    // Register the GHCB page
+    vc_register_ghcb(ghcb_pa);
+restore_ghcb:
+    // Set the RW permission for the GHCB page
+    *ptep |= PTE_W;
+    // Invalidate the TLB entry for the GHCB page
+	vmpl_flush_tlb_one(ghcb_va);
+    // Restore the percpu GHCB page address
+    percpu->ghcb = (void *)ghcb_pa;
+    // The GHCB page is valid, return success
+    return 0;
+failed:
+    // The GHCB page is not valid, terminate the VMPL with an error
+    return -1;
+}
 #endif

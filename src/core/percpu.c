@@ -11,6 +11,7 @@
 #include "serial.h"
 #include "log.h"
 #include "percpu.h"
+#include "debug.h"
 
 __thread struct dune_percpu *percpu;
 

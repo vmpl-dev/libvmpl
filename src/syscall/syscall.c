@@ -1,5 +1,6 @@
 #include "vmpl.h"
 #include "syscall.h"
+#include "log.h"
 
 #include <unistd.h>
 

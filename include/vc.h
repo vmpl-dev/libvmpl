@@ -227,6 +227,7 @@ uint8_t vc_inb(uint16_t port);
 
 #ifdef CONFIG_VMPL_GHCB
 int vc_init(struct dune_percpu *percpu);
+int vc_init_percpu(struct dune_percpu *percpu);
 #else
 static inline int vc_init(struct dune_percpu *percpu)
 {

@@ -1,6 +1,7 @@
 #include "mm.h"
 #include "idt.h"
 #include "vmpl.h"
+#include "log.h"
 
 struct idtd idt[IDT_ENTRIES];
 
