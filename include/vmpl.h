@@ -163,6 +163,15 @@ extern void dune_ret_from_user(int ret) __attribute__((noreturn));
 extern void dune_dump_trap_frame(struct dune_tf *tf);
 extern void dune_passthrough_syscall(struct dune_tf *tf);
 
+// apic routines
+uint32_t apic_get_id();
+int apic_setup();
+void apic_cleanup();
+void apic_init_rt_entry();
+uint32_t apic_get_id_for_cpu(uint32_t cpu, bool *error);
+void apic_send_ipi(uint8_t vector, uint32_t dest_apic_id);
+void apic_eoi();
+
 // ucontext support
 extern void dune_getcontext(ucontext_t *ucp, struct dune_tf *tf);
 extern void dune_setcontext(const ucontext_t *ucp, struct dune_tf *tf);

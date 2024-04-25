@@ -1,5 +1,4 @@
 #define _GNU_SOURCE
-#include "apic.h"
 #include "dune.h"
 #include <stdio.h>
 #include <stdlib.h>

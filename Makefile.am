@@ -57,7 +57,6 @@ pkginclude_HEADERS = include/vmpl.h \
                     include/vc.h \
                     include/pgtable.h \
                     include/seimi.h \
-                    include/apic.h \
                     include/elf.h \
                     include/bitmap.h \
                     include/log.h

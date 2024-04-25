@@ -7,7 +7,7 @@
 
 #include "sys.h"
 #include "log.h"
-#include "apic.h"
+#include "vmpl.h"
 
 #define APIC_DM_FIXED       0x00000
 #define NMI_VECTOR          0x02

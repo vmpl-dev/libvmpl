@@ -2,7 +2,6 @@
 #define __DUNE_H_
 
 #include "vmpl.h"
-#include "apic.h"
 #include "pgtable.h"
 
 #define PTE_ADDR            pte_addr

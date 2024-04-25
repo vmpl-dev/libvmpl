@@ -25,7 +25,6 @@
 #include "config.h"
 #include "percpu.h"
 #include "sys.h"
-#include "apic.h"
 #include "vmpl-dev.h"
 #include "ioctl.h"
 #include "vmpl.h"
