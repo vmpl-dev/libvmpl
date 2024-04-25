@@ -67,6 +67,26 @@ int dune_fd;
 
 static __thread struct dune_percpu *percpu;
 
+int setup_vm()
+{
+    int vmpl_fd;
+
+    vmpl_fd = open("/dev/" RUN_VMPL_DEV_NAME, O_RDWR);
+    if (vmpl_fd == -1) {
+        perror("Failed to open /dev/" RUN_VMPL_DEV_NAME);
+        return -errno;
+    }
+
+    dune_fd = vmpl_ioctl_create_vm(vmpl_fd);
+    if (dune_fd < 0) {
+        log_err("dune: failed to create vm");
+        return -errno;
+    }
+
+    close(vmpl_fd);
+    return 0;
+}
+
 int vmpl_init(bool map_full)
 {
     int rc;
@@ -75,18 +95,14 @@ int vmpl_init(bool map_full)
     log_init();
     log_info("vmpl_init");
 
-    vmpl_fd = open("/dev/" RUN_VMPL_DEV_NAME, O_RDWR);
-    if (vmpl_fd == -1) {
-        perror("Failed to open /dev/" RUN_VMPL_DEV_NAME);
-        rc = -errno;
-        goto failed;
-    }
+    // Setup VMPL without error checking
+    setup_signal();
+    setup_hotcalls();
+    setup_idt();
 
-    dune_fd = vmpl_ioctl_create_vm(vmpl_fd);
-    if (dune_fd < 0) {
+    if ((rc = setup_vm())) {
         log_err("dune: failed to create vm");
-        rc = -errno;
-        goto failed;
+        return rc;
     }
 
 	if ((rc = setup_mm())) {
@@ -103,12 +119,6 @@ int vmpl_init(bool map_full)
         log_err("dune: unable to setup syscall handler");
         goto failed;
     }
-
-    setup_hotcalls();
-
-    setup_signal();
-
-    setup_idt();
 
     if ((rc = apic_setup())) {
         perror("dune: failed to setup APIC");
