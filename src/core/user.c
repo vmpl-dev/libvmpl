@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdarg.h>
 #include <errno.h>
 
 #include "vmpl.h"
@@ -45,6 +46,23 @@ static int dune_call_user(void *func, struct user_args *args)
 	ret = dune_jump_to_user(tf);
 
 	return ret;
+}
+
+int dune_call_user_func(void *func, ...)
+{
+	va_list ap;
+	struct user_args args = {0};
+
+	va_start(ap, func);
+	args.arg1 = va_arg(ap, unsigned long);
+	args.arg2 = va_arg(ap, unsigned long);
+	args.arg3 = va_arg(ap, unsigned long);
+	args.arg4 = va_arg(ap, unsigned long);
+	args.arg5 = va_arg(ap, unsigned long);
+	args.arg6 = va_arg(ap, unsigned long);
+	va_end(ap);
+
+	return dune_call_user(func, &args);
 }
 
 int dune_call_user_main(void *func, int argc, char **argv, char **envp)

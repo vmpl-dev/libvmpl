@@ -270,6 +270,7 @@ extern int vmpl_init(bool map_full);
 extern int vmpl_enter(int argc, char *argv[]);
 
 // user mode entry
+int dune_call_user_func(void *func, ...);
 int dune_call_user_main(void *func, int argc, char **argv, char **envp);
 int dune_call_user_thread(void *func, void *arg);
 
