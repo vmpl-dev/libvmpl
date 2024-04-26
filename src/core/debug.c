@@ -7,13 +7,12 @@
 #include "ioctl.h"
 #include "debug.h"
 #include "vmpl.h"
+#include "percpu.h"
 
 #ifdef CONFIG_DUNE_BOOT
 #define X86_EFLAGS_TF (0x100)
 
 static struct dune_trap_regs trap_regs;
-
-extern int dune_fd;
 
 static void dune_trap_enable(__u64 trigger_rip, __u8 delay,
 							 dune_trap_notify_func func, void *priv)
@@ -27,12 +26,12 @@ static void dune_trap_enable(__u64 trigger_rip, __u8 delay,
 		.priv = priv,
 	};
 
-	dune_ioctl_trap_enable(dune_fd, &trap_conf);
+	dune_ioctl_trap_enable(percpu->vcpu_fd, &trap_conf);
 }
 
 static void dune_trap_disable()
 {
-	dune_ioctl_trap_disable(dune_fd);
+	dune_ioctl_trap_disable(percpu->vcpu_fd);
 }
 
 static void notify_on_resume(struct dune_trap_regs *regs, void *priv)
@@ -49,7 +48,7 @@ static void notify_on_resume(struct dune_trap_regs *regs, void *priv)
 	dune_conf->rflags |= regs->rflags & X86_EFLAGS_TF;
 
 	/* Continue in Dune mode. */
-	__dune_go_dune(dune_fd, dune_conf);
+	__dune_go_dune(percpu->vcpu_fd, dune_conf);
 	/* It doesn't return. */
 }
 
