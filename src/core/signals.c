@@ -1,5 +1,8 @@
 #define _GNU_SOURCE
 #include <signal.h>
+#include <string.h>
+#include <stddef.h>
+#include "log.h"
 #include "signals.h"
 
 #ifdef CONFIG_VMPL_SIGNAL
