@@ -198,6 +198,30 @@ void dune_syscall_handler(struct dune_tf *tf)
 		}
 #endif
 
+		switch (tf->rax) {
+#ifdef CONFIG_VMPL_MM
+#define VMPL_SYSCALL_HANDLER(name, ...)                 \
+	case __NR_##name:                                   \
+	{                                                   \
+		ret = vmpl_vm_##name(vmpl_mm.pgd, __VA_ARGS__); \
+		ret = (ret == MAP_FAILED) ? -errno : ret;       \
+		if ((ret != -ENOMEM) && (ret != -ENOTSUP))      \
+		{                                               \
+			tf->rax = ret;                              \
+			return;                                     \
+		}                                               \
+		break;                                          \
+	}
+		VMPL_SYSCALL_HANDLER(mmap, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9)
+		VMPL_SYSCALL_HANDLER(munmap, tf->rdi, tf->rsi)
+		VMPL_SYSCALL_HANDLER(mprotect, tf->rdi, tf->rsi, tf->rdx)
+		VMPL_SYSCALL_HANDLER(pkey_mprotect, tf->rdi, tf->rsi, tf->rdx, tf->rcx)
+		VMPL_SYSCALL_HANDLER(mremap, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8)
+#endif
+		default:
+			break;
+		}
+
 #ifdef CONFIG_VMPL_HOTCALLS
 		if (hotcalls_initialized()) {
 			ret = vmpl_hotcalls_call(tf);
@@ -209,25 +233,6 @@ void dune_syscall_handler(struct dune_tf *tf)
 #endif
 
 		switch (tf->rax) {
-#ifdef CONFIG_VMPL_MM
-#define VMPL_SYSCALL_HANDLER(name, ...)                 \
-	case __NR_##name:                                   \
-	{                                                   \
-		ret = vmpl_vm_##name(vmpl_mm.pgd, __VA_ARGS__); \
-		ret = (ret == MAP_FAILED) ? -errno : ret;       \
-		if ((ret == -ENOMEM) || (ret == -ENOTSUP))      \
-		{                                               \
-			syscall_cb(tf);                             \
-			ret = tf->rax;                              \
-		}                                               \
-		break;                                          \
-	}
-		VMPL_SYSCALL_HANDLER(mmap, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9)
-		VMPL_SYSCALL_HANDLER(munmap, tf->rdi, tf->rsi)
-		VMPL_SYSCALL_HANDLER(mprotect, tf->rdi, tf->rsi, tf->rdx)
-		VMPL_SYSCALL_HANDLER(pkey_mprotect, tf->rdi, tf->rsi, tf->rdx, tf->rcx)
-		VMPL_SYSCALL_HANDLER(mremap, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8)
-#endif
 		case __NR_madvise:
 			ret = 0;
 			break;
