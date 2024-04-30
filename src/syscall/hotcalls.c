@@ -41,8 +41,19 @@ bool is_hotcall(long syscall) {
 	return false;
 }
 
+static inline bool need_hotcalls(long sys_nr)
+{
+	unsigned short cs;
+	__asm__ __volatile__("movw %%cs, %0" : "=r"(cs));
+	return (((cs & 0x3) == 0) && is_hotcall(sys_nr) && hotcalls_initialized());
+}
+
 long vmpl_hotcalls_call(struct dune_tf *tf)
 {
+	if (!is_hotcall(tf->rax)) {
+		return -ENOSYS;
+	}
+
     hotcall_args_t args = {
         .sysnr = tf->rax,
         .rdi = tf->rdi,
@@ -53,36 +64,28 @@ long vmpl_hotcalls_call(struct dune_tf *tf)
         .r9 = tf->r9,
     };
 
-	if (!is_hotcall(tf->rax)) {
-		return -ENOSYS;
-	}
-
 	return hotcalls_call(&args);
 }
 
 long exec_hotcall(long nr, ...)
 {
+	if (!need_hotcalls(nr)) {
+		return -ENOSYS;
+	}
+
 	va_list args;
 	hotcall_args_t hotcall_args = {
 		.sysnr = nr,
 	};
 
 	va_start(args, nr);
-	hotcall_args.rdi = va_arg(args, long);
-	hotcall_args.rsi = va_arg(args, long);
-	hotcall_args.rdx = va_arg(args, long);
-	hotcall_args.r10 = va_arg(args, long);
-	hotcall_args.r8 = va_arg(args, long);
-	hotcall_args.r9 = va_arg(args, long);
+	hotcall_args.rdi = va_arg(args, uint64_t);
+	hotcall_args.rsi = va_arg(args, uint64_t);
+	hotcall_args.rdx = va_arg(args, uint64_t);
+	hotcall_args.r10 = va_arg(args, uint64_t);
+	hotcall_args.r8 = va_arg(args, uint64_t);
+	hotcall_args.r9 = va_arg(args, uint64_t);
 	va_end(args);
-
-	if (!is_hotcall(nr)) {
-		return -ENOSYS;
-	}
-
-	if (!hotcalls_initialized()) {
-		return -ENOSYS;
-	}
 
 	return hotcalls_call(&hotcall_args);
 }
@@ -136,7 +139,9 @@ static size_t load_hotcalls(char *hotcalls_conf)
 
 static void hotcalls_cleanup()
 {
+	log_info("cleanup hotcalls");
 	hotcalls_teardown();
+	log_success("hotcalls disabled");
 }
 
 
