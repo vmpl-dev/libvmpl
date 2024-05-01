@@ -270,9 +270,9 @@ extern int vmpl_init(bool map_full);
 extern int vmpl_enter(int argc, char *argv[]);
 
 // user mode entry
-int dune_call_user_func(void *func, ...);
-int dune_call_user_main(void *func, int argc, char **argv, char **envp);
-int dune_call_user_thread(void *func, void *arg);
+extern int dune_call_user_func(void *func, ...);
+extern int dune_call_user_main(void *func, int argc, char **argv, char **envp);
+extern int dune_call_user_thread(void *func, void *arg);
 
 /**
  * vmpl_init_and_enter - initializes libvmpl and enters "VMPL mode"

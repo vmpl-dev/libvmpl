@@ -19,9 +19,7 @@
 #include <sys/syscall.h>
 
 #include "config.h"
-#include "vc.h"
 #include "vmpl.h"
-#include "mm.h"
 #include "log.h"
 #include "dunify.h"
 
@@ -108,13 +106,13 @@ static int main_hook(int argc, char **argv, char **envp)
 		log_debug("dune mode entered!");
 	}
 
-	// Run in user mode if requested
-	if (run_in_user_mode) {
-		// Call user main function in user mode
-		return dune_call_user_main(&user_main, argc, argv, envp);
+	// Call original main
+	if (!run_in_user_mode) {
+		return main_orig(argc, argv, envp);
 	}
 
-	return main_orig(argc, argv, envp);
+	// Call user main function in user mode
+	return dune_call_user_main(&user_main, argc, argv, envp);
 }
 
 /*
