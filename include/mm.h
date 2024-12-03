@@ -32,13 +32,6 @@
 #define VMPL_VM_CLONE_FMT		"start = 0x%lx, end = 0x%lx, prot = 0x%lx, path = 0x%lx"
 #define VMPL_VM_PKEY_MPROTECT_FMT	"start = 0x%lx, end = 0x%lx, prot = 0x%lx, pkey = %d"
 
-enum {
-	CREATE_NONE = 0,
-	CREATE_NORMAL = 1,
-	CREATE_BIG = 2,
-	CREATE_BIG_1GB = 3,
-};
-
 struct perm_map_t {
 		int perm_flag;
 		pte_t pte_flag;
