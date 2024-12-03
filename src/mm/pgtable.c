@@ -41,7 +41,7 @@ static inline virtaddr_t pgtable_alloc(void)
 	physaddr_t pa;
 	virtaddr_t va;
 
-	pg = dune_page_alloc(dune_fd);
+	pg = dune_page_alloc();
 	if (!pg)
 		return NULL;
 	
@@ -86,7 +86,7 @@ static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count,
     }
 
     // Map page table to virtual address space
-    vaddr = do_mapping(fd, paddr, PAGE_SIZE);
+    vaddr = do_mapping(paddr, PAGE_SIZE);
     if (vaddr == MAP_FAILED) {
         perror("dune: failed to map pgtable");
         goto failed;
@@ -219,7 +219,7 @@ pte_t *pgtable_do_mapping(uint64_t phys)
     vmpl_page_mark_addr(phys);
 
     // Map the page to the virtual address space of the process.
-    va = do_mapping(dune_fd, phys, PAGE_SIZE);
+    va = do_mapping(phys, PAGE_SIZE);
     if (va == MAP_FAILED) {
         log_err("failed to map pgtable");
         goto failed;

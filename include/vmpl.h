@@ -264,6 +264,7 @@ extern int dune_elf_dump(struct dune_elf *elf);
 extern int dune_elf_iter_sh(struct dune_elf *elf, dune_elf_shcb cb);
 extern int dune_elf_iter_ph(struct dune_elf *elf, dune_elf_phcb cb);
 extern int dune_elf_load_ph(struct dune_elf *elf, Elf64_Phdr *phdr, off_t off);
+extern int dune_fd;
 
 // vmpl initialization
 extern int vmpl_init(bool map_full);

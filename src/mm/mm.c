@@ -81,7 +81,7 @@ static inline physaddr_t alloc_phys_page(void)
 	struct page *pg;
 	physaddr_t pa;
 
-	pg = vmpl_page_alloc(dune_fd);
+	pg = vmpl_page_alloc();
 	if (!pg)
 		return NULL;
 
@@ -102,7 +102,7 @@ static inline virtaddr_t alloc_virt_page(void)
 	physaddr_t pa;
 	virtaddr_t va;
 
-	pg = dune_page_alloc(dune_fd);
+	pg = dune_page_alloc();
 	if (!pg)
 		return NULL;
 	
@@ -1410,7 +1410,7 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 	}
 
     // VMPL Page Management
-    rc = page_init(dune_fd);
+    rc = vmpl_page_init();
 	if (rc != 0) {
 		log_err("Failed to initialize page management");
 		goto out;
@@ -1459,7 +1459,7 @@ int vmpl_mm_exit(struct vmpl_mm_t *vmpl_mm)
 	rc = pgtable_exit(vmpl_mm->pgd);
 	assert(rc == 0);
 
-	rc = page_exit();
+	rc = vmpl_page_exit();
 	assert(rc == 0);
 
 	return 0;

@@ -153,7 +153,6 @@ static inline bool is_aligned(PhysAddr addr, size_t alignment) {
     return (addr % alignment) == 0;
 }
 
-extern int dune_fd;
 extern pte_t *pgroot;
 int pgtable_init(pte_t **pgd, int fd);
 int pgtable_exit(pte_t *pgd);
