@@ -28,6 +28,7 @@ struct vm_ops {
 };
 
 // 平台注册函数
+const struct vm_ops *register_dune_ops(void);
 const struct vm_ops *register_vmpl_ops(void);
 
 #define BUILD_ASSERT(cond) _Static_assert(cond, #cond)

@@ -21,6 +21,13 @@ __thread void *lpercpu = NULL;
 static const struct vm_ops *detect_vm_platform(void) {
     unsigned int eax, ebx, ecx, edx;
     
+    // 检查 Intel VMX
+    if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
+        if (ecx & (1 << 5)) { // VMX bit
+            return register_dune_ops();
+        }
+    }
+    
     // 检查 AMD SVM
     if (__get_cpuid(0x80000001, &eax, &ebx, &ecx, &edx)) {
         if (ecx & (1 << 2)) { // SVM bit

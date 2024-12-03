@@ -113,4 +113,13 @@ typedef enum {
     VmplMax,
 } VMPL;
 
+#ifndef __STR
+#define __STR(x) #x
+#define STR(x) __STR(x)
+#endif
+
+#ifndef __str
+#define __str(x) STR(x)
+#endif
+
 #endif
