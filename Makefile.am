@@ -19,6 +19,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/core/debug.c \
                     src/mm/page.c \
                     src/mm/pgtable.c \
+                    src/mm/layout.c \
                     src/mm/vma.c \
                     src/mm/vm.c \
                     src/mm/mm.c \

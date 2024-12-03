@@ -27,7 +27,7 @@
 #include "vm.h"
 #include "mm.h"
 #include "log.h"
-#include "vmpl.h"
+#include "layout.h"
 
 static struct perm_map_t perm_maps[] = {
 	{PERM_R, PTE_P},
@@ -1406,6 +1406,13 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 
 	// VMPL Memory Management
 	if (vmpl_mm->initialized) {
+		goto out;
+	}
+
+	// 初始化地址转换策略
+	rc = mapping_init(false);
+	if (rc != 0) {
+		log_err("Failed to initialize address mapping");
 		goto out;
 	}
 

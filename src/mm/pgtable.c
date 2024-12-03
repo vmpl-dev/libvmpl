@@ -22,14 +22,18 @@
 #include "mmu.h"
 #include "page.h"
 #include "pgtable.h"
+#include "layout.h"
 
 #define MEMORY_POOL_START   PGTABLE_MMAP_BASE
 #define MEMORY_POOL_END     PGTABLE_MMAP_END
 
-#define __va(x) ((void *)((unsigned long)(x) + PGTABLE_MMAP_BASE))
-#define __pa(x) ((unsigned long)(x) - PGTABLE_MMAP_BASE)
-#define phys_to_virt(x) __va(x)
-#define virt_to_phys(x) __pa(x)
+// 使用pgtable的地址转换函数
+#define __va(x) pgtable_pa_to_va(x)
+#define __pa(x) pgtable_va_to_pa(x)
+
+// 使用pgtable的地址转换函数
+#define phys_to_virt(x) pgtable_pa_to_va(x)
+#define virt_to_phys(x) pgtable_va_to_pa(x)
 
 #define padding(level) ((level)*4 + 4)
 static char *pt_names[] = { "P4D", "PUD", "PMD", "PTE", "Page" };
@@ -98,7 +102,8 @@ static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count,
     for (int i = 0; i < max_i; i++) {
         if (vaddr[i] & 0x1) {
             log_trace("%*s%s Entry[%d]: %016lx", padding(level), "", pt_names[level], i, vaddr[i]);
-            __pgtable_init(pte_addr(vaddr[i]), level + 1, fd, pgtable_count, page_count);
+            virtaddr_t root = pgtable_pa_to_va(pte_addr(vaddr[i]));
+            __pgtable_init(root, level + 1, fd, pgtable_count, page_count);
         }
     }
 
@@ -212,7 +217,7 @@ pte_t *pgtable_do_mapping(uint64_t phys)
     // Check if the page is already mapped
     if (vmpl_page_is_maped(phys)) {
         log_debug("already mapped %lx", phys);
-        return __va(phys);
+        return pgtable_pa_to_va(phys);
     }
 
     // Mark the page as vmpl page
@@ -402,8 +407,13 @@ int lookup_address(uint64_t va, int *level, pte_t **ptep)
  */
 uint64_t pgtable_pa_to_va(uint64_t pa)
 {
-    assert(pa >= PAGEBASE);
-    return phys_to_virt(pa);
+    const address_mapping_t *mapping = get_current_mapping();
+    
+    if (mapping->is_valid_pa(pa)) {
+        return mapping->pa_to_va(pa);
+    }
+
+    return 0;
 }
 
 /**
@@ -418,13 +428,15 @@ uint64_t pgtable_pa_to_va(uint64_t pa)
  */
 uint64_t pgtable_va_to_pa(uint64_t va)
 {
-    pte_t *ptep;
-
-    // XXX: Using PA + PGTABLE_MMAP_BASE == VA
-    if ((va >= PGTABLE_MMAP_BASE) && (va < PGTABLE_MMAP_END)) {
-        return virt_to_phys(va);
+    const address_mapping_t *mapping = get_current_mapping();
+    
+    // 如果地址在页表映射范围内，使用页表查找
+    if (mapping->is_valid_va(va)) {
+        return mapping->va_to_pa(va);
     }
 
+    // 否则通过页表查找
+    pte_t *ptep;
     int rc = pgtable_lookup(pgroot, va, false, &ptep);
     if (rc == 0) {
         return pte_addr(*ptep);
