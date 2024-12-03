@@ -59,4 +59,12 @@ int setup_syscall(bool map_full)
 exit:
     return 0;
 }
+
+void setup_vsyscall(void)
+{
+    pte_t *pte;
+
+    vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
+    *pte = PTE_ADDR(pgtable_va_to_pa(&__dune_vsyscall_page)) | PTE_P | PTE_U;
+}
 #endif

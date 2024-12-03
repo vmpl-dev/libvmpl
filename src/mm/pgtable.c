@@ -23,6 +23,7 @@
 #include "page.h"
 #include "pgtable.h"
 #include "layout.h"
+#include "vmpl.h"
 
 #define MEMORY_POOL_START   PGTABLE_MMAP_BASE
 #define MEMORY_POOL_END     PGTABLE_MMAP_END

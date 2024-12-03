@@ -7,6 +7,7 @@
 #include "vm.h"
 #include "vmpl.h"
 #include "log.h"
+#include "mapping.h"
 
 // 全局配置实例
 static struct vmpl_layout_t vmpl_cfg;

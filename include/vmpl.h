@@ -238,6 +238,34 @@ extern int vmpl_vm_pkey_mprotect(pte_t *root, void *addr, size_t len, int prot, 
 extern pte_t *vmpl_vm_clone(pte_t *root);
 extern void vmpl_vm_free(pte_t *root);
 
+// process memory maps
+
+#define PROCMAP_TYPE_UNKNOWN	0x00
+#define PROCMAP_TYPE_FILE	0x01
+#define PROCMAP_TYPE_ANONYMOUS	0x02
+#define PROCMAP_TYPE_HEAP	0x03
+#define PROCMAP_TYPE_STACK	0x04
+#define PROCMAP_TYPE_VSYSCALL	0x05
+#define PROCMAP_TYPE_VDSO	0x06
+#define PROCMAP_TYPE_VVAR	0x07
+
+struct dune_procmap_entry {
+	uintptr_t	begin;
+	uintptr_t	end;
+	uint64_t	offset;
+	bool		r; // Readable
+	bool		w; // Writable
+	bool		x; // Executable
+	bool		p; // Private (or shared)
+	char		*path;
+	int		type;
+};
+
+typedef void (*dune_procmap_cb)(const struct dune_procmap_entry *);
+
+extern void dune_procmap_iterate(dune_procmap_cb cb);
+extern void dune_procmap_dump();
+
 // elf helper functions
 #include "elf.h"
 struct dune_elf {
@@ -264,6 +292,7 @@ extern int dune_elf_dump(struct dune_elf *elf);
 extern int dune_elf_iter_sh(struct dune_elf *elf, dune_elf_shcb cb);
 extern int dune_elf_iter_ph(struct dune_elf *elf, dune_elf_phcb cb);
 extern int dune_elf_load_ph(struct dune_elf *elf, Elf64_Phdr *phdr, off_t off);
+
 extern int dune_fd;
 
 // vmpl initialization

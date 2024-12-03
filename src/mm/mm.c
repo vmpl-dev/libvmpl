@@ -23,6 +23,7 @@
 #include "mmu.h"
 #include "ioctl.h"
 #include "page.h"
+#include "vmpl.h"
 #include "vma.h"
 #include "vm.h"
 #include "mm.h"
