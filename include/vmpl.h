@@ -185,6 +185,7 @@ void register_hotcall(long syscall);
 void unregister_hotcall(long syscall);
 bool is_hotcall(long syscall);
 long vmpl_hotcalls_call(struct dune_tf *tf);
+long exec_hotcall(long nr, ...);
 void setup_hotcalls();
 
 // virtual memory routines

@@ -1,11 +1,15 @@
+#define _GNU_SOURCE
 #include "log.h"
 #include "vmpl-dev.h"
+#include "mmu.h"
 #include "page.h"
 #include "pgtable.h"
 #include "vm.h"
 #include "mm.h"
 #include "mapping.h"
+#include "dune.h"
 #include "vmpl.h"
+#include "syscall.h"
 
 uintptr_t phys_limit;
 uintptr_t mmap_base;

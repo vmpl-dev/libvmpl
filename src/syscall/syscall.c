@@ -1,8 +1,18 @@
-#include "vmpl.h"
-#include "syscall.h"
+#define _GNU_SOURCE
 #include "log.h"
+#include "mmu.h"
+#include "pgtable.h"
+#include "vm.h"
+#include "mm.h"
+#include "syscall.h"
+#include "vmpl.h"
 
 #include <unistd.h>
+#include <errno.h>
+#include <assert.h>
+#include <sys/mman.h>
+#include <string.h>
+
 
 long __vmpl_syscall(long sys_nr, struct syscall_args_t *args) {
     return syscall(sys_nr, args->a0, args->a1, args->a2, args->a3, args->a4, args->a5);

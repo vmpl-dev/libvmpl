@@ -1485,7 +1485,7 @@ int vmpl_mm_exit(struct vmpl_mm_t *vmpl_mm)
 void vmpl_mm_stats(struct vmpl_mm_t *vmpl_mm)
 {
 	printf("VMPL Memory Management Stats:\n");
-	page_stats();
+	vmpl_page_stats();
 	pgtable_stats(vmpl_mm->pgd);
 	vmpl_vm_stats(&vmpl_mm->vmpl_vm);
 }

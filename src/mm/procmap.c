@@ -46,6 +46,7 @@
  * 7fff601ff000-7fff60200000 r-xp 00000000 00:00 0                          [vdso]
  * ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0                  [vsyscall]
  */
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>

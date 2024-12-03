@@ -7,8 +7,9 @@ AM_LDFLAGS = -L. -lvmpl -ldict
 
 # Specify shared libraries to be built
 lib_LTLIBRARIES = libvmpl.la libdunify.la libdune.la
-libvmpl_la_SOURCES = src/vmpl.c \
+libvmpl_la_SOURCES = src/entry.c \
                     src/error.c \
+                    src/core/_entry.S \
                     src/core/ioctl.c \
                     src/core/user.c \
                     src/core/percpu.c \
@@ -17,6 +18,7 @@ libvmpl_la_SOURCES = src/vmpl.c \
                     src/core/idt.c \
                     src/core/trap.c \
                     src/core/debug.c \
+                    src/core/vmpl.c \
                     src/mm/page.c \
                     src/mm/pgtable.c \
                     src/mm/layout.c \

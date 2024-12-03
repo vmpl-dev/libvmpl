@@ -11,7 +11,7 @@
 
 #include "config.h"
 #include "types.h"
-#include "mmu-x86.h"
+#include "mmu.h"
 #include "log.h"
 
 typedef uint64_t physaddr_t;

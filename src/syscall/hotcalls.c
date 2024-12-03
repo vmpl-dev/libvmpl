@@ -164,10 +164,3 @@ void setup_hotcalls()
 		log_warn("hotcalls not enabled");
 	}
 }
-
-#ifdef CONFIG_VMPL_HOTCALLS
-void hotcalls_enable(struct dune_percpu *percpu)
-{
-	percpu->hotcall = exec_hotcall;
-}
-#endif

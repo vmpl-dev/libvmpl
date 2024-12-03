@@ -16,7 +16,7 @@
 #include <hotcalls/hotcalls.h>
 
 #include "config.h"
-#include "mmu-x86.h"
+#include "mmu.h"
 #include "sys.h"
 #include "page.h"
 #include "mm.h"
@@ -26,6 +26,7 @@
 #include "log.h"
 #include "vmpl-core.h"
 #include "sys-filter.h"
+#include "percpu.h"
 
 /**
  * @brief  Exception messages
@@ -280,7 +281,7 @@ static int dune_pre_pf_handler(struct dune_tf *tf)
 		// If the page is a GHCB page, we should first clear the percpu GHCB page address, such that
 		// we fall back to the default MSR protocol. Then we register the GHCB page.
 		if ((addr & PAGE_MASK) == (uint64_t)GHCB_MMAP_BASE) {
-			if (vc_init_percpu(percpu) == 0)
+			if (vc_init_percpu(lpercpu) == 0)
 				goto exit;
 		}
 #endif

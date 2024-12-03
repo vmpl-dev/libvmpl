@@ -13,20 +13,18 @@
 #include "percpu.h"
 #include "debug.h"
 
-__thread struct dune_percpu *percpu;
+__thread void *percpu;
 
 unsigned long dune_get_user_fs(void)
 {
 	void *ptr;
-	asm("movq %%gs:%c[ufs_base], %0" : "=r"(ptr) :
-	    [ufs_base]"i"(offsetof(struct dune_percpu, ufs_base)) : "memory");
+	asm("movq %%gs:(%1), %0" : "=r"(ptr) : "r"(UFS_BASE) : "memory");
 	return (unsigned long) ptr;
 }
 
 void dune_set_user_fs(unsigned long fs_base)
 {
-	asm ("movq %0, %%gs:%c[ufs_base]" : : "r"(fs_base),
-	     [ufs_base]"i"(offsetof(struct dune_percpu, ufs_base)));
+	asm ("movq %0, %%gs:(%1)" : : "r"(fs_base), "r"(UFS_BASE));
 }
 
 #ifdef CONFIG_VMPL_CPUSET
@@ -67,7 +65,7 @@ static int alloc_cpu()
 	return cpu;
 }
 
-static int setup_cpuset()
+int setup_cpuset()
 {
     int cpu;
     cpu_set_t cpuset;
@@ -107,58 +105,15 @@ static uint64_t gdt_template[NR_GDT_ENTRIES] = {
     TSS2,
 };
 
-static void setup_gdt(struct dune_percpu *percpu)
+void setup_gdt(uint64_t *gdt, struct Tss *tss)
 {
     log_info("setup gdt");
-	memcpy(percpu->gdt, gdt_template, sizeof(uint64_t) * NR_GDT_ENTRIES);
-    percpu->gdt[GD_TSS >> 3] = (SEG_TSSA | SEG_P | SEG_A | SEG_BASELO(&percpu->tss) | SEG_LIM(sizeof(struct Tss) - 1));
-    percpu->gdt[GD_TSS2 >> 3] = SEG_BASEHI(&percpu->tss);
+	memcpy(gdt, gdt_template, sizeof(uint64_t) * NR_GDT_ENTRIES);
+    gdt[GD_TSS >> 3] = (SEG_TSSA | SEG_P | SEG_A | SEG_BASELO(tss) | SEG_LIM(sizeof(struct Tss) - 1));
+    gdt[GD_TSS2 >> 3] = SEG_BASEHI(tss);
 }
 
-static int setup_vmsa(struct dune_percpu *percpu)
-{
-    int rc;
-    struct vcpu_config *config = malloc(sizeof(struct vcpu_config));
-    memset(config, 0, sizeof(struct vcpu_config));
-    log_info("setup vmsa");
-
-    config->lstar = &__dune_syscall;
-    config->fs.base = percpu->kfs_base;
-    config->gs.base = (uint64_t)percpu;
-
-    config->tr.selector = GD_TSS;
-    config->tr.base = &percpu->tss;
-    config->tr.limit = sizeof(percpu->tss);
-    config->tr.attrib = 0x0089; // refer to linux-svsm
-
-    config->gdtr.base = (uint64_t)&percpu->gdt;
-    config->gdtr.limit = sizeof(percpu->gdt) - 1;
-
-    config->idtr.base = (uint64_t)&idt;
-    config->idtr.limit = sizeof(idt) - 1;
-
-    rc = vmpl_ioctl_create_vcpu(dune_fd, config);
-    if (rc < 0) {
-        log_err("dune: failed to create vcpu");
-        goto failed;
-    }
-
-    int vcpu_fd = rc;
-    rc = vmpl_ioctl_set_config(vcpu_fd, config);
-    if (rc != 0) {
-        log_err("dune: failed to set config");
-        goto failed;
-    }
-
-    percpu->vcpu_fd = vcpu_fd;
-    free(config);
-    return 0;
-failed:
-    return rc;
-}
-
-#ifdef CONFIG_DUMP_DETAILS
-static void dump_gdt(uint64_t *gdt)
+void dump_gdt(uint64_t *gdt)
 {
     log_debug("GDT Entries:");
     for (int i = 0; i < NR_GDT_ENTRIES; i++)
@@ -172,7 +127,7 @@ static void dump_gdt(uint64_t *gdt)
     }
 }
 
-static void dump_tss(struct Tss *tss)
+void dump_tss(struct Tss *tss)
 {
     log_debug("TSS RSP Entries:");
     for (int i = 0; i < 3; i++)
@@ -187,31 +142,7 @@ static void dump_tss(struct Tss *tss)
     log_debug("IOMB: %x, IOPB: %x", tss->tss_iomb, tss->tss_iopb);
 }
 
-static void dump_percpu(struct dune_percpu *percpu)
-{
-    log_debug("PerCpu Entry:");
-    log_debug("percpu_ptr: %lx", percpu->percpu_ptr);
-    log_debug("kfs_base: %lx ufs_base: %lx", percpu->kfs_base, percpu->ufs_base);
-    log_debug("in_usermode: %lx", percpu->in_usermode);
-    log_debug("tss: %p gdt: %p", &percpu->tss, percpu->gdt);
-    log_debug("ghcb: %p", percpu->ghcb);
-    log_debug("lstar: %p vsyscall: %p", percpu->lstar, percpu->vsyscall);
-}
-
-static void dump_configs(struct dune_percpu *percpu)
-{
-    log_debug("VMPL Configs:");
-    dump_idt(idt);
-    dump_gdt(percpu->gdt);
-    dump_tss(&percpu->tss);
-    dump_ghcb(percpu->ghcb);
-    dump_percpu(percpu);
-}
-#else
-static void dump_configs(struct dune_percpu *percpu) {}
-#endif
-
-static int setup_safe_stack(struct dune_percpu *percpu)
+int setup_safe_stack(struct Tss *tss)
 {
 	int i;
 	char *safe_stack;
@@ -224,318 +155,42 @@ static int setup_safe_stack(struct dune_percpu *percpu)
 		return -ENOMEM;
 
 	safe_stack += SAFE_STACK_SIZE;
-	percpu->tss.tss_iomb = offsetof(struct Tss, tss_iopb);
+	tss->tss_iomb = offsetof(struct Tss, tss_iopb);
 
 	for (i = 0; i < 7; i++)
-		percpu->tss.tss_ist[i] = (uintptr_t)safe_stack;
+		tss->tss_ist[i] = (uintptr_t)safe_stack;
 
 	/* changed later on jump to G3 */
-	percpu->tss.tss_rsp[0] = (uintptr_t)safe_stack;
+	tss->tss_rsp[0] = (uintptr_t)safe_stack;
 
 	return 0;
 }
 
-struct dune_percpu *vmpl_alloc_percpu(void)
+void *create_percpu(void)
 {
-    struct dune_percpu *percpu;
-	unsigned long fs_base, gs_base;
-
-    log_debug("vmpl_alloc_percpu");
+    log_debug("create percpu");
 	percpu = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
 				  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (percpu == MAP_FAILED)
 		return NULL;
-
-    fs_base = rdfsbase();
-    gs_base = rdgsbase();
-	percpu->kfs_base = fs_base;
-	percpu->ufs_base = fs_base;
-	percpu->in_usermode = 1;
-    percpu->ghcb = NULL;
-    percpu->hotcall = NULL;
-
-	if (setup_safe_stack(percpu)) {
-        log_err("dune: failed to setup safe stack");
-		munmap(percpu, PGSIZE);
-        return NULL;
-    }
-
     return percpu;
 }
 
-void vmpl_free_percpu(struct dune_percpu *percpu)
+void free_percpu(void *percpu)
 {
-    log_debug("vmpl_free_percpu");
     munmap(percpu, PGSIZE);
 }
 
-#ifdef CONFIG_DUNE_BOOT
-static int xsave_begin(struct dune_percpu *percpu)
+unsigned long get_fs_base(void)
 {
-    log_info("xsave begin");
-    percpu->fpu = memalign(64, sizeof(struct fpu_area));
-    if (!percpu->fpu) {
-        perror("dune: failed to allocate fpu area");
-        return -ENOMEM;
+    unsigned long fs_base;
+#ifdef __x86_64__
+    if (arch_prctl(ARCH_GET_FS, &fs_base) == -1) {
+        printf("dune: failed to get FS register\n");
+        return -EIO;
     }
-
-    dune_fpu_init(percpu->fpu);
-    dune_fpu_save(percpu->fpu);
-    dune_fpu_dump((struct fpu_area *)percpu->xsave_area);
-    return 0;
-}
-
-static int xsave_end(struct dune_percpu *percpu)
-{
-    dune_fpu_load(percpu->fpu);
-
-    log_info("xsave end");
-    return 0;
-}
-
-static int dune_boot(struct dune_percpu *percpu)
-{
-	struct tptr _idtr, _gdtr;
-
-	_gdtr.base = (uint64_t)&percpu->gdt;
-	_gdtr.limit = sizeof(percpu->gdt) - 1;
-
-	_idtr.base = (uint64_t)&idt;
-	_idtr.limit = sizeof(idt) - 1;
-
-	asm volatile(
-		// STEP 1: load the new GDT
-		"lgdt %0\n"
-
-		// STEP 2: initialize data segements
-		"mov %1, %%ax\n"
-        "mov %%ax, %%ds\n"
-        "mov %%ax, %%es\n"
-        "mov %%ax, %%ss\n"
-
-        // STEP 3: long jump into the new code segment
-        "mov %2, %%rax\n"
-        "pushq %%rax\n"
-        "leaq 1f(%%rip),%%rax\n"
-        "pushq %%rax\n"
-        "lretq\n"
-        "1:\n"
-        "nop\n"
-
-        // STEP 4: load the task register (for safe stack switching)
-        "mov %3, %%ax\n"
-        "ltr %%ax\n"
-
-        // STEP 5: load the new IDT and enable interrupts
-        "lidt %4\n"
-        "sti\n"
-
-		:
-		: "m"(_gdtr), "i"(GD_KD), "i"(GD_KT), "i"(GD_TSS), "m"(_idtr)
-		: "rax");
-
-    // STEP 6: FS and GS require special initialization on 64-bit
-    wrmsrl(MSR_FS_BASE, percpu->kfs_base);
-    wrmsrl(MSR_GS_BASE, (uint64_t)percpu);
-
-	return 0;
-}
 #else
-static int dune_boot(struct dune_percpu *percpu) { return 0; }
-
-static int xsave_begin(struct dune_percpu *percpu)
-{
-    log_info("xsave begin");
-    percpu->xsave_mask = _xgetbv(0);
-
-    log_debug("xsave mask: %llx", percpu->xsave_mask);
-    // The XSAVE instruction requires 64-byte alignment for state buffers
-    percpu->xsave_area = memalign(64, XSAVE_SIZE);
-    if (!percpu->xsave_area) {
-        perror("dune: failed to allocate xsave area");
-        return -ENOMEM;
-    }
-
-    log_debug("xsave area at %lx", percpu->xsave_area);
-    memset(percpu->xsave_area, 0, XSAVE_SIZE);
-    _xsave64(percpu->xsave_area, percpu->xsave_mask);
-
-    dune_fpu_dump((struct fpu_area *)percpu->xsave_area);
-    return 0;
-}
-
-static int xsave_end(struct dune_percpu *percpu)
-{
-    // Restore the XSAVE state
-    _xsetbv(0, percpu->xsave_mask);
-    _xrstor64(percpu->xsave_area, percpu->xsave_mask);
-
-    // Free the XSAVE area
-    free(percpu->xsave_area);
-    percpu->xsave_area = NULL;
-
-    log_info("xsave end");
-    return 0;
-}
+    fs_base = rdfsbase();
 #endif
-
-static int vmpl_init_pre(struct dune_percpu *percpu)
-{
-    int rc;
-
-    // Setup CPU set for the thread
-    if ((rc = setup_cpuset())) {
-        log_err("dune: unable to setup CPU set");
-        goto failed;
-    }
-
-    // Setup GDT for hypercall
-    setup_gdt(percpu);
-
-    // Setup segments registers
-    if ((rc = setup_vmsa(percpu))) {
-		log_err("dune: failed to setup vmsa");
-		goto failed;
-	}
-
-    // Setup XSAVE for FPU
-    if ((rc = xsave_begin(percpu))) {
-		log_err("dune: failed to setup xsave");
-		goto failed;
-	}
-
-    return 0;
-failed:
-	return rc;
-}
-
-static int vmpl_init_post(struct dune_percpu *percpu)
-{
-    // Now we are in VMPL mode
-    percpu->in_usermode = 0;
-
-    // Setup XSAVE for FPU
-    xsave_end(percpu);
-
-    // Setup VC communication
-    vc_init(percpu);
-
-    // Setup hotcall
-    hotcalls_enable(percpu);
-
-    // Setup serial port
-    serial_init();
-
-    return 0;
-}
-
-static int __do_dune_enter(int vcpu_fd)
-{
-    int rc;
-    struct dune_config *config = malloc(sizeof(struct dune_config));
-    if (!config) {
-        log_err("dune: failed to allocate config struct");
-        return -ENOMEM;
-    }
-
-    memset(config, 0, sizeof(struct dune_config));
-    /* NOTE: We don't setup the general purpose registers because __dune_ret
-     * will restore them as they were before the __dune_enter call */
-    config->rip = (uint64_t) &__dune_ret;
-    config->rsp = 0;
-    config->rflags = 0x202;
-
-    // Initialize VMPL library
-    rc = __dune_enter(vcpu_fd, config);
-    if (rc) {
-        perror("dune: entry to Dune mode failed");
-        goto failed;
-    }
-
-    return 0;
-failed:
-    free(config);
-    return rc;
-}
-
-int do_dune_enter()
-{
-    int rc;
-    struct dune_percpu *__percpu;
-
-    if (!percpu) {
-        __percpu = vmpl_alloc_percpu();
-        if (!__percpu) {
-            rc = -ENOMEM;
-            log_err("dune: failed to allocate percpu struct");
-            goto failed;
-        }
-    } else {
-        __percpu = percpu;
-        log_debug("dune: fork case");
-    }
-
-    rc = vmpl_init_pre(__percpu);
-    if (rc) {
-        log_err("dune: failed to initialize VMPL library");
-        goto failed;
-    }
-
-    // Dump configs
-    dump_configs(__percpu);
-
-    rc = __do_dune_enter(__percpu->vcpu_fd);
-    if (rc) {
-        log_err("dune: failed to enter Dune mode");
-        goto failed;
-    }
-
-    dune_boot(__percpu);
-    vmpl_init_post(__percpu);
-
-    percpu = __percpu;
-    return 0;
-failed:
-    log_err("dune: failed to enter Dune mode");
-    vmpl_free_percpu(__percpu);
-    return -EIO;
-}
-
-void on_dune_syscall(struct dune_config *conf)
-{
-    conf->rax = syscall(conf->status, conf->rdi, conf->rsi, conf->rdx, conf->r10, conf->r8, conf->r9);
-    __dune_go_dune(percpu->vcpu_fd, conf);
-}
-
-/**
- * on_dune_exit - handle Dune exits
- *
- * This function must not return. It can either exit(), __dune_go_dune() or
- * __dune_go_linux().
- */
-void on_dune_exit(struct dune_config *conf)
-{
-    switch (conf->ret) {
-    case DUNE_RET_EXIT:
-        syscall(SYS_exit, conf->status);
-        break;
-    case DUNE_RET_SYSCALL:
-        on_dune_syscall(conf);
-		break;
-    case DUNE_RET_INTERRUPT:
-		dune_debug_handle_int(conf);
-		printf("dune: exit due to interrupt %lld\n", conf->status);
-        break;
-    case DUNE_RET_SIGNAL:
-        __dune_go_dune(percpu->vcpu_fd, conf);
-        break;
-    case DUNE_RET_NOENTER:
-        log_warn("dune: re-entry to Dune mode failed, status is %ld", conf->status);
-        break;
-    default:
-        log_warn("dune: unknown exit from Dune, ret=%ld, status=%ld", conf->ret, conf->status);
-        break;
-    }
-
-    exit(EXIT_FAILURE);
+    return fs_base;
 }

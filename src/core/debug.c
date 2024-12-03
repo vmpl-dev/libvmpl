@@ -13,6 +13,12 @@
 #define X86_EFLAGS_TF (0x100)
 
 static struct dune_trap_regs trap_regs;
+static __thread int debug_fd = -1;
+
+void set_debug_fd(int fd)
+{
+	debug_fd = fd;
+}
 
 static void dune_trap_enable(__u64 trigger_rip, __u8 delay,
 							 dune_trap_notify_func func, void *priv)
@@ -26,12 +32,12 @@ static void dune_trap_enable(__u64 trigger_rip, __u8 delay,
 		.priv = priv,
 	};
 
-	dune_ioctl_trap_enable(percpu->vcpu_fd, &trap_conf);
+	dune_ioctl_trap_enable(debug_fd, &trap_conf);
 }
 
 static void dune_trap_disable()
 {
-	dune_ioctl_trap_disable(percpu->vcpu_fd);
+	dune_ioctl_trap_disable(debug_fd);
 }
 
 static void notify_on_resume(struct dune_trap_regs *regs, void *priv)
@@ -48,7 +54,7 @@ static void notify_on_resume(struct dune_trap_regs *regs, void *priv)
 	dune_conf->rflags |= regs->rflags & X86_EFLAGS_TF;
 
 	/* Continue in Dune mode. */
-	__dune_go_dune(percpu->vcpu_fd, dune_conf);
+	__dune_go_dune(debug_fd, dune_conf);
 	/* It doesn't return. */
 }
 

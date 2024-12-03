@@ -225,14 +225,4 @@ uint16_t vc_inw(uint16_t port);
 void vc_outb(uint16_t port, uint8_t value);
 uint8_t vc_inb(uint16_t port);
 
-#ifdef CONFIG_VMPL_GHCB
-int vc_init(struct dune_percpu *percpu);
-int vc_init_percpu(struct dune_percpu *percpu);
-#else
-static inline int vc_init(struct dune_percpu *percpu)
-{
-    return 0;
-}
-#endif
-
 #endif
