@@ -112,6 +112,30 @@ typedef uint64_t pte_t;
 #define LGPGSIZE	(1 << (PGSHIFT + NPTBITS))
 
 /**
+ * 页表级别枚举
+ * 从低到高依次为: PTE -> PMD -> PUD -> P4D -> PGD
+ */
+enum page_level {
+    PT_LEVEL_PTE = 0,  // Page Table Entry (4KB页)
+    PT_LEVEL_PMD = 1,  // Page Middle Directory (2MB页)
+    PT_LEVEL_PUD = 2,  // Page Upper Directory (1GB页)
+    PT_LEVEL_P4D = 3,  // Page 4th Directory
+    PT_LEVEL_PGD = 4,  // Page Global Directory
+    PT_LEVEL_MAX
+};
+
+/**
+ * @brief 页表创建类型枚举
+ * 与dune.h中定义保持一致
+ */
+enum create_mode {
+    CREATE_NONE = 0,
+    CREATE_NORMAL = 1,
+    CREATE_BIG = 2,
+    CREATE_BIG_1GB = 3,
+};
+
+/**
  * @brief Check if the page is a COW page
  * @note Check if the page is a COW page by checking if the page table entry has
  * the COW bit set and the read/write bit cleared.

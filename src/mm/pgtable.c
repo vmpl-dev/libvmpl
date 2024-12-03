@@ -35,7 +35,7 @@
 static char *pt_names[] = { "P4D", "PUD", "PMD", "PTE", "Page" };
 pte_t *pgroot;
 
-static inline virtaddr_t pgtable_alloc(void)
+static inline virtaddr_t alloc_zero_page(void)
 {
 	struct page *pg;
 	physaddr_t pa;
@@ -242,77 +242,59 @@ failed:
  */
 int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 {
-    int m, i, j, k, l;
-    pte_t *pgd = root, *p4d, *pud, *pmd, *pte;
-    uint64_t pa;
-
+    pte_t *pt_curr = root;
+    uint64_t idx;
+    enum page_level level;
+    
     assert(root != NULL);
     assert(va != NULL);
     assert(pte_out != NULL);
 
-    m = PDX(4, va);
-	i = PDX(3, va);
-	j = PDX(2, va);
-	k = PDX(1, va);
-	l = PDX(0, va);
-
+    // 从最高级页表开始遍历
 #ifdef CONFIG_PGTABLE_LA57
-    log_debug("%p, %d, %d, %d, %d, %d", va, m, i, j, k, l);
-    log_debug("pgd[%d] = %lx", m, pgd[m]);
-    if (!pte_present(pgd[m])) {
-        if (!create)
-            return -ENOENT;
-        p4d = pgtable_alloc();
-        log_debug("p4d = %p", p4d);
-        pgd[m] = pte_addr(__pa(p4d)) | PTE_DEF_FLAGS;
-        log_debug("pgd[%d] = %lx", m, pgd[m]);
-    } else {
-        p4d = pgtable_do_mapping(pte_addr(pgd[m]));
-    }
+    for (level = PT_LEVEL_PGD; level >= PT_LEVEL_PTE; level--) {
 #else
-    log_debug("%p, %d, %d, %d, %d", va, i, j, k, l);
-    p4d = pgd;
+    for (level = PT_LEVEL_P4D; level >= PT_LEVEL_PTE; level--) {
 #endif
+        idx = PDX(level, va);
+        log_debug("level %d: pt_curr[%lu] = %lx", level, idx, pt_curr[idx]);
 
-    log_debug("p4d[%d] = %lx", i, p4d[i]);
-	if (!pte_present(p4d[i])) {
-        if (!create)
-            return -ENOENT;
-        pud = pgtable_alloc();
-        p4d[i] = pte_addr(__pa(pud)) | PTE_DEF_FLAGS;
-    } else {
-        pud = pgtable_do_mapping(pte_addr(p4d[i]));
+        if (!pte_present(pt_curr[idx])) {
+            if (create == CREATE_NONE)
+                return -ENOENT;
+            
+            // 根据创建模式处理
+            if ((create == CREATE_BIG && level == PT_LEVEL_PMD) ||
+                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD)) {
+                // 对于大页，直接返回当前页表项
+                *pte_out = &pt_curr[idx];
+                return 0;
+            }
+                
+            // 需要创建新的页表页
+            pte_t *new_pt = alloc_zero_page();
+            if (!new_pt)
+                return -ENOMEM;
+                
+            pt_curr[idx] = pte_addr(pgtable_va_to_pa(new_pt)) | PTE_DEF_FLAGS;
+            log_debug("created new pt at level %d: %lx", level, pt_curr[idx]);
+        } else if (level > PT_LEVEL_PTE) {
+            // 检查是否是大页
+            if ((create == CREATE_BIG && level == PT_LEVEL_PMD && pte_big(pt_curr[idx])) ||
+                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD && pte_big(pt_curr[idx]))) {
+                *pte_out = &pt_curr[idx];
+                return 0;
+            }
+
+            // 获取下一级页表的虚拟地址
+            pt_curr = pgtable_do_mapping(pte_addr(pt_curr[idx]));
+            if (!pt_curr)
+                return -EFAULT;
+        }
     }
 
-    log_debug("pud[%d] = %lx", j, pud[j]);
-	if (!pte_present(pud[j])) {
-        if (!create)
-            return -ENOENT;
-        pmd = pgtable_alloc();
-        pud[j] = pte_addr(__pa(pmd)) | PTE_DEF_FLAGS;
-    } else if (pte_big(pud[j])) {
-        *pte_out = &pud[j];
-        return 0;
-    } else {
-        pmd = pgtable_do_mapping(pte_addr(pud[j]));
-    }
-
-    log_debug("pmd[%d] = %lx", k, pmd[k]);
-	if (!pte_present(pmd[k])) {
-        if (!create)
-            return -ENOENT;
-        pte = pgtable_alloc();
-        pmd[k] = pte_addr(__pa(pte)) | PTE_DEF_FLAGS;
-    } else if (pte_big(pmd[k])) {
-        *pte_out = &pmd[k];
-        return 0;
-    } else {
-        pte = pgtable_do_mapping(pte_addr(pmd[k]));
-    }
-
-    log_debug("pte[%d] = %lx", l, pte[l]);
-	*pte_out = &pte[l];
-	return 0;
+    *pte_out = &pt_curr[idx];
+    return 0;
 }
 
 /**
@@ -348,61 +330,50 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
  */
 int lookup_address_in_pgd(pte_t *root, uint64_t va, int *level, pte_t **ptep)
 {
-    int m, i, j, k, l;
+    pte_t *pt_curr;
+    enum page_level curr_level;
+    uint64_t idx;
 
     assert(root != NULL);
+
+    pt_curr = root;
 #ifdef CONFIG_PGTABLE_LA57
-    log_debug("%p", va);
-    pgd_t *pgd = pgd_offset(root, va);
-    if (pte_none(*pgd) || pte_bad(*pgd)) {
-        return -EINVAL;
-    }
-
-    if (level)
-        *level = 5;
-
-    log_debug("pgd: %lx", *pgd);
-    p4d_t *p4d = p4d_offset(pgd, va);
+    curr_level = PT_LEVEL_PGD;
 #else
-    p4d_t *p4d = p4d_offset(root, va);
+    curr_level = PT_LEVEL_P4D;
 #endif
-    if (pte_none(*p4d) || pte_bad(*p4d)) {
-        return -EINVAL;
+
+    // 从最高级页表开始遍历
+    while (curr_level >= PT_LEVEL_PTE) {
+        idx = PDX(curr_level, va);
+        log_debug("level %d: pt_curr[%lu] = %lx", curr_level, idx, pt_curr[idx]);
+
+        // 检查页表项是否有效
+        if (pte_none(pt_curr[idx]) || 
+            (curr_level > PT_LEVEL_PTE && pte_bad(pt_curr[idx])) ||
+            (curr_level == PT_LEVEL_PTE && !pte_present(pt_curr[idx]))) {
+            return -EINVAL;
+        }
+
+        // 更新返回值
+        if (level) {
+            *level = curr_level;
+        }
+        if (curr_level == PT_LEVEL_PTE) {
+            if (ptep) {
+                *ptep = &pt_curr[idx];
+            }
+            break;
+        }
+
+        // 获取下一级页表
+        pt_curr = pgtable_do_mapping(pte_addr(pt_curr[idx]));
+        if (!pt_curr) {
+            return -EFAULT;
+        }
+
+        curr_level--;
     }
-
-    if (level)
-        *level = 4;
-
-    log_debug("p4d: %lx", *p4d);
-    pud_t *pud = pud_offset(p4d, va);
-    if (pte_none(*pud) || pte_bad(*pud)) {
-        return -EINVAL;
-    }
-
-    if (level)
-        *level = 3;
-
-    log_debug("pud: %lx", *pud);
-    pmd_t *pmd = pmd_offset(pud, va);
-    if (pte_none(*pmd) || pte_bad(*pmd)) {
-        return -EINVAL;
-    }
-
-    if (level)
-        *level = 2;
-
-    log_debug("pmd: %lx", *pmd);
-    pte_t *pte = pte_offset(pmd, va);
-    if (pte_none(*pte) || !pte_present(*pte)) {
-        return -EINVAL;
-    }
-
-    log_debug("pte: %lx", *pte);
-    if (ptep)
-        *ptep = pte;
-
-    if (level)
-        *level = 1;
 
     return 0;
 }
