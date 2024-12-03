@@ -142,7 +142,7 @@ static inline void put_page(void * page)
 
 /**
  * @brief Dune VM Page Walk
- * @note  XXX: Using PA == VA - PGTABLE_MMAP_BASE
+ * @note  Using the current address mapping strategy to do address translation.
  * The page walk callback function takes a page table entry and a virtual address.
  * @param dir The root of the page table.
  * @param start_va The start of the virtual address range to walk.
@@ -154,81 +154,84 @@ static inline void put_page(void * page)
  * @retval 0 on success, non-zero on failure.
  */
 int __vmpl_vm_page_walk(pte_t *dir, void *start_va, void *end_va,
-			page_walk_cb cb, const void *arg, int level,
-			int create)
+                        page_walk_cb cb, const void *arg, int level,
+                        int create)
 {
-	int i, ret;
-	pte_t *new_dir;
-	int start_idx = PDX(level, start_va);
-	int end_idx = PDX(level, end_va);
-	void *base_va = (void *)((unsigned long)start_va & ~(PDADDR(level + 1, 1) - 1));
+    int i, ret;
+    pte_t *new_dir;
+    int start_idx = PDX(level, start_va);
+    int end_idx = PDX(level, end_va);
+    void *base_va = (void *)((unsigned long)start_va & ~(PDADDR(level + 1, 1) - 1));
 
-	assert(level >= 0 && level <= NPTLVLS);
-	assert(end_idx < NPTENTRIES);
+    assert(level >= 0 && level <= NPTLVLS);
+    assert(end_idx < NPTENTRIES);
 
-	for (i = start_idx; i <= end_idx; i++) {
-		void *n_start_va, *n_end_va;
-		void *cur_va = base_va + PDADDR(level, i);
-		pte_t *pte = &dir[i];
+    for (i = start_idx; i <= end_idx; i++) {
+        void *n_start_va, *n_end_va;
+        void *cur_va = base_va + PDADDR(level, i);
+        pte_t *pte = &dir[i];
 
-		if (level == 0) {
-			if (create == CREATE_NORMAL || *pte) {
-				ret = cb(arg, pte, cur_va);
-				if (ret)
-					return ret;
-			}
-			continue;
-		}
+        if (level == 0) {
+            if (create == CREATE_NORMAL || *pte) {
+                ret = cb(arg, pte, cur_va);
+                if (ret)
+                    return ret;
+            }
+            continue;
+        }
 
-		if (level == 1) {
-			if (create == CREATE_BIG || pte_big(*pte)) {
-				ret = cb(arg, pte, cur_va);
-				if (ret)
-					return ret;
-				continue;
-			}
-		}
+        if (level == 1) {
+            if (create == CREATE_BIG || pte_big(*pte)) {
+                ret = cb(arg, pte, cur_va);
+                if (ret)
+                    return ret;
+                continue;
+            }
+        }
 
-		if (level == 2) {
-			if (create == CREATE_BIG_1GB || pte_big(*pte)) {
-				ret = cb(arg, pte, cur_va);
-				if (ret)
-					return ret;
-				continue;
-			}
-		}
+        if (level == 2) {
+            if (create == CREATE_BIG_1GB || pte_big(*pte)) {
+                ret = cb(arg, pte, cur_va);
+                if (ret)
+                    return ret;
+                continue;
+            }
+        }
 
-		if (!pte_present(*pte)) {
-			if (!create)
-				continue;
+        if (!pte_present(*pte)) {
+            if (!create)
+                continue;
 
-			new_dir = alloc_zero_page();
-			if (!new_dir)
-				return -ENOMEM;
-			log_debug("new_dir = 0x%lx, pte = 0x%lx, cur_va = 0x%lx, level = %d",
-					  new_dir, *pte, cur_va, level);
-			uint64_t pa = pgtable_va_to_pa(new_dir);
-			*pte = pte_addr(pa) | PTE_DEF_FLAGS;
-			// Clear the C-bit on the page table entry
-			if (level > 1) {
-				*pte &= ~PTE_C;
-			}
-		} else {
-			new_dir = pgtable_do_mapping(pte_addr(*pte));
-			if (!new_dir)
-				return -ENOMEM;
-		}
+            new_dir = alloc_zero_page();
+            if (!new_dir)
+                return -ENOMEM;
+            
+            log_debug("new_dir = 0x%lx, pte = 0x%lx, cur_va = 0x%lx, level = %d",
+                      new_dir, *pte, cur_va, level);
+            
+            uint64_t pa = pgtable_va_to_pa(new_dir);
+            *pte = pte_addr(pa) | PTE_DEF_FLAGS;
+            
+            // Clear the C-bit on the page table entry
+            if (level > 1) {
+                *pte &= ~PTE_C;
+            }
+        } else {
+            new_dir = pgtable_do_mapping(pte_addr(*pte));
+            if (!new_dir)
+                return -ENOMEM;
+        }
 
-		n_start_va = (i == start_idx) ? start_va : cur_va;
-		n_end_va = (i == end_idx) ? end_va : cur_va + PDADDR(level, 1) - 1;
+        n_start_va = (i == start_idx) ? start_va : cur_va;
+        n_end_va = (i == end_idx) ? end_va : cur_va + PDADDR(level, 1) - 1;
 
-		ret = __vmpl_vm_page_walk(new_dir, n_start_va, n_end_va, cb, arg,
-								  level - 1, create);
-		if (ret)
-			return ret;
-	}
+        ret = __vmpl_vm_page_walk(new_dir, n_start_va, n_end_va, cb, arg,
+                                  level - 1, create);
+        if (ret)
+            return ret;
+    }
 
-	return 0;
+    return 0;
 }
 
 /**
