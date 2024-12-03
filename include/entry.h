@@ -27,10 +27,6 @@ struct vm_ops {
     struct vcpu_ops vcpu_ops;            // 虚拟机CPU操作接口
 };
 
-// 平台注册函数
-const struct vm_ops *register_dune_ops(void);
-const struct vm_ops *register_vmpl_ops(void);
-
 #define BUILD_ASSERT(cond) _Static_assert(cond, #cond)
 
 #endif /* __ENTRY_H_ */

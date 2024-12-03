@@ -17,6 +17,7 @@
 #include "entry.h"
 #include "debug.h"
 #include "vmpl.h"
+#include "platform.h"
 
 
 struct dune_percpu {
@@ -371,8 +372,6 @@ static const struct vm_ops dune_ops = {
     .vcpu_ops = dune_vcpu_ops,
 };
 
-// 注册DUNE平台操作
-const struct vm_ops *register_dune_ops(void) {
-    return &dune_ops;
-}
+// 使用宏注册DUNE驱动
+DECLARE_VM_DRIVER(dune, VM_PLATFORM_INTEL_VTX, &dune_ops);
 

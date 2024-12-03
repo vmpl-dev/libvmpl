@@ -8,6 +8,7 @@
 #include "entry.h"
 #include "percpu.h"
 #include "error.h"
+#include "platform.h"
 
 // 当前使用的虚拟化平台
 static const struct vm_ops *current_vm_ops = NULL;
@@ -18,25 +19,13 @@ __thread void *lpercpu = NULL;
  * @brief 检测CPU是否支持虚拟化并选择合适的平台
  * @return const struct vm_ops* 平台操作接口指针，NULL表示不支持
  */
-static const struct vm_ops *detect_vm_platform(void) {
-    unsigned int eax, ebx, ecx, edx;
-    
-    // 检查 Intel VMX
-    if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
-        if (ecx & (1 << 5)) { // VMX bit
-            return register_dune_ops();
-        }
+static struct vm_ops *detect_vm_platform(void) {
+    struct vm_ops *ops = find_vm_ops();
+    if (!ops) {
+        log_err("No supported platform found");
+        vmpl_set_last_error(VMPL_ERROR_NOT_SUPPORTED);
     }
-    
-    // 检查 AMD SVM
-    if (__get_cpuid(0x80000001, &eax, &ebx, &ecx, &edx)) {
-        if (ecx & (1 << 2)) { // SVM bit
-            return register_vmpl_ops();
-        }
-    }
-    
-    vmpl_set_last_error(VMPL_ERROR_NOT_SUPPORTED);
-    return NULL;
+    return ops;
 }
 
 /**
@@ -49,6 +38,9 @@ int vmpl_init(bool map_full) {
         vmpl_set_last_error(VMPL_ERROR_NOT_SUPPORTED);
         return -1;
     }
+
+    // 打印虚拟化平台信息
+    log_info("Detected platform: %s", current_vm_ops->name);
 
     return current_vm_ops->init(map_full);
 }
@@ -64,6 +56,9 @@ int vmpl_enter(int argc, char *argv[]) {
         vmpl_set_last_error(VMPL_ERROR_NOT_INITIALIZED);
         return -1;
     }
+
+    // 打印虚拟化平台信息
+    log_info("Detected platform: %s", current_vm_ops->name);
 
     // 初始化虚拟机CPU操作接口
     struct vcpu_ops *vcpu_ops = &current_vm_ops->vcpu_ops;

@@ -32,6 +32,7 @@
 #include "debug.h"
 #include "fpu.h"
 #include "percpu.h"
+#include "platform.h"
 
 struct vmpl_percpu {
 	uint64_t percpu_ptr;
@@ -573,7 +574,5 @@ const static struct vm_ops vmpl_ops = {
     .vcpu_ops = vmpl_vcpu_ops,
 };
 
-// 注册VMPL平台操作
-const struct vm_ops *register_vmpl_ops(void) {
-    return &vmpl_ops;
-}
+// 使用宏注册VMPL驱动
+DECLARE_VM_DRIVER(vmpl, VM_PLATFORM_AMD_SEV, &vmpl_ops);
