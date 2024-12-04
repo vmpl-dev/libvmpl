@@ -1,9 +1,12 @@
 /*
  * fpu.h - x86 floating point, MMX, SSE, and AVX support for Dune
  */
+#ifndef __DUNE_FPU_H_
+#define __DUNE_FPU_H_
 
-#include <stdio.h>
+#include <ucontext.h>
 #include <string.h>
+#include <stdio.h>
 #include <stdint.h>
 
 struct fxsave_area {
@@ -68,6 +71,33 @@ static inline void fpu_xrstor(struct fpu_area *fp, uint64_t mask)
 		     "memory");
 }
 
+#ifdef CONFIG_UCONTEXT_FPU
+static inline void dune_fpu_init(ucontext_t *uc)
+{
+    // 获取当前上下文
+    if (getcontext(uc) == 0) {
+        // 保存 FPU 状态
+        // 注意：x86_64 架构下，fpregs 包含了 FPU、MMX、SSE 等状态
+        __asm__ __volatile__ (
+            "fxsave %0\n\t"
+            : "=m" (*uc->uc_mcontext.fpregs)
+            :
+            : "memory"
+        );
+    }
+}
+
+static inline void dune_fpu_finish(ucontext_t *uc)
+{
+    // 恢复 FPU 状态
+    __asm__ __volatile__ (
+        "fxrstor %0\n\t"
+        :
+        : "m" (*uc->uc_mcontext.fpregs)
+        : "memory"
+    );
+}
+#else
 /*
  * dune_fpu_init - initializes an fpu area
  * @fp: the fpu area
@@ -133,3 +163,6 @@ static inline void dune_fpu_save_safe(struct fpu_area *fp)
 {
 	fpu_xsave(fp, -1);
 }
+#endif
+
+#endif /* __DUNE_FPU_H_ */
