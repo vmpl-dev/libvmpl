@@ -36,8 +36,14 @@
 #define phys_to_virt(x) pgtable_pa_to_va(x)
 #define virt_to_phys(x) pgtable_va_to_pa(x)
 
-#define padding(level) ((level)*4 + 4)
-static char *pt_names[] = { "P4D", "PUD", "PMD", "PTE", "Page" };
+#define padding(level) ((PT_LEVEL_PGD - level)*4 + 4)
+static char *pt_names[] = { 
+#ifdef CONFIG_PGTABLE_LA57
+    "PTE", "PMD", "PUD", "P4D", "PGD"
+#else
+    "PTE", "PMD", "PUD", "P4D"
+#endif
+};
 pte_t *pgroot;
 
 static inline virtaddr_t alloc_zero_page(void)
@@ -51,7 +57,7 @@ static inline virtaddr_t alloc_zero_page(void)
 		return NULL;
 	
 	pa = dune_page2pa(pg);
-	va = pgtable_pa_to_va(pa);
+	va = phys_to_virt(pa);
     assert(pa >= PAGEBASE);
     assert(va >= PGTABLE_MMAP_BASE);
     assert(va < PGTABLE_MMAP_END);
@@ -85,7 +91,7 @@ static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count,
     vmpl_page_mark_addr(paddr);
 
     // If this is a leaf page table
-    if (level == 4) {
+    if ((level + 1) == PT_LEVEL_PTE) {
         (*page_count)++;
         return 0;
     }
@@ -99,12 +105,16 @@ static int __pgtable_init(uint64_t paddr, int level, int fd, int *pgtable_count,
 
     // Traverse page table
     log_trace("%*s%s [%p - %09lx]", padding(level), "", pt_names[level], vaddr, paddr);
-    max_i = (level != 0) ? 512 : 256;
+#ifdef CONFIG_PGTABLE_LA57
+    max_i = (level != PT_LEVEL_PGD) ? 512 : 256;
+#else
+    max_i = (level != PT_LEVEL_P4D) ? 512 : 256;
+#endif
     for (int i = 0; i < max_i; i++) {
-        if (vaddr[i] & 0x1) {
-            log_trace("%*s%s Entry[%d]: %016lx", padding(level), "", pt_names[level], i, vaddr[i]);
-            virtaddr_t root = pgtable_pa_to_va(pte_addr(vaddr[i]));
-            __pgtable_init(root, level + 1, fd, pgtable_count, page_count);
+        pte_t pte = vaddr[i];
+        if (pte_present(pte)) {
+            log_trace("%*s%s Entry[%d]: %016lx", padding(level), "", pt_names[level], i, pte);
+            __pgtable_init(pte_addr(pte), level - 1, fd, pgtable_count, page_count);
         }
     }
 
@@ -134,14 +144,18 @@ int pgtable_init(pte_t **pgd, int fd)
     log_debug("dune: CR3 at 0x%lx", cr3);
 
     // Initialize page table
-	rc = __pgtable_init(cr3, 0, fd, &pgtable_count, &page_count);
+#ifdef CONFIG_PGTABLE_LA57
+	rc = __pgtable_init(cr3, PT_LEVEL_PGD, fd, &pgtable_count, &page_count);
+#else
+	rc = __pgtable_init(cr3, PT_LEVEL_P4D, fd, &pgtable_count, &page_count);
+#endif
     if (rc) {
         log_err("pgtable init failed");
         return rc;
     }
 
     log_debug("dune: %lu page tables, %lu pages", pgtable_count, page_count);
-    *pgd = pgtable_pa_to_va(cr3);
+    *pgd = phys_to_virt(cr3);
     pgroot = *pgd;
 
     return 0;
@@ -196,7 +210,7 @@ void pgtable_test(pte_t *pgd, uint64_t va)
 void load_cr3(uint64_t cr3)
 {
     physaddr_t pa;
-    pa = pgtable_va_to_pa(pte_addr(cr3));
+    pa = virt_to_phys(pte_addr(cr3));
     cr3 &= ~ADDR_MASK;
     cr3 |= PTE_C;
     cr3 |= pa;
@@ -218,7 +232,7 @@ pte_t *pgtable_do_mapping(uint64_t phys)
     // Check if the page is already mapped
     if (vmpl_page_is_maped(phys)) {
         log_debug("already mapped %lx", phys);
-        return pgtable_pa_to_va(phys);
+        return phys_to_virt(phys);
     }
 
     // Mark the page as vmpl page
@@ -263,9 +277,10 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
     for (level = PT_LEVEL_P4D; level >= PT_LEVEL_PTE; level--) {
 #endif
         idx = PDX(level, va);
-        log_debug("level %d: pt_curr[%lu] = %lx", level, idx, pt_curr[idx]);
+        pte_t pte = pt_curr[idx];
+        log_debug("level %d: pt_curr[%lu] = %lx", level, idx, pte);
 
-        if (!pte_present(pt_curr[idx])) {
+        if (!pte_present(pte)) {
             if (create == CREATE_NONE)
                 return -ENOENT;
             
@@ -284,16 +299,19 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
                 
             pt_curr[idx] = pte_addr(pgtable_va_to_pa(new_pt)) | PTE_DEF_FLAGS;
             log_debug("created new pt at level %d: %lx", level, pt_curr[idx]);
+
+            // 下一级页表
+            pt_curr = new_pt;
         } else if (level > PT_LEVEL_PTE) {
             // 检查是否是大页
-            if ((create == CREATE_BIG && level == PT_LEVEL_PMD && pte_big(pt_curr[idx])) ||
-                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD && pte_big(pt_curr[idx]))) {
+            if ((create == CREATE_BIG && level == PT_LEVEL_PMD && pte_big(pte)) ||
+                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD && pte_big(pte))) {
                 *pte_out = &pt_curr[idx];
                 return 0;
             }
 
             // 获取下一级页表的虚拟地址
-            pt_curr = pgtable_do_mapping(pte_addr(pt_curr[idx]));
+            pt_curr = pgtable_do_mapping(pte_addr(pte));
             if (!pt_curr)
                 return -EFAULT;
         }

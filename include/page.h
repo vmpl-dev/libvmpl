@@ -21,10 +21,11 @@ typedef uintptr_t virtaddr_t;
 
 // VMPL级别枚举
 typedef enum vmpl_level {
-    VMPL1 = 0,
-    VMPL2 = 1,
-    VMPL3 = 2,
-    VMPL_MAX = 3
+	VMPL0 = 0,
+    VMPL1 = 1,
+    VMPL2 = 2,
+    VMPL3 = 3,
+    VMPL_MAX = VMPL3
 } vmpl_level_t;
 
 #define VMPL_BIT(vmpl) (1 << (vmpl))
@@ -73,7 +74,7 @@ static inline void __get_page(struct page *pg)
 {
 	assert(pg >= g_manager->pages);
 	assert(pg < (g_manager->pages + MAX_PAGES));
-	assert(pg->vmpl == VMPL1);
+	assert(pg->vmpl != VMPL0);
 
 	pg->ref++;
 }
@@ -81,7 +82,7 @@ static inline void __put_page(struct page *pg)
 {
 	assert(pg >= g_manager->pages);
 	assert(pg < (g_manager->pages + MAX_PAGES));
-	assert(pg->vmpl == VMPL1);
+	assert(pg->vmpl != VMPL0);
 	assert(pg->ref > 0);
 
 	pg->ref--;
@@ -156,11 +157,6 @@ extern bool dune_page_is_from_pool(physaddr_t pa);
 extern struct page * dune_pa2page(physaddr_t pa);
 extern physaddr_t dune_page2pa(struct page *pg);
 extern void dune_page_get(struct page *pg);
-
-// #define dune_pa2page			vmpl_pa2page
-// #define dune_page2pa			vmpl_page2pa
-// #define dune_page_isfrompool	vmpl_page_is_from_pool
-// #define dune_page_get			vmpl_page_get
 
 // -----------------------PAGE MANAGEMENT-----------------------
 int page_init(int fd);

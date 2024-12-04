@@ -23,7 +23,7 @@
 struct page_manager *g_manager = NULL;
 
 // 创建页面管理器
-static struct page_manager* page_manager_create(int fd) 
+static struct page_manager* page_manager_create(int fd, size_t pagebase)
 {
     struct page_manager *pm = malloc(sizeof(*pm));
     if (!pm) return NULL;
@@ -35,8 +35,14 @@ static struct page_manager* page_manager_create(int fd)
     }
 
     pm->fd = fd;
-    
+    pm->pagebase = pagebase;
     return pm;
+}
+
+static void page_manager_free(struct page_manager *pm)
+{
+    free(pm->pages);
+    free(pm);
 }
 
 // VMPL Page Management [Common Functions]
@@ -66,9 +72,10 @@ void* do_mapping(uint64_t phys, size_t len)
 	return addr;
 }
 
-static int grow_pages(struct page_manager *pm, struct page_head *head, size_t num_pages, bool mapping)
+static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 {
 	int rc;
+	struct page_manager *pm = g_manager;
 	struct get_pages_t param;
 	struct page *begin, *end, *pg;
 	void *ptr;
@@ -115,22 +122,13 @@ static struct page* page_manager_alloc(struct page_manager *pm, bool is_vmpl)
 		return dune_page_alloc();
 }
 
-
-static void page_manager_free(struct page *pg)
-{
-	if (pg->vmpl == Vmpl1)
-		vmpl_page_free(pg);
-	else
-		dune_page_free(pg);
-}
-
 // Dune Page Management [Common Functions]
 int dune_page_init(void)
 {
 	log_info("dune_page_init");
 
 	// 创建页面管理器，兼容dune的page管理
-	g_manager = page_manager_create(dune_fd);
+	g_manager = page_manager_create(dune_fd, PAGEBASE);
 	if (!g_manager)
 		return -ENOMEM;
 
@@ -138,6 +136,9 @@ int dune_page_init(void)
 	g_manager->dune_page_count = 0;
 	pthread_mutex_init(&g_manager->dune_mutex, NULL);
 	SLIST_INIT(&g_manager->dune_free_list);
+
+	// 分配初始页面
+	grow_pages(&g_manager->dune_free_list, CONFIG_DUNE_PAGE_GROW_SIZE, true);
 
     return 0;
 }
@@ -155,7 +156,7 @@ struct page * dune_page_alloc(void)
 	pthread_mutex_lock(mutex);
 
 	if (SLIST_EMPTY(free_list)) {
-		if (grow_pages(g_manager->fd, free_list, CONFIG_DUNE_PAGE_GROW_SIZE, true)) {
+		if (grow_pages(free_list, CONFIG_DUNE_PAGE_GROW_SIZE, true)) {
 			pthread_mutex_unlock(mutex);
 			return NULL;
 		}
@@ -238,6 +239,7 @@ int vmpl_page_init(void)
 	g_manager->vmpl_page_count = 0;
 	pthread_mutex_init(&g_manager->vmpl_mutex, NULL);
 	SLIST_INIT(&g_manager->vmpl_free_list);
+	grow_pages(&g_manager->vmpl_free_list, CONFIG_VMPL_PAGE_GROW_SIZE, true);
 
 	return 0;
 }
@@ -256,7 +258,7 @@ struct page* vmpl_page_alloc(void)
 	pthread_mutex_lock(mutex);
 
 	if (SLIST_EMPTY(free_list)) {
-		if (grow_pages(g_manager->fd, free_list, CONFIG_VMPL_PAGE_GROW_SIZE, true)) {
+		if (grow_pages(free_list, CONFIG_VMPL_PAGE_GROW_SIZE, true)) {
 			pthread_mutex_unlock(mutex);
 			return NULL;
 		}
@@ -289,7 +291,8 @@ void vmpl_page_stats(void)
 
 bool vmpl_page_is_from_pool(physaddr_t pa)
 {
-	return dune_page_is_from_pool(pa);
+	struct page *pg = vmpl_pa2page(pa);
+	return pg->vmpl != VMPL0;
 }
 
 bool vmpl_page_is_maped(physaddr_t pa)
