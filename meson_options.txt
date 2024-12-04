@@ -17,3 +17,8 @@ option('enable-pgtable-selftest', type : 'boolean', value : 'false', description
 option('enable-stack-trace', type : 'boolean', value : 'false', description : 'Enable stack-trace support')
 option('enable-ghcb-selftest', type : 'boolean', value : 'false', description : 'Enable ghcb-selftest support')
 option('enable-serial-port', type : 'boolean', value : 'false', description : 'Enable serial-port support')
+option('vmpl-va-start', type: 'string', value: '0x3fffff000000UL', description: 'Set vmpl va start')
+option('vmpl-va-size', type: 'string', value: '0x20000000UL', description: 'Set vmpl va size')
+option('vmpl-fit-algorithm', type: 'string', value: '2', description: 'Set vmpl fit algorithm')
+option('vmpl-page-grow-size', type: 'string', value: '0x400', description: 'Set vmpl page grow size')
+option('dune-page-grow-size', type: 'string', value: '0x200', description: 'Set dune page grow size')

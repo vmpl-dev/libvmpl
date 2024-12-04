@@ -8,185 +8,146 @@ project('vmpl', ['c'],
         'debug=true',
         'strip=true',
         'b_lto=true',
-        'cpp_std=c++17',
         'c_std=c11',
-        'c_args=-O3',
-        'c_link_args=-O3',
         'default_library=both',
         'prefix=/usr/local/musl',
     ],
 )
 
-add_project_arguments(language: 'c')
+# 设置编译器为 musl-gcc
+cc = meson.get_compiler('c', native: false)
 
-# Set the default compiler to musl-gcc
-cc = meson.get_compiler('c')
+# 添加编译器标志
+add_project_arguments(
+    '-Wall',
+    '-g',
+    '-O3',
+    '-fPIC',
+    '-mxsave',
+    '-D__ASSEMBLY__',      # 支持汇编
+    '-D_GNU_SOURCE',       # 启用 GNU 扩展
+    language: 'c'
+)
 
-# Print the compiler name
-message('Compiler: ' + cc.get_id())
+# 包含目录
+inc = include_directories('include', '../vmpl-dev', '/usr/local/musl/include')
 
-# Set the default build type to release
-if meson.is_cross_build()
-    message('Cross build')
-endif
+# 配置选项，对应 configure.ac 中的选项
+vmpl_va_start = get_option('vmpl-va-start')
+vmpl_va_size = get_option('vmpl-va-size')
+vmpl_fit_algorithm = get_option('vmpl-fit-algorithm')
+vmpl_page_grow_size = get_option('vmpl-page-grow-size')
+dune_page_grow_size = get_option('dune-page-grow-size')
 
-# Checks for programs
-ar = find_program('ar')
-as = find_program('as')
-
-# Specify the desired archiver program with options
-meson.add_dist_script('ar')
-meson.add_dist_script('as')
-
-# Options
-vmpl_options = [
-    ['cpuset', true],
-    ['signal', false],
-    ['apic', true],
-    ['msr-protocol', false],
-    ['ghcb', true],
-    ['pgtable', true],
-    ['seimi', false],
-    ['syscall', false],
-    ['vsyscall', false],
-    ['debug', false],
-    ['dune-boot', true],
-    ['remap-syscall', false],
-    ['remap-vsyscall', false],
-    ['dump-details', false],
-    ['pgtbale-la57', false],
-    ['pgtable-selftest', false],
-    ['stack-trace', false],
-    ['ghcb-selftest', false],
-    ['serial-port', false]
-]
-
-# Configuration file
+# 配置数据
 conf = configuration_data()
-conf.set('VERSION', meson.project_version())
-conf.set('PACKAGE', meson.project_name())
-conf.set('PACKAGE_BUGREPORT', '')
-conf.set('PACKAGE_NAME', meson.project_name())
-conf.set('PACKAGE_STRING', meson.project_name() + ' ' + meson.project_version())
-conf.set('PACKAGE_TARNAME', meson.project_name())
-conf.set('PACKAGE_URL', '')
-conf.set('PACKAGE_VERSION', meson.project_version())
-conf.set('VERSION', meson.project_version())
-conf.set('VMPL_VERSION', meson.project_version())
-conf.set('VMPL_MAJOR_VERSION', meson.project_version().split('.')[0])
-conf.set('VMPL_MINOR_VERSION', meson.project_version().split('.')[1])
+conf.set('CONFIG_VMPL_VA_START', vmpl_va_start)
+conf.set('CONFIG_VMPL_VA_SIZE', vmpl_va_size)
+conf.set('CONFIG_VMPL_FIT_ALGORITHM', vmpl_fit_algorithm)
+conf.set('CONFIG_VMPL_PAGE_GROW_SIZE', vmpl_page_grow_size)
+conf.set('CONFIG_DUNE_PAGE_GROW_SIZE', dune_page_grow_size)
 
-# Foreach option, set the value to the configuration file
-foreach opt : vmpl_options
-    opt_name = opt[0]
-    opt_default = opt[1]
-    opt_desc = 'Enable ' + opt_name + ' support'
-    opt_define = 'CONFIG_' + opt_name.to_upper().replace('-', '_')
-    opt_value = get_option('enable-' + opt_name)
-    if opt_value
-        conf.set(opt_define, opt_value)
-    else
-        conf.set(opt_define, opt_default)
-    endif
-endforeach
-
-# Specify dependencies
-deps = [
-    cc.find_library('dl'),
-    cc.find_library('pthread'),
-    cc.find_library('m'),
-]
-
-# Generate config.h
-configure_file(
-    output : 'config.h',
-    configuration : conf,
-)
-
-# Build targets
-# executable('vmpl', 'source.c', dependencies : deps)
-
-# Specify the include directories and the preprocessor flags
-include_dir = include_directories('include', '../svsm-dev')
-add_project_arguments('-include', 'config.h', language : 'c')
-
-# Specify the compiler flags
-add_project_arguments('-MD', '-fasm', language : 'c')
-
-# Import the pkgconfig module
-pkgconfig = import('pkgconfig')
-
-# Specify shared libraries to be built
+# libvmpl 源文件
 libvmpl_sources = files(
-    'src/vmpl.c',
-    'src/sys.c',
-    'src/mm.c',
-    'src/seimi.c',
-    'src/ghcb.c',
-    'src/vmsa.c',
-    'src/vc.c',
-    'src/dune.S',
-    'src/vsyscall.S',
-    'src/serial.c',
-    'src/trap.c',
-    'src/apic.c',
-    'src/bitmap.c',
-    'src/pmm.c',
-    'src/env.c',
-    'src/log.c',
+    'src/entry.c',
+    'src/error.c',
+    'src/core/_entry.S',
+    'src/core/ioctl.c',
+    'src/core/user.c',
+    'src/core/percpu.c',
+    'src/core/signals.c',
+    'src/core/apic.c',
+    'src/core/idt.c',
+    'src/core/trap.c',
+    'src/core/debug.c',
+    'src/core/vmpl.c',
+    'src/core/dune.c',
+    'src/core/platform.c',
+    'src/mm/page.c',
+    'src/mm/pgtable.c',
+    'src/mm/layout.c',
+    'src/mm/mapping.c',
+    'src/mm/procmap.c',
+    'src/mm/vma.c',
+    'src/mm/vm.c',
+    'src/mm/mm.c',
+    'src/syscall/hotcalls.c',
+    'src/syscall/syscall.c',
+    'src/syscall/vsyscall.S',
+    'src/vc/ghcb.c',
+    'src/vc/vc.c',
+    'src/vc/serial.c',
+    'src/security/seimi.c',
+    'src/security/sys-filter.c',
+    'src/utils/util.c',
+    'src/utils/elf.c',
+    'src/utils/env.c',
+    'src/utils/log.c',
 )
-libvmpl = library('vmpl', libvmpl_sources,
-    include_directories : include_dir,
+
+# 声明依赖
+dict_dep = declare_dependency(
+    link_args : ['-ldict']
+)
+
+hotcalls_dep = declare_dependency(
+    link_args : ['-lhotcalls']
+)
+
+dl_dep = declare_dependency(
+    link_args : ['-ldl']
+)
+
+# 构建 libvmpl
+libvmpl = library('vmpl',
+    libvmpl_sources,
+    include_directories : inc,
+    dependencies : [
+        dict_dep,
+        hotcalls_dep,
+        dl_dep,
+    ],
     version : '1.0.0',
     install : true,
 )
 
-# Generate the vmpl.pc file
-pkgconfig.generate(
+# 构建 libdune
+libdune = library('dune',
+    'src/libdune.c',
+    link_with : libvmpl,
+    install : true,
+)
+
+# 构建 libdunify
+libdunify = library('dunify',
+    'src/dunify.c',
+    link_with : libvmpl,
+    dependencies : dl_dep,
+    install : true,
+)
+
+# 安装头文件
+install_headers(
+    [
+        'include/vmpl.h',
+        'include/dune.h',
+        'include/error.h',
+        'include/sys.h',
+        'include/vc.h',
+        'include/pgtable.h',
+        'include/seimi.h',
+        'include/elf.h',
+        'include/bitmap.h',
+        'include/log.h',
+    ],
+    subdir : 'vmpl'
+)
+
+# pkgconfig 生成
+pkg = import('pkgconfig')
+pkg.generate(
+    libvmpl,
     name : 'vmpl',
     description : 'VMPL library',
-    version : meson.project_version(),
-    libraries : libvmpl,
-    install_dir : get_option('libdir') + '/pkgconfig',
-)
-
-# Specify headers to be installed
-libvmpl_headers = files(
-    'include/vmpl.h',
-    'include/sys.h',
-    'include/syscall.h',
-    'include/vc.h',
-    'include/mm.h',
-    'include/seimi.h',
-    'include/apic.h',
-    'include/bitmap.h',
-    'include/log.h',
-)
-
-libdunify_sources = files('src/dunify.c')
-libdunify = shared_library('dunify', libdunify_sources,
-    link_with : libvmpl,
-    include_directories : include_dir,
-    dependencies : cc.find_library('dl'),
     version : '1.0.0',
-    install : true,
 )
-
-# Generate the dunify.pc file
-pkgconfig.generate(
-    name : 'dunify',
-    description : 'Dunify library',
-    version : meson.project_version(),
-    libraries : libdunify,
-    requires : 'vmpl',
-    requires_private : 'vmpl',
-    install_dir : get_option('libdir') + '/pkgconfig',
-)
-
-# Install targets
-install_dir = get_option('prefix') + '/bin'
-install_headers(libvmpl_headers,
-    subdir : 'vmpl',
-    install_dir : 'include/vmpl',
-)
-install_subdir('vmpl', install_dir : 'include')
