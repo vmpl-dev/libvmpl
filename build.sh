@@ -15,4 +15,9 @@ meson setup --wipe build
 meson compile -C build
 
 # Install libvmpl, libdunify
-meson install -C build
+
+
+# Install libexecinfo
+git clone https://github.com/resslinux/libexecinfo.git
+cd libexecinfo
+sudo make install DESTDIR=/usr/local/musl INCLUDEDIR=/include LIBDIR=/lib
