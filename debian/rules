@@ -1,0 +1,56 @@
+#!/usr/bin/make -f
+
+# 获取 CPU 核心数以加速编译
+NJOBS := $(shell nproc)
+
+# 设置编译标志
+export DEB_CFLAGS_MAINT_APPEND = -Wall -g -O3 -fPIC -mxsave -D_GNU_SOURCE
+export DEB_CPPFLAGS_MAINT_APPEND = -I$(CURDIR)/include -I$(CURDIR)/../vmpl-dev
+
+# 设置交叉编译环境
+export CC = musl-gcc
+export CXX = musl-g++
+export AR = ar
+export RANLIB = ranlib
+export STRIP = strip
+
+# 设置库路径
+# export LD_LIBRARY_PATH := /usr/local/musl/lib
+# export LIBRARY_PATH := /usr/local/musl/lib
+
+%:
+	dh $@ --with autoreconf
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--host=x86_64-linux-musl \
+		--prefix=/usr/local/musl \
+		--enable-dune-boot \
+		--enable-sys-filter \
+		--enable-vmpl-cpuset \
+		--enable-vmpl-signal \
+		--enable-vmpl-debug \
+		--enable-vmpl-mm \
+		--enable-vmpl-ghcb \
+		--enable-dump-details \
+		--enable-shared \
+		--enable-static
+
+override_dh_auto_build:
+	$(MAKE) -j$(NJOBS)
+
+override_dh_auto_install:
+	dh_auto_install
+	dh_missing --fail-missing
+
+# 禁用 dh_usrlocal
+override_dh_usrlocal:
+
+# 处理共享库依赖
+override_dh_shlibdeps:
+	dh_shlibdeps -l/usr/local/musl/lib --dpkg-shlibdeps-params=--ignore-missing-info
+
+# 禁用 dh_makeshlibs
+override_dh_makeshlibs:
+	dh_makeshlibs --no-scripts

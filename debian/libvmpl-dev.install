@@ -1,0 +1,11 @@
+usr/local/musl/include/vmpl/vmpl.h
+usr/local/musl/include/vmpl/dune.h
+usr/local/musl/include/vmpl/error.h
+usr/local/musl/include/vmpl/sys.h
+usr/local/musl/include/vmpl/vc.h
+usr/local/musl/include/vmpl/pgtable.h
+usr/local/musl/include/vmpl/seimi.h
+usr/local/musl/include/vmpl/elf.h
+usr/local/musl/include/vmpl/bitmap.h
+usr/local/musl/include/vmpl/log.h
+

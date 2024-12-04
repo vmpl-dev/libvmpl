@@ -1,0 +1,20 @@
+Source: libvmpl
+Section: libs
+Priority: optional
+Maintainer: Benshan Mei <mbs2021@163.com>
+Build-Depends: debhelper (>= 9), autotools-dev, automake, libtool
+Standards-Version: 3.9.6
+Homepage: https://github.com/vmpl-dev/libvmpl
+
+Package: libvmpl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: VMPL runtime library
+ Runtime library for VMPL.
+
+Package: libvmpl-dev
+Section: libdevel
+Architecture: any
+Depends: libvmpl (= ${binary:Version}), ${misc:Depends}
+Description: VMPL development files
+ Development files for VMPL (headers and static libraries).

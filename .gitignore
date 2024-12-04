@@ -5,6 +5,8 @@
 *.log
 *.asm
 *.xml
+*.d
+*.a
 # autoconf, automake, libtool files
 aclocal.m4
 ar-lib
@@ -21,7 +23,6 @@ config.sub
 configure
 configure~
 configure.ac~
-debian
 depcomp
 .deps
 .dirstamp
@@ -36,3 +37,43 @@ Makefile
 Makefile.in
 missing
 stamp-h1
+autoreconf.after
+autoreconf.before
+
+# Debian build files
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/*.debhelper
+debian/*.debhelper.log
+debian/*.substvars
+debian/files
+debian/tmp/
+debian/*-stamp
+debian/*.install
+debian/*.links
+debian/*.docs
+debian/*.manpages
+debian/*.postinst.debhelper
+debian/*.postrm.debhelper
+debian/*.prerm.debhelper
+debian/*.preinst.debhelper
+
+# Package build directories
+debian/*/
+
+# Generated packages
+../*.deb
+../*.changes
+../*.buildinfo
+../*.dsc
+../*.tar.gz
+../*.tar.xz
+
+# Except these files
+!debian/changelog
+!debian/control
+!debian/copyright
+!debian/rules
+!debian/compat
+!debian/*.install
+!debian/not-installed
