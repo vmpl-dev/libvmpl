@@ -17,6 +17,7 @@
 typedef uint64_t physaddr_t;
 typedef uintptr_t virtaddr_t;
 
+#define PAGE_SIZE		(4096)
 #define PAGE_FLAG_MAPPED	0x1
 
 // VMPL级别枚举
@@ -44,6 +45,8 @@ struct page {
 // -----------------------PAGE MANAGER-----------------------
 struct page_manager {
     struct page *pages;
+	// 获取页面描述符，用于VMPL页面管理
+	struct get_pages_t *get_pages;
     
     // VMPL页面管理
     pthread_mutex_t vmpl_mutex;

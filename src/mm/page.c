@@ -27,6 +27,14 @@ static struct page_manager* page_manager_create(int fd, size_t pagebase)
 {
     struct page_manager *pm = malloc(sizeof(*pm));
     if (!pm) return NULL;
+
+	// 获取页面描述符，用于VMPL页面管理，4KB页面
+	pm->get_pages = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+	                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (!pm->get_pages) {
+		free(pm);
+		return NULL;
+	}
     
     pm->pages = malloc(sizeof(struct page) * MAX_PAGES);
     if (!pm->pages) {
@@ -41,6 +49,7 @@ static struct page_manager* page_manager_create(int fd, size_t pagebase)
 
 static void page_manager_free(struct page_manager *pm)
 {
+	munmap(pm->get_pages, PAGE_SIZE);
     free(pm->pages);
     free(pm);
 }
@@ -76,38 +85,49 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 {
 	int rc;
 	struct page_manager *pm = g_manager;
-	struct get_pages_t param;
+	struct get_pages_t *param = pm->get_pages;
 	struct page *begin, *end, *pg;
 	void *ptr;
 
 	// Allocate more physical pages
-	param.num_pages = num_pages;
-	rc = vmpl_ioctl_get_pages(pm->fd, &param);
+	param->num_pages = num_pages;
+	rc = vmpl_ioctl_get_pages(pm->fd, param);
 	if (rc) {
 		log_err("Failed to allocate %lu pages", num_pages);
 		return -ENOMEM;
 	}
 
-	log_debug("Allocated %lu pages, phys = 0x%lx", num_pages, param.phys);
+	log_debug("Allocated %lu pages", num_pages);
 
 	// Add to free list
-	begin = vmpl_pa2page(param.phys);
-	end = begin + num_pages;
-	for (pg = begin; pg < end; pg++) {
-		log_trace("Adding page %lx/%lx to free list", pg - begin, num_pages);
-		vmpl_page_mark(pg);
-		SLIST_INSERT_HEAD(head, pg, link);
-	}
+	size_t remaining_pages = num_pages;
+    size_t page_idx = 0;
 
-	if (!mapping)
-		return 0;
+	while (remaining_pages > 0 && page_idx < 511) {
+		struct page_desc_t *desc = &param->pages[page_idx];
+		// extract page from page descriptor
+		size_t num_pages = 1 << desc->size; // 2^order
+		begin = vmpl_pa2page(desc->phys);
+		end = begin + num_pages;
+		for (pg = begin; pg < end; pg++) {
+			log_trace("Adding page %lx/%lx to free list", pg - begin, num_pages);
+			vmpl_page_mark(pg);
+			SLIST_INSERT_HEAD(head, pg, link);
+		}
 
-	// Linear mapping
-	log_debug("Mapping pages: phys = 0x%lx, len = %lu", param.phys, num_pages * PGSIZE);
-	ptr = do_mapping(param.phys, num_pages << PGSHIFT);
-	if (!ptr) {
-		log_err("Failed to map pages");
-		return -ENOMEM;
+		remaining_pages -= num_pages;
+		page_idx++;
+
+		if (!mapping)
+			continue;
+
+		// Linear mapping
+		log_debug("Mapping pages: phys = 0x%lx, len = %lu", desc->phys, desc->size * PGSIZE);
+		ptr = do_mapping(desc->phys, desc->size << PGSHIFT);
+		if (!ptr) {
+			log_err("Failed to map pages");
+			return -ENOMEM;
+		}
 	}
 
 	return 0;
