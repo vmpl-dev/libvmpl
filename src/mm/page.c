@@ -133,13 +133,28 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 	return 0;
 }
 
-// 统一的页面分配接口
-static struct page* page_manager_alloc(struct page_manager *pm, bool is_vmpl) 
+bool __get_page(struct page *pg)
 {
-	if (is_vmpl)
-		return vmpl_page_alloc();
-	else
-		return dune_page_alloc();
+	if (pg < g_manager->pages || pg >= (g_manager->pages + MAX_PAGES))
+		return false;
+	
+	if (pg->vmpl == VMPL0)
+		return false;
+	
+	pg->ref++;
+	return true;
+}
+
+bool __put_page(struct page *pg)
+{
+	if (pg < g_manager->pages || pg >= (g_manager->pages + MAX_PAGES))
+		return false;
+	
+	if (pg->vmpl == VMPL0 || pg->ref == 0)
+		return false;
+
+	pg->ref--;
+	return true;
 }
 
 // Dune Page Management [Common Functions]

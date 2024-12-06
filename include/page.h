@@ -73,23 +73,8 @@ extern struct page_manager *g_manager;
 #define MAX_PAGES	(SYSTEM_RAM >> PAGE_SHIFT) /* 17 GB of memory */
 
 extern void *do_mapping(uint64_t phys, size_t len);
-static inline void __get_page(struct page *pg)
-{
-	assert(pg >= g_manager->pages);
-	assert(pg < (g_manager->pages + MAX_PAGES));
-	assert(pg->vmpl != VMPL0);
-
-	pg->ref++;
-}
-static inline void __put_page(struct page *pg)
-{
-	assert(pg >= g_manager->pages);
-	assert(pg < (g_manager->pages + MAX_PAGES));
-	assert(pg->vmpl != VMPL0);
-	assert(pg->ref > 0);
-
-	pg->ref--;
-}
+extern bool __get_page(struct page *pg);
+extern bool __put_page(struct page *pg);
 
 // -----------------------VMPL PAGE MANAGEMENT-----------------------
 extern int vmpl_page_init(void);
