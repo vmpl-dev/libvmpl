@@ -9,7 +9,6 @@
 #include "vmpl.h"
 #include "percpu.h"
 
-#ifdef CONFIG_DUNE_BOOT
 #define X86_EFLAGS_TF (0x100)
 
 static struct dune_trap_regs trap_regs;
@@ -91,4 +90,3 @@ void dune_debug_handle_int(struct dune_config *conf)
 		break;
 	}
 }
-#endif

@@ -52,11 +52,7 @@ typedef struct Ghcb {
     uint32_t usage;
 } Ghcb;
 
-#ifdef CONFIG_DUMP_DETAILS
 void dump_ghcb(struct Ghcb *ghcb);
-#else
-static inline void dump_ghcb(struct Ghcb *ghcb) {}
-#endif
 
 inline void set_offset_valid(Ghcb* ghcb, size_t offset) {
     size_t idx = (offset / 8) / 8;

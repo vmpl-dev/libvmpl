@@ -12,13 +12,8 @@ struct syscall_args_t {
 } __attribute__((packed));
 
 long __vmpl_syscall(long sys_nr, struct syscall_args_t *args);
-#ifdef CONFIG_DUNE_BOOT
 int setup_syscall();
 int setup_vsyscall(void);
-#else
-static inline int setup_syscall() { return 0; }
-static inline int setup_vsyscall(void) { return 0; }
-#endif
 #else
 .macro VMPL_SYSCALL
     push %r9

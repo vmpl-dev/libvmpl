@@ -128,13 +128,6 @@ AC_ARG_ENABLE([sys-filter], [AS_HELP_STRING([--enable-sys-filter],
               [enable_sys_filter=no])
 AM_CONDITIONAL([ENABLE_SYS_FILTER], [test "x$enable_sys_filter" = "xyes"])
 
-AC_ARG_ENABLE([dune-boot],
-              [AS_HELP_STRING([--enable-dune-boot],
-                              [Enable dune boot support])],
-              [enable_dune_boot=$enableval],
-              [enable_dune_boot=no])
-AM_CONDITIONAL([ENABLE_DUNE_BOOT], [test "x$enable_dune_boot" = "xyes"])
-
 AC_ARG_ENABLE([dump-details],
               [AS_HELP_STRING([--enable-dump-details],
                               [Enable dump details support])],
@@ -212,10 +205,6 @@ fi
 
 if test "x$enable_sys_filter" = "xyes"; then
     AC_DEFINE([CONFIG_SYS_FILTER], [1], [Enable sys filter support])
-fi
-
-if test "x$enable_dune_boot" = "xyes"; then
-    AC_DEFINE([CONFIG_DUNE_BOOT], [1], [Enable dune boot support])
 fi
 
 if test "x$enable_dump_details" = "xyes"; then

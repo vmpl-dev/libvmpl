@@ -141,7 +141,6 @@ int vmpl_ioctl_vmpl_run(int vmpl_fd, struct dune_config *dune_config) {
     return rc;
 }
 
-#ifdef CONFIG_DUNE_BOOT
 int dune_ioctl_trap_enable(int dune_fd, struct dune_trap_config *trap_config) {
     int rc;
     rc = ioctl(dune_fd, DUNE_TRAP_ENABLE, trap_config);
@@ -191,4 +190,3 @@ int dune_ioctl_get_layout(int dune_fd, struct dune_layout *layout) {
 
     return 0;
 }
-#endif

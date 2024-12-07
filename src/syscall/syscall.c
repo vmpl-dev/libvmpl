@@ -18,7 +18,6 @@ long __vmpl_syscall(long sys_nr, struct syscall_args_t *args) {
     return syscall(sys_nr, args->a0, args->a1, args->a2, args->a3, args->a4, args->a5);
 }
 
-#ifdef CONFIG_DUNE_BOOT
 int setup_syscall()
 {
     int rc;
@@ -81,4 +80,3 @@ int setup_vsyscall(void)
     log_debug("dune: vsyscall at %p, pte = %lx", VSYSCALL_ADDR, *pte);
     return 0;
 }
-#endif
