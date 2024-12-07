@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <cpuid.h>
-#include <asm/processor-flags.h>
 
 #define BIT(bit) (1ULL << (bit))
 

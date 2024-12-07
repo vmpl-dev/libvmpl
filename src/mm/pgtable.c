@@ -283,14 +283,6 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
         if (!pte_present(pte)) {
             if (create == CREATE_NONE)
                 return -ENOENT;
-            
-            // 根据创建模式处理
-            if ((create == CREATE_BIG && level == PT_LEVEL_PMD) ||
-                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD)) {
-                // 对于大页，直接返回当前页表项
-                *pte_out = &pt_curr[idx];
-                return 0;
-            }
                 
             // 需要创建新的页表页
             pte_t *new_pt = alloc_zero_page();
@@ -300,12 +292,23 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
             pt_curr[idx] = pte_addr(pgtable_va_to_pa(new_pt)) | PTE_DEF_FLAGS;
             log_debug("created new pt at level %d: %lx", level, pt_curr[idx]);
 
+            // 根据创建模式处理
+            if ((create == CREATE_BIG && level == PT_LEVEL_PMD) ||
+                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD)) {
+                log_debug("big page at level %d: %lx", level, pt_curr[idx]);
+                // 对于大页，直接返回当前页表项
+                *pte_out = &pt_curr[idx];
+                return 0;
+            }
+
             // 下一级页表
             pt_curr = new_pt;
-        } else if (level > PT_LEVEL_PTE) {
+        } else {
             // 检查是否是大页
-            if ((create == CREATE_BIG && level == PT_LEVEL_PMD && pte_big(pte)) ||
-                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD && pte_big(pte))) {
+            if ((level == PT_LEVEL_PMD && pte_big(pte)) ||
+                (level == PT_LEVEL_PUD && pte_big(pte))) {
+                // 返回当前页表项
+                log_debug("big page at level %d: %lx", level, pte);
                 *pte_out = &pt_curr[idx];
                 return 0;
             }

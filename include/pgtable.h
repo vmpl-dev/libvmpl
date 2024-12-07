@@ -116,12 +116,15 @@ typedef uint64_t pte_t;
  * 从低到高依次为: PTE -> PMD -> PUD -> P4D -> PGD
  */
 enum page_level {
-    PT_LEVEL_PTE = 0,  // Page Table Entry (4KB页)
+    PT_LEVEL_PTE = 0, // Page Table Entry (4KB页)
     PT_LEVEL_PMD = 1,  // Page Middle Directory (2MB页)
     PT_LEVEL_PUD = 2,  // Page Upper Directory (1GB页)
     PT_LEVEL_P4D = 3,  // Page 4th Directory
+#ifdef CONFIG_PGTABLE_LA57
     PT_LEVEL_PGD = 4,  // Page Global Directory
-    PT_LEVEL_MAX
+#else
+    PT_LEVEL_PGD = 3,  // Page Global Directory
+#endif
 };
 
 /**

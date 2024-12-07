@@ -326,7 +326,7 @@ int dune_prepare(bool map_full)
 		goto err;
 	}
 
-	if ((ret = setup_syscall(map_full))) {
+	if ((ret = setup_syscall())) {
 		vmpl_set_last_error(VMPL_ERROR_INVALID_STATE);
 		log_err("dune: unable to setup system calls");
 		goto err;

@@ -98,6 +98,7 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 	}
 
 	log_debug("Allocated %lu pages", num_pages);
+	log_debug("num_pages: %lu", param->num_pages);
 
 	// Add to free list
 	size_t remaining_pages = num_pages;
@@ -105,6 +106,7 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 
 	while (remaining_pages > 0 && page_idx < 511) {
 		struct page_desc_t *desc = &param->pages[page_idx];
+		log_debug("desc->size: %u, desc->phys: %lx", desc->size, desc->phys);
 		// extract page from page descriptor
 		size_t num_pages = 1 << desc->size; // 2^order
 		begin = vmpl_pa2page(desc->phys);
@@ -122,8 +124,8 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 			continue;
 
 		// Linear mapping
-		log_debug("Mapping pages: phys = 0x%lx, len = %lu", desc->phys, desc->size * PGSIZE);
-		ptr = do_mapping(desc->phys, desc->size << PGSHIFT);
+		log_debug("Mapping pages: phys = 0x%lx, len = %lu", desc->phys, num_pages * PGSIZE);
+		ptr = do_mapping(desc->phys, num_pages << PGSHIFT);
 		if (!ptr) {
 			log_err("Failed to map pages");
 			return -ENOMEM;
@@ -357,16 +359,22 @@ static void vmpl_page_test(void)
 
 int page_manager_init(void)
 {
+	int ret;
+
 	// 创建页面管理器，兼容dune的page管理
 	g_manager = page_manager_create(dune_fd, PAGEBASE);
 	if (!g_manager)
 		return -ENOMEM;
 
 	// 初始化vmpl的page管理
-	vmpl_page_init();
+	ret = vmpl_page_init();
+	if (ret)
+		return ret;
 
 	// 初始化dune的page管理
-	dune_page_init();
+	ret = dune_page_init();
+	if (ret)
+		return ret;
 
 	return 0;
 }

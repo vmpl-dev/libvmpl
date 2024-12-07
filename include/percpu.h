@@ -30,7 +30,11 @@ extern const uint64_t VMPL_PERCPU_HOTCALL;
 #define XSAVE_SIZE 4096
 
 extern __thread void *lpercpu;
+#ifdef CONFIG_VMPL_CPUSET
 int setup_cpuset();
+#else
+static inline int setup_cpuset(void) { return 0; }
+#endif
 void setup_gdt(uint64_t *gdt, struct Tss *tss);
 void dump_gdt(uint64_t *gdt);
 void dump_tss(struct Tss *tss);

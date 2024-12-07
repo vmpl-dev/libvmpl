@@ -53,7 +53,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "dune.h"
+#include "vmpl.h"
 
 static int get_type(const char *path)
 {

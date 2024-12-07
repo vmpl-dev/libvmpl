@@ -456,7 +456,13 @@ static int vmpl_prepare(bool map_full)
     }
 
     // 初始化系统调用
-    if ((rc = setup_syscall(map_full))) {
+    if ((rc = setup_syscall())) {
+        vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
+        goto failed;
+    }
+
+    // 初始化vsyscall
+    if ((rc = setup_vsyscall())) {
         vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
         goto failed;
     }

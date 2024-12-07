@@ -2,7 +2,6 @@
 #define __ENTRY_H_
 
 #include <stdbool.h>
-#include "dune.h"
 #include "vmpl.h"
 #include "percpu.h"
 #include "vmpl-dev.h"

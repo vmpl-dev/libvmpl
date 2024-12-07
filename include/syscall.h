@@ -13,11 +13,11 @@ struct syscall_args_t {
 
 long __vmpl_syscall(long sys_nr, struct syscall_args_t *args);
 #ifdef CONFIG_DUNE_BOOT
-int setup_syscall(bool map_full);
-void setup_vsyscall(void);
+int setup_syscall();
+int setup_vsyscall(void);
 #else
-static inline int setup_syscall(bool map_full) { return 0; }
-static inline void setup_vsyscall(void) {}
+static inline int setup_syscall() { return 0; }
+static inline int setup_vsyscall(void) { return 0; }
 #endif
 #else
 .macro VMPL_SYSCALL

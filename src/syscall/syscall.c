@@ -19,7 +19,7 @@ long __vmpl_syscall(long sys_nr, struct syscall_args_t *args) {
 }
 
 #ifdef CONFIG_DUNE_BOOT
-int setup_syscall(bool map_full)
+int setup_syscall()
 {
     int rc;
     unsigned long lstar;
@@ -53,28 +53,32 @@ int setup_syscall(bool map_full)
         (unsigned long) __dune_syscall);
 
     for (i = 0; i <= PGSIZE; i += PGSIZE) {
+        rc = vmpl_vm_lookup(pgroot, (void *) (lstara + i), CREATE_NORMAL, &pte);
+        if (rc) {
+            log_err("dune: unable to lookup syscall at %lx", lstara + i);
+            return rc;
+        }
         uintptr_t pa = pgtable_va_to_pa(page + i);
-        vmpl_vm_lookup(pgroot, (void *) (lstara + i), CREATE_NORMAL, &pte);
+        log_debug("dune: syscall at %p, pte = %lx", lstara + i, *pte);
         *pte = PTE_ADDR(pa) | PTE_P | PTE_C;
     }
 
-    if (!map_full)
-        goto exit;
-
-    log_info("setup vsyscall");
-    vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
-    *pte = PTE_ADDR(pgtable_va_to_pa(&__dune_vsyscall_page)) | PTE_P | PTE_U | PTE_C;
-    log_debug("dune: vsyscall at %p, pte = %lx", VSYSCALL_ADDR, *pte);
-
-exit:
     return 0;
 }
 
-void setup_vsyscall(void)
+int setup_vsyscall(void)
 {
+    int ret;
     pte_t *pte;
 
-    vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
-    *pte = PTE_ADDR(pgtable_va_to_pa(&__dune_vsyscall_page)) | PTE_P | PTE_U;
+    ret = vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
+    if (ret) {
+        log_err("dune: unable to lookup vsyscall");
+        return ret;
+    }
+
+    *pte = PTE_ADDR(pgtable_va_to_pa(&__dune_vsyscall_page)) | PTE_P | PTE_U | PTE_C;
+    log_debug("dune: vsyscall at %p, pte = %lx", VSYSCALL_ADDR, *pte);
+    return 0;
 }
 #endif

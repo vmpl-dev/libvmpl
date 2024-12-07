@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 #include "mmu.h"
-#include "dune.h"
+#include "vmpl.h"
 #include "elf.h"
 
 #define MAX_SNAME 40

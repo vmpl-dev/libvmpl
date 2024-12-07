@@ -86,11 +86,6 @@ int setup_cpuset()
 
     return 0;
 }
-#else
-static int setup_cpuset()
-{
-    return 0;
-}
 #endif
 
 static uint64_t gdt_template[NR_GDT_ENTRIES] = {
