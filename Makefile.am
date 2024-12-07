@@ -3,10 +3,10 @@ ACLOCAL_AMFLAGS = -I m4
 # 将config.h包含在编译中
 AM_CPPFLAGS = -I$(top_srcdir)/include -I../vmpl-dev -include config.h
 AM_CFLAGS = -Wall -g -O3 -MD -fPIC -mxsave
-AM_LDFLAGS = -L. -lvmpl -ldict
+AM_LDFLAGS = -L$(prefix)/lib
 
 # Specify shared libraries to be built
-lib_LTLIBRARIES = libvmpl.la libdunify.la libdune.la
+lib_LTLIBRARIES = libvmpl.la
 libvmpl_la_SOURCES = src/entry.c \
                     src/error.c \
                     src/core/_entry.S \
@@ -42,25 +42,18 @@ libvmpl_la_SOURCES = src/entry.c \
                     src/utils/env.c \
                     src/utils/log.c
 libvmpl_la_CFLAGS = $(AM_CFLAGS)
-libvmpl_la_LDFLAGS = -ldl \
-                    -ldict \
-                    -lhotcalls \
-                    -version-info 1:0:0
-
-libdune_la_SOURCES = src/libdune.c
-libdune_la_LDFLAGS = -lvmpl
-
-libdunify_la_SOURCES = src/dunify.c
-libdunify_la_CFLAGS = $(AM_CFLAGS)
-libdunify_la_LDFLAGS = -fPIC -shared \
+libvmpl_la_LDFLAGS = -version-info 1:0:0 \
+                    -L$(prefix)/lib \
                     -ldl \
-                    -lvmpl \
-                    -version-info 1:0:0
+                    -ldict \
+                    -lhotcalls
+
+# Add subdirectories
+SUBDIRS = libdune libdunify
 
 # Specify headers to be installed
 pkgincludedir = $(includedir)/vmpl
 pkginclude_HEADERS = include/vmpl.h \
-                    include/dune.h \
                     include/error.h \
                     include/sys.h \
                     include/vc.h \

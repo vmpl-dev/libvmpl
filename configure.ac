@@ -5,6 +5,7 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_ENABLE_STATIC
 
 AC_PROG_CC([musl-gcc])
+AC_PROG_INSTALL
 
 # Specify the desired archiver program with options
 AR=ar
@@ -14,6 +15,9 @@ AM_PROG_AR
 AM_PROG_AS
 
 LT_INIT([static, shared])
+
+# Add subdirectories
+AC_CONFIG_SUBDIRS([libdune libdunify])
 
 # Set installation prefix
 AC_PREFIX_DEFAULT([/usr/local/musl])
