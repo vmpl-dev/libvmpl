@@ -107,7 +107,20 @@ static bool addr_is_mapped(void *va)
     return 1;
 }
 
-#define STACK_DEPTH 12
+#define STACK_DEPTH CONFIG_STACK_DEPTH
+
+void print_stack(unsigned long *sp) {
+    int i;
+
+    dune_printf("dune: Dumping Stack Contents...\n");
+    for (i = 0; i < STACK_DEPTH; i++) {
+		if (!addr_is_mapped(&sp[i])) {
+			dune_printf("dune: reached unmapped addr\n");
+			break;
+		}
+		dune_printf("dune: RSP%+-3d 0x%016lx\n", i * sizeof(long), sp[i]);
+    }
+}
 
 static void dune_dump_stack(struct dune_tf *tf)
 {
@@ -116,15 +129,8 @@ static void dune_dump_stack(struct dune_tf *tf)
 
     // we use printf() because this might
     // have to work even if libc doesn't.
-    dune_printf("dune: Dumping Stack Contents...\n");
-    for (i = 0; i < STACK_DEPTH; i++) {
-        if (!addr_is_mapped(&sp[i])) {
-            dune_printf("dune: reached unmapped addr\n");
-            break;
-        }
-        dune_printf("dune: RSP%+-3d 0x%016lx\n", i * sizeof(long),
-               sp[i]);
-    }
+
+	print_stack(sp);
 }
 #else
 static void dune_dump_stack(struct dune_tf *tf) { }

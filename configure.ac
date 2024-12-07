@@ -149,6 +149,12 @@ AC_ARG_ENABLE([stack-trace],
               [enable_stack_trace=no])
 AM_CONDITIONAL([ENABLE_STACK_TRACE], [test "x$enable_stack_trace" = "xyes"])
 
+AC_ARG_WITH([stack-depth], [AS_HELP_STRING([--with-stack-depth],
+                                           [Set stack depth])],
+            [with_stack_depth=$withval],
+            [with_stack_depth=12])
+AC_DEFINE_UNQUOTED([CONFIG_STACK_DEPTH], [$with_stack_depth], [stack depth])
+
 AC_ARG_ENABLE([serial-port],
               [AS_HELP_STRING([--enable-serial-port],
                               [Enable serial port support])],
