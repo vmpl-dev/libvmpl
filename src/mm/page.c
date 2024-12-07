@@ -162,11 +162,6 @@ int dune_page_init(void)
 {
 	log_info("dune_page_init");
 
-	// 创建页面管理器，兼容dune的page管理
-	g_manager = page_manager_create(dune_fd, PAGEBASE);
-	if (!g_manager)
-		return -ENOMEM;
-
 	// 初始化dune的page管理
 	g_manager->dune_page_count = 0;
 	pthread_mutex_init(&g_manager->dune_mutex, NULL);
@@ -267,9 +262,6 @@ int vmpl_page_init(void)
 {
 	log_info("vmpl_page_init");
 
-	// 初始化dune的page管理
-	dune_page_init();
-
 	// 初始化vmpl的page管理
 	g_manager->vmpl_page_count = 0;
 	pthread_mutex_init(&g_manager->vmpl_mutex, NULL);
@@ -362,3 +354,59 @@ static void vmpl_page_test(void)
 	assert(pg->vmpl == Vmpl1);
 	log_success("VMPL Pages Test Passed");
 }
+
+int page_manager_init(void)
+{
+	// 创建页面管理器，兼容dune的page管理
+	g_manager = page_manager_create(dune_fd, PAGEBASE);
+	if (!g_manager)
+		return -ENOMEM;
+
+	// 初始化vmpl的page管理
+	vmpl_page_init();
+
+	// 初始化dune的page管理
+	dune_page_init();
+
+	return 0;
+}
+
+int page_manager_exit(void)
+{
+	int rc;
+
+	// 退出vmpl的page管理
+	rc = vmpl_page_exit();
+	if (rc)
+		return rc;
+
+	// 退出dune的page管理
+	rc = dune_page_exit();
+	if (rc)
+		return rc;
+
+	// 释放页面管理器
+	page_manager_free(g_manager);
+
+	return 0;
+}
+
+void page_manager_stats(void)
+{
+	// 打印vmpl的page管理统计信息
+	vmpl_page_stats();
+
+	// 打印dune的page管理统计信息
+	dune_page_stats();
+}
+
+#ifdef CONFIG_VMPL_TEST
+void page_manager_test(void)
+{
+	// 测试vmpl的page管理
+	vmpl_page_test();
+
+	// 测试dune的page管理
+	dune_page_test();
+}
+#endif

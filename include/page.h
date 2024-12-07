@@ -147,13 +147,13 @@ extern physaddr_t dune_page2pa(struct page *pg);
 extern void dune_page_get(struct page *pg);
 
 // -----------------------PAGE MANAGEMENT-----------------------
-int page_init(int fd);
-int page_exit(void);
-void page_stats(void);
+extern int page_manager_init(void);
+extern int page_manager_exit(void);
+extern void page_manager_stats(void);
 #ifdef CONFIG_VMPL_TEST
-void page_test(void);
+extern void page_manager_test(void);
 #else
-static inline void page_test(void) {}
+static inline void page_manager_test(void) {}
 #endif
 
 #endif

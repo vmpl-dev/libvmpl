@@ -1421,7 +1421,7 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 	}
 
     // VMPL Page Management
-    rc = vmpl_page_init();
+    rc = page_manager_init();
 	if (rc != 0) {
 		log_err("Failed to initialize page management");
 		goto out;
@@ -1470,7 +1470,7 @@ int vmpl_mm_exit(struct vmpl_mm_t *vmpl_mm)
 	rc = pgtable_exit(vmpl_mm->pgd);
 	assert(rc == 0);
 
-	rc = vmpl_page_exit();
+	rc = page_manager_exit();
 	assert(rc == 0);
 
 	return 0;
@@ -1485,7 +1485,7 @@ int vmpl_mm_exit(struct vmpl_mm_t *vmpl_mm)
 void vmpl_mm_stats(struct vmpl_mm_t *vmpl_mm)
 {
 	printf("VMPL Memory Management Stats:\n");
-	vmpl_page_stats();
+	page_manager_stats();
 	pgtable_stats(vmpl_mm->pgd);
 	vmpl_vm_stats(&vmpl_mm->vmpl_vm);
 }
@@ -1662,7 +1662,7 @@ void vmpl_mm_test(struct vmpl_mm_t *vmpl_mm)
 	int rc;
 	void *addr;
 	log_info("VMPL-MM Test");
-	page_test(dune_fd);
+	page_manager_test();
 	pgtable_test(vmpl_mm->pgd, (uint64_t)vmpl_mm->pgd);
 	vmpl_vm_test(&vmpl_mm->vmpl_vm);
 	vmpl_mm_test_mmap(vmpl_mm);
