@@ -23,7 +23,7 @@
 struct page_manager *g_manager = NULL;
 
 // 创建页面管理器
-static struct page_manager* page_manager_create(int fd, size_t pagebase)
+static struct page_manager* page_manager_create(int fd, uintptr_t pagebase, size_t max_pages)
 {
     struct page_manager *pm = malloc(sizeof(*pm));
     if (!pm) return NULL;
@@ -36,7 +36,7 @@ static struct page_manager* page_manager_create(int fd, size_t pagebase)
 		return NULL;
 	}
     
-    pm->pages = malloc(sizeof(struct page) * MAX_PAGES);
+    pm->pages = malloc(sizeof(struct page) * max_pages);
     if (!pm->pages) {
         free(pm);
         return NULL;
@@ -44,6 +44,7 @@ static struct page_manager* page_manager_create(int fd, size_t pagebase)
 
     pm->fd = fd;
     pm->pagebase = pagebase;
+	pm->max_pages = max_pages;
     return pm;
 }
 
@@ -137,7 +138,7 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 
 bool __get_page(struct page *pg)
 {
-	if (pg < g_manager->pages || pg >= (g_manager->pages + MAX_PAGES))
+	if (!page_in_range(pg))
 		return false;
 	
 	if (pg->vmpl == VMPL0)
@@ -149,7 +150,7 @@ bool __get_page(struct page *pg)
 
 bool __put_page(struct page *pg)
 {
-	if (pg < g_manager->pages || pg >= (g_manager->pages + MAX_PAGES))
+	if (!page_in_range(pg))
 		return false;
 	
 	if (pg->vmpl == VMPL0 || pg->ref == 0)
@@ -216,14 +217,12 @@ void dune_page_free(struct page *pg)
 void dune_page_stats(void)
 {
 	printf("Dune Pages Stats:\n");
-	printf("Dune Pages: %d/%ld\n", g_manager->dune_page_count, MAX_PAGES);
+	printf("Dune Pages: %d/%ld\n", g_manager->dune_page_count, g_manager->max_pages);
 }
 
 bool dune_page_is_from_pool(physaddr_t pa)
 {
-	if (pa >= g_manager->pagebase && pa < (g_manager->pagebase + (MAX_PAGES << PGSHIFT)))
-		return true;
-	return false;
+	return address_in_range(pa);
 }
 
 struct page * dune_pa2page(physaddr_t pa)
@@ -317,7 +316,7 @@ void vmpl_page_free(struct page *pg)
 void vmpl_page_stats(void)
 {
 	printf("VMPL Pages Stats:\n");
-	printf("VMPL Pages: %d/%ld\n", g_manager->vmpl_page_count, MAX_PAGES);
+	printf("VMPL Pages: %d/%ld\n", g_manager->vmpl_page_count, g_manager->max_pages);
 }
 
 bool vmpl_page_is_from_pool(physaddr_t pa)
@@ -364,7 +363,7 @@ int page_manager_init(void)
 	int ret;
 
 	// 创建页面管理器，兼容dune的page管理
-	g_manager = page_manager_create(dune_fd, PAGEBASE);
+	g_manager = page_manager_create(dune_fd, PAGEBASE, MAX_PAGES);
 	if (!g_manager)
 		return -ENOMEM;
 

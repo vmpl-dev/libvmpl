@@ -63,6 +63,7 @@ struct page_manager {
 
     // PAGEBASE属性
     uintptr_t pagebase;
+	uint64_t max_pages;
 };
 
 extern struct page_manager *g_manager;
@@ -72,6 +73,17 @@ extern struct page_manager *g_manager;
 #define PAGE_SHIFT	12
 #define MAX_PAGES	(SYSTEM_RAM >> PAGE_SHIFT) /* 17 GB of memory */
 
+static inline bool address_in_range(uint64_t addr)
+{
+	struct page_manager *pm = g_manager;
+	return addr >= pm->pagebase && addr < (pm->pagebase + (pm->max_pages << PAGE_SHIFT));
+}
+
+static inline bool page_in_range(struct page *pg)
+{
+	struct page_manager *pm = g_manager;
+	return pg >= pm->pages && pg < (pm->pages + pm->max_pages);
+}
 extern void *do_mapping(uint64_t phys, size_t len);
 extern bool __get_page(struct page *pg);
 extern bool __put_page(struct page *pg);
@@ -96,7 +108,7 @@ static inline void vmpl_page_mark(struct page *pg)
 }
 static inline void vmpl_page_mark_addr(physaddr_t pa)
 {
-	if (pa >= PAGEBASE)
+	if (address_in_range(pa))
 		vmpl_page_mark(vmpl_pa2page(pa));
 }
 static inline void vmpl_page_get(struct page *pg)
@@ -106,7 +118,7 @@ static inline void vmpl_page_get(struct page *pg)
 static inline struct page * vmpl_page_get_addr(physaddr_t pa)
 {
 	struct page *pg;
-	if (pa < PAGEBASE)
+	if (!address_in_range(pa))
 		return NULL;
 	pg = vmpl_pa2page(pa);
 	if (vmpl_page_is_from_pool(pa))
