@@ -272,9 +272,9 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
 
     // 从最高级页表开始遍历
 #ifdef CONFIG_PGTABLE_LA57
-    for (level = PT_LEVEL_PGD; level >= PT_LEVEL_PTE; level--) {
+    for (level = PT_LEVEL_PGD; level > PT_LEVEL_PTE; level--) {
 #else
-    for (level = PT_LEVEL_P4D; level >= PT_LEVEL_PTE; level--) {
+    for (level = PT_LEVEL_P4D; level > PT_LEVEL_PTE; level--) {
 #endif
         idx = PDX(level, va);
         pte_t pte = pt_curr[idx];
@@ -293,9 +293,9 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
             log_debug("created new pt at level %d: %lx", level, pt_curr[idx]);
 
             // 根据创建模式处理
-            if ((create == CREATE_BIG && level == PT_LEVEL_PMD) ||
-                (create == CREATE_BIG_1GB && level == PT_LEVEL_PUD)) {
-                log_debug("big page at level %d: %lx", level, pt_curr[idx]);
+            if ((create == CREATE_BIG_1GB && level == PT_LEVEL_PUD) ||
+                (create == CREATE_BIG && level == PT_LEVEL_PMD)) {
+                log_debug("found big page at level %d: %lx", level, pt_curr[idx]);
                 // 对于大页，直接返回当前页表项
                 *pte_out = &pt_curr[idx];
                 return 0;
@@ -305,10 +305,10 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
             pt_curr = new_pt;
         } else {
             // 检查是否是大页
-            if ((level == PT_LEVEL_PMD && pte_big(pte)) ||
-                (level == PT_LEVEL_PUD && pte_big(pte))) {
+            if ((level == PT_LEVEL_PUD && pte_big(pte)) ||
+                (level == PT_LEVEL_PMD && pte_big(pte))) {
                 // 返回当前页表项
-                log_debug("big page at level %d: %lx", level, pte);
+                log_debug("found big page at level %d: %lx", level, pte);
                 *pte_out = &pt_curr[idx];
                 return 0;
             }
@@ -320,6 +320,8 @@ int pgtable_lookup(pte_t *root, void *va, int create, pte_t **pte_out)
         }
     }
 
+    // 获取最低级页表项的虚拟地址
+    idx = PDX(PT_LEVEL_PTE, va);
     *pte_out = &pt_curr[idx];
     return 0;
 }
@@ -357,49 +359,55 @@ int pgtable_update_leaf_pte(pte_t *pgd, uint64_t va, uint64_t pa)
  */
 int lookup_address_in_pgd(pte_t *root, uint64_t va, int *level, pte_t **ptep)
 {
-    pte_t *pt_curr;
+    pte_t *pt_curr = root;
     enum page_level curr_level;
     uint64_t idx;
 
     assert(root != NULL);
 
-    pt_curr = root;
-#ifdef CONFIG_PGTABLE_LA57
-    curr_level = PT_LEVEL_PGD;
-#else
-    curr_level = PT_LEVEL_P4D;
-#endif
-
     // 从最高级页表开始遍历
-    while (curr_level >= PT_LEVEL_PTE) {
+#ifdef CONFIG_PGTABLE_LA57
+    for (curr_level = PT_LEVEL_PGD; curr_level > PT_LEVEL_PTE; curr_level--) {
+#else
+    for (curr_level = PT_LEVEL_P4D; curr_level > PT_LEVEL_PTE; curr_level--) {
+#endif
         idx = PDX(curr_level, va);
-        log_debug("level %d: pt_curr[%lu] = %lx", curr_level, idx, pt_curr[idx]);
-
-        // 检查页表项是否有效
-        if (pte_none(pt_curr[idx]) || 
-            (curr_level > PT_LEVEL_PTE && pte_bad(pt_curr[idx])) ||
-            (curr_level == PT_LEVEL_PTE && !pte_present(pt_curr[idx]))) {
-            return -EINVAL;
-        }
+        pte_t pte = pt_curr[idx];
+        log_debug("level %d: pt_curr[%lu] = %lx", curr_level, idx, pte);
 
         // 更新返回值
         if (level) {
             *level = curr_level;
         }
-        if (curr_level == PT_LEVEL_PTE) {
+
+        // 检查页表项是否有效
+        if (pte_none(pte) || 
+            (curr_level > PT_LEVEL_PTE && pte_bad(pte)) ||
+            (curr_level == PT_LEVEL_PTE && !pte_present(pte))) {
+            return -EINVAL;
+        }
+
+        // 检查是否是大页
+        if ((curr_level == PT_LEVEL_PUD && pte_big(pte)) ||
+            (curr_level == PT_LEVEL_PMD && pte_big(pte))) {
+            log_debug("found big page at level %d: %lx", curr_level, pte);
             if (ptep) {
                 *ptep = &pt_curr[idx];
             }
-            break;
+            return 0;
         }
 
         // 获取下一级页表
-        pt_curr = pgtable_do_mapping(pte_addr(pt_curr[idx]));
+        pt_curr = pgtable_do_mapping(pte_addr(pte));
         if (!pt_curr) {
             return -EFAULT;
         }
+    }
 
-        curr_level--;
+    if (ptep) {
+        // 获取最低级页表项的虚拟地址
+        idx = PDX(PT_LEVEL_PTE, va);
+        *ptep = &pt_curr[idx];
     }
 
     return 0;

@@ -29,7 +29,6 @@ extern const uint64_t VMPL_PERCPU_HOTCALL;
 #define SAFE_STACK_SIZE (2048 * 1024)
 #define XSAVE_SIZE 4096
 
-extern __thread void *lpercpu;
 #ifdef CONFIG_VMPL_CPUSET
 int setup_cpuset();
 #else
@@ -41,6 +40,8 @@ void dump_tss(struct Tss *tss);
 int setup_safe_stack(struct Tss *tss);
 void *create_percpu(void);
 void free_percpu(void *percpu);
+void *get_current_percpu(void);
+void set_current_percpu(void *percpu);
 unsigned long get_fs_base(void);
 
 #endif

@@ -2,6 +2,8 @@
 #define __ENTRY_H_
 
 #include <stdbool.h>
+#include "page.h"
+#include "mm.h"
 #include "vmpl.h"
 #include "percpu.h"
 #include "vmpl-dev.h"
@@ -25,6 +27,17 @@ struct vm_ops {
     void (*test)(void);                   // 测试函数
     struct vcpu_ops vcpu_ops;            // 虚拟机CPU操作接口
 };
+
+// 虚拟化上下文
+struct vmpl_context {
+    int dune_fd;
+    struct page_manager *g_manager;
+    struct vmpl_mm_t *vmpl_mm;
+    struct vm_ops *ops;
+};
+
+struct vmpl_context *get_current_context(void);
+void set_current_context(struct vmpl_context *ctx);
 
 #define BUILD_ASSERT(cond) _Static_assert(cond, #cond)
 

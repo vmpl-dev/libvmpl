@@ -56,6 +56,20 @@ AC_ARG_WITH([dune-page-grow-size], [AS_HELP_STRING([--with-dune-page-grow-size],
             [with_dune_page_grow_size=0x200])
 AC_DEFINE_UNQUOTED([CONFIG_DUNE_PAGE_GROW_SIZE], [$with_dune_page_grow_size], [dune page grow size])
 
+AC_ARG_ENABLE([vmpl-banner],
+              [AS_HELP_STRING([--enable-vmpl-banner],
+                              [Enable vmpl banner support])],
+              [enable_vmpl_banner=$enableval],
+              [enable_vmpl_banner=no])
+AM_CONDITIONAL([ENABLE_VMPL_BANNER], [test "x$enable_vmpl_banner" = "xyes"])
+
+AC_ARG_ENABLE([vmpl-stats],
+              [AS_HELP_STRING([--enable-vmpl-stats],
+                              [Enable vmpl stats support])],
+              [enable_vmpl_stats=$enableval],
+              [enable_vmpl_stats=no])
+AM_CONDITIONAL([ENABLE_VMPL_STATS], [test "x$enable_vmpl_stats" = "xyes"])
+
 AC_ARG_ENABLE([vmpl-test], [AS_HELP_STRING([--enable-vmpl-test],
                                            [Enable vmpl test support])],
               [enable_vmpl_test=$enableval],
@@ -168,6 +182,14 @@ AS_IF([test "x$enable_vmpl_syscall" = "xyes" -a "$x$enable_vmpl_seimi" = "xyes"]
 AC_DEFINE([LIBVMPL_INCLUDE_DIR], [/home/benshan/vmpl-process/libvmpl/include], [libvmpl的头文件目录])
 AC_DEFINE([SVSM_DEV_INCLUDE_DIR], [/home/benshan/svsm-dev], [svsm-dev的头文件目录])
 AC_DEFINE([MY_CUSTOM_VAR] [1], [附加标志])
+
+if test "x$enable_vmpl_banner" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_BANNER], [1], [Enable vmpl banner support])
+fi
+
+if test "x$enable_vmpl_stats" = "xyes"; then
+    AC_DEFINE([CONFIG_VMPL_STATS], [1], [Enable vmpl stats support])
+fi
 
 if test "x$enable_vmpl_test" = "xyes"; then
     AC_DEFINE([CONFIG_VMPL_TEST], [1], [Enable vmpl test support])

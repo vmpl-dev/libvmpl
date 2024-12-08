@@ -13,7 +13,7 @@
 #include "percpu.h"
 #include "debug.h"
 
-__thread void *percpu;
+static __thread void *lpercpu;
 
 unsigned long dune_get_user_fs(void)
 {
@@ -164,7 +164,7 @@ int setup_safe_stack(struct Tss *tss)
 void *create_percpu(void)
 {
     log_debug("create percpu");
-	percpu = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
+	void *percpu = mmap(NULL, PGSIZE, PROT_READ | PROT_WRITE,
 				  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (percpu == MAP_FAILED)
 		return NULL;
@@ -174,6 +174,16 @@ void *create_percpu(void)
 void free_percpu(void *percpu)
 {
     munmap(percpu, PGSIZE);
+}
+
+void *get_current_percpu(void)
+{
+    return lpercpu;
+}
+
+void set_current_percpu(void *percpu)
+{
+    lpercpu = percpu;
 }
 
 unsigned long get_fs_base(void)

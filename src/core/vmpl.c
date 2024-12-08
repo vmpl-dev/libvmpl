@@ -489,15 +489,11 @@ static void vmpl_cleanup(void)
     apic_cleanup();
 }
 
-#ifdef CONFIG_DUMP_DETAILS
 static void vmpl_stats(void)
 {
     log_info("vmpl_stats");
     vmpl_mm_stats(&vmpl_mm);
 }
-#else
-static inline void vmpl_stats(void) { }
-#endif
 
 #ifdef CONFIG_VMPL_TEST
 static void vmpl_test(void)

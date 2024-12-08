@@ -165,12 +165,12 @@ int dune_page_init(void)
 	log_info("dune_page_init");
 
 	// 初始化dune的page管理
-	g_manager->dune_page_count = 0;
 	pthread_mutex_init(&g_manager->dune_mutex, NULL);
 	SLIST_INIT(&g_manager->dune_free_list);
 
 	// 分配初始页面
 	grow_pages(&g_manager->dune_free_list, CONFIG_DUNE_PAGE_GROW_SIZE, true);
+	g_manager->dune_page_count = CONFIG_DUNE_PAGE_GROW_SIZE;
 
     return 0;
 }
@@ -265,10 +265,12 @@ int vmpl_page_init(void)
 	log_info("vmpl_page_init");
 
 	// 初始化vmpl的page管理
-	g_manager->vmpl_page_count = 0;
 	pthread_mutex_init(&g_manager->vmpl_mutex, NULL);
 	SLIST_INIT(&g_manager->vmpl_free_list);
+
+	// 分配初始页面
 	grow_pages(&g_manager->vmpl_free_list, CONFIG_VMPL_PAGE_GROW_SIZE, true);
+	g_manager->vmpl_page_count = CONFIG_VMPL_PAGE_GROW_SIZE;
 
 	return 0;
 }

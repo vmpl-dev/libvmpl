@@ -69,6 +69,7 @@ int setup_vsyscall(void)
 {
     int ret;
     pte_t *pte;
+    log_info("setup vsyscall");
 
     ret = vmpl_vm_lookup(pgroot, (void *) VSYSCALL_ADDR, CREATE_NORMAL, &pte);
     if (ret) {
