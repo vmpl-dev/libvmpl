@@ -210,7 +210,7 @@ void dune_syscall_handler(struct dune_tf *tf)
 #define VMPL_SYSCALL_HANDLER(name, ...)                 \
 	case __NR_##name:                                   \
 	{                                                   \
-		ret = vmpl_vm_##name(vmpl_mm.pgd, __VA_ARGS__); \
+		ret = vmpl_vm_##name(pgroot, __VA_ARGS__); 		\
 		ret = (ret == MAP_FAILED) ? -errno : ret;       \
 		if ((ret != -ENOMEM) && (ret != -ENOTSUP))      \
 		{                                               \

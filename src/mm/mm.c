@@ -669,7 +669,7 @@ static int unmap_vma(void *va_start, void *va_end)
 
 	while ((vma = find_vma_intersection(vm, va_start, va_end)) != NULL) {
 		// Walk the page table and unmap the pages in the VMA.
-		int rc = __vmpl_vm_page_walk(vmpl_mm.pgd, vma->start, vma->end - 1,
+		int rc = __vmpl_vm_page_walk(pgroot, vma->start, vma->end - 1,
 									&__vmpl_vm_munmap_helper, vma,
 									3, CREATE_NONE);
 		if (rc != 0) {
@@ -790,7 +790,7 @@ void *vmpl_vm_mmap(pte_t *root, void *addr, size_t length, int prot, int flags,
 	vma->vm_file = strdup("[vmpl]");
 
 	// Allocate page table entries for the new VMA
-	rc = __vmpl_vm_page_walk(vmpl_mm.pgd, vma->start, vma->end - 1,
+	rc = __vmpl_vm_page_walk(pgroot, vma->start, vma->end - 1,
 							 &__vmpl_vm_mmap_helper, vma,
 							 3, CREATE_NORMAL);
 
@@ -930,7 +930,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 					  old_vma->start, old_vma->end);
 			vmpl_vma_free(new_vma);
 			// Allocate page table entries for the new VMA (if MREMAP_FIXED is not set)
-			ret = __vmpl_vm_page_walk(vmpl_mm.pgd, old_address + old_size, old_address + new_size - 1,
+			ret = __vmpl_vm_page_walk(pgroot, old_address + old_size, old_address + new_size - 1,
 									  &__vmpl_vm_mremap_helper, old_vma,
 									  3, CREATE_NORMAL);
 			return old_address;
@@ -962,7 +962,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	};
 
 	// Allocate page table entries for the new VMA
-	ret = __vmpl_vm_page_walk(vmpl_mm.pgd, new_address, new_address + new_size - 1,
+	ret = __vmpl_vm_page_walk(pgroot, new_address, new_address + new_size - 1,
 						&__vmpl_vm_mremap_helper, &mremap_arg,
 						3, CREATE_NORMAL);
 
@@ -996,7 +996,7 @@ void *vmpl_vm_mremap(pte_t *root, void *old_address, size_t old_size,
 	}
 
 	// Unmap the old VMA
-	rc = __vmpl_vm_page_walk(vmpl_mm.pgd, old_address, old_address + old_size - 1,
+	rc = __vmpl_vm_page_walk(pgroot, old_address, old_address + old_size - 1,
 							 &__vmpl_vm_munmap_helper, old_vma,
 							 3, CREATE_NONE);
 	if (rc != 0) {
@@ -1435,7 +1435,7 @@ int vmpl_mm_init(struct vmpl_mm_t *vmpl_mm)
 	}
 
 	// VMPL Page Table Management
-    rc = pgtable_init(&vmpl_mm->pgd, dune_fd);
+    rc = pgtable_init();
 	if (rc != 0) {
 		log_err("Failed to initialize page table");
 		goto out;
@@ -1467,7 +1467,7 @@ int vmpl_mm_exit(struct vmpl_mm_t *vmpl_mm)
 	rc = vmpl_vm_exit(&vmpl_mm->vmpl_vm);
 	assert(rc == 0);
 
-	rc = pgtable_exit(vmpl_mm->pgd);
+	rc = pgtable_exit(pgroot);
 	assert(rc == 0);
 
 	rc = page_manager_exit();
@@ -1486,7 +1486,7 @@ void vmpl_mm_stats(struct vmpl_mm_t *vmpl_mm)
 {
 	printf("VMPL Memory Management Stats:\n");
 	page_manager_stats();
-	pgtable_stats(vmpl_mm->pgd);
+	pgtable_stats(pgroot);
 	vmpl_vm_stats(&vmpl_mm->vmpl_vm);
 }
 
@@ -1503,7 +1503,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 #if 0
 	// Test page table entry lookup
 	log_info("Test page table entry lookup");
-	rc = pgtable_lookup(vmpl_mm->pgd, vmpl_mm->vmpl_vm.va_start, false, &ptep);
+	rc = pgtable_lookup(pgroot, vmpl_mm->vmpl_vm.va_start, false, &ptep);
 	assert(rc == 0);
 	assert(ptep != NULL);
 	log_success("Test page table entry lookup passed, pte = 0x%lx", *ptep);
@@ -1524,7 +1524,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test page table entry lookup
 	log_info("Test page table entry lookup");
-	rc = pgtable_lookup(vmpl_mm->pgd, addr, false, &ptep);
+	rc = pgtable_lookup(pgroot, addr, false, &ptep);
 	assert(rc == 0);
 	assert(ptep != NULL);
 	log_success("Test page table entry lookup passed, pte = 0x%lx", *ptep);
@@ -1545,7 +1545,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	log_success("Test mmap at a specific address passed");
 
 	// Test access to the mapped page at a specific address
-	pgtable_lookup(vmpl_mm->pgd, addr, false, &ptep);
+	pgtable_lookup(pgroot, addr, false, &ptep);
 	log_info("Test access to the mapped page at a specific address, pte = 0x%lx", *ptep);
 	assert(!pte_present(*ptep));
 	*(uint64_t *)(addr) = 0xdeadbeef;
@@ -1633,7 +1633,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 
 	// Test clone
 	log_info("Test clone");
-	new_root = vmpl_vm_clone(vmpl_mm->pgd);
+	new_root = vmpl_vm_clone(pgroot);
 	assert(new_root != NULL);
 	log_success("Test clone passed");
 
@@ -1643,7 +1643,7 @@ void vmpl_mm_test_mmap(struct vmpl_mm_t *vmpl_mm)
 	log_success("Test load new page table passed");
 
 	// Restore the original page table
-	load_cr3(CR3_NOFLUSH | (uint64_t)vmpl_mm->pgd);
+	load_cr3(CR3_NOFLUSH | (uint64_t)pgroot);
 
 	// Test free
 	log_info("Test free");
@@ -1663,7 +1663,7 @@ void vmpl_mm_test(struct vmpl_mm_t *vmpl_mm)
 	void *addr;
 	log_info("VMPL-MM Test");
 	page_manager_test();
-	pgtable_test(vmpl_mm->pgd, (uint64_t)vmpl_mm->pgd);
+	pgtable_test(pgroot, (uint64_t)pgroot);
 	vmpl_vm_test(&vmpl_mm->vmpl_vm);
 	vmpl_mm_test_mmap(vmpl_mm);
 	log_success("VMPL-MM Test Passed");

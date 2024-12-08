@@ -62,7 +62,6 @@ typedef uintptr_t phys_addr_t;
 typedef uintptr_t virt_addr_t;
 
 struct vmpl_mm_t {
-	pte_t *pgd;
 	struct vmpl_vm_t vmpl_vm;
 	bool initialized;
 	pthread_mutex_t lock;

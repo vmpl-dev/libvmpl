@@ -126,7 +126,7 @@ failed:
     return -ENOMEM;
 }
 
-int pgtable_init(pte_t **pgd, int fd)
+int pgtable_init()
 {
 	int rc;
     uint64_t cr3;
@@ -135,7 +135,7 @@ int pgtable_init(pte_t **pgd, int fd)
 	log_debug("pgtable init");
 
 	// Get CR3
-    rc = vmpl_ioctl_get_cr3(fd, &cr3);
+    rc = vmpl_ioctl_get_cr3(dune_fd, &cr3);
     if (rc) {
         log_err("get cr3 failed");
         return rc;
@@ -145,9 +145,9 @@ int pgtable_init(pte_t **pgd, int fd)
 
     // Initialize page table
 #ifdef CONFIG_PGTABLE_LA57
-	rc = __pgtable_init(cr3, PT_LEVEL_PGD, fd, &pgtable_count, &page_count);
+	rc = __pgtable_init(cr3, PT_LEVEL_PGD, dune_fd, &pgtable_count, &page_count);
 #else
-	rc = __pgtable_init(cr3, PT_LEVEL_P4D, fd, &pgtable_count, &page_count);
+	rc = __pgtable_init(cr3, PT_LEVEL_P4D, dune_fd, &pgtable_count, &page_count);
 #endif
     if (rc) {
         log_err("pgtable init failed");
@@ -155,8 +155,7 @@ int pgtable_init(pte_t **pgd, int fd)
     }
 
     log_debug("dune: %lu page tables, %lu pages", pgtable_count, page_count);
-    *pgd = phys_to_virt(cr3);
-    pgroot = *pgd;
+    pgroot = phys_to_virt(cr3);
 
     return 0;
 }

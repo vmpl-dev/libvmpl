@@ -181,7 +181,7 @@ static inline bool is_aligned(PhysAddr addr, size_t alignment) {
 }
 
 extern pte_t *pgroot;
-int pgtable_init(pte_t **pgd, int fd);
+int pgtable_init();
 int pgtable_exit(pte_t *pgd);
 int pgtable_free(pte_t *pgd);
 void pgtable_stats(pte_t *pgd);
