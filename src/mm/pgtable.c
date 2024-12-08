@@ -58,12 +58,7 @@ static inline virtaddr_t alloc_zero_page(void)
 	
 	pa = dune_page2pa(pg);
 	va = phys_to_virt(pa);
-    assert(pa >= PAGEBASE);
-    assert(va >= PGTABLE_MMAP_BASE);
-    assert(va < PGTABLE_MMAP_END);
-    assert(pa == (va - PGTABLE_MMAP_BASE));
-    assert(pg == vmpl_pa2page(pa));
-    assert(pg->flags == 1);
+
     memset(va, 0, PAGE_SIZE);
 	log_debug("pg = 0x%lx, pa = 0x%lx, va = 0x%lx, ref = %d", pg, pa, va, pg->ref);
 	return va;
@@ -201,6 +196,17 @@ void pgtable_test(pte_t *pgd, uint64_t va)
     rc = pgtable_lookup(pgd, va, false, &ptep);
     assert(rc == 0);
     log_success("Page Table Test Passed");
+
+    // 检查物理地址是否在VMPL范围内
+    void *va = alloc_zero_page();
+    pa = virt_to_phys(va);
+    struct page *pg = vmpl_pa2page(pa);
+    assert(pa >= PAGEBASE);
+    assert(va >= PGTABLE_MMAP_BASE);
+    assert(va < PGTABLE_MMAP_END);
+    assert(pa == (va - PGTABLE_MMAP_BASE));
+    assert(pg == vmpl_pa2page(pa));
+    assert(pg->flags == 1);
 
     return 0;
 }
