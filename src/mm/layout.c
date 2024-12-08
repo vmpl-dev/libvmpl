@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <assert.h>
 #include "vmpl-dev.h"
+#include "ioctl.h"
 #include "layout.h"
 #include "page.h"
 #include "pgtable.h"
@@ -15,12 +16,21 @@ static struct dune_layout_t dune_cfg;
 
 // VMPL配置初始化
 static int vmpl_init_config(void) {
-    vmpl_cfg.mmap_base = PGTABLE_MMAP_BASE;
-    vmpl_cfg.mmap_end = PGTABLE_MMAP_END;
-    vmpl_cfg.page_base = PAGEBASE;
-    vmpl_cfg.max_pages = MAX_PAGES;
+    int ret;
+    struct vmpl_layout layout;
+
+    ret = vmpl_ioctl_get_layout(dune_fd, &layout);
+    if (ret < 0) {
+        log_err("Failed to get layout: %s", strerror(errno));
+        return ret;
+    }
+
+    vmpl_cfg.mmap_base = layout.mmap_base;
+    vmpl_cfg.mmap_end = layout.mmap_end;
+    vmpl_cfg.page_base = layout.phys_base;
+    vmpl_cfg.max_pages = (layout.phys_end - layout.phys_base) / PAGE_SIZE;
     vmpl_cfg.page_size = PAGE_SIZE;
-    
+
     log_debug("VMPL config initialized: mmap_base=0x%lx, mmap_end=0x%lx", 
               vmpl_cfg.mmap_base, vmpl_cfg.mmap_end);
     return 0;
@@ -52,9 +62,18 @@ static uint64_t vmpl_pa_to_va(uint64_t pa) {
 
 // DUNE配置初始化
 static int dune_init_config(void) {
-    dune_cfg.phys_limit = phys_limit;
-    dune_cfg.mmap_base = mmap_base;
-    dune_cfg.stack_base = start_stack;
+    int ret;
+    struct dune_layout layout;
+
+    ret = dune_ioctl_get_layout(dune_fd, &layout);
+    if (ret < 0) {
+        log_err("Failed to get layout: %s", strerror(errno));
+        return ret;
+    }
+
+    dune_cfg.phys_limit = layout.phys_limit;
+    dune_cfg.mmap_base = layout.base_map;
+    dune_cfg.stack_base = layout.base_stack;
     dune_cfg.stack_size = GPA_STACK_SIZE;
     dune_cfg.map_size = GPA_MAP_SIZE;
     

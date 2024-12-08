@@ -62,6 +62,15 @@ int vmpl_ioctl_create_vcpu(int vmpl_fd, struct vcpu_config *config) {
     return rc;
 }
 
+int vmpl_ioctl_get_layout(int vmpl_fd, struct vmpl_layout *layout) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_LAYOUT, layout);
+    if (rc < 0) {
+        log_err("Failed to get layout: %s", strerror(errno));
+        return -errno;
+    }
+}
+
 int vmpl_ioctl_get_ghcb(int vmpl_fd, uint64_t *ghcb) {
     int rc;
     rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_GHCB, ghcb);
