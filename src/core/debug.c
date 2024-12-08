@@ -11,7 +11,7 @@
 
 #define X86_EFLAGS_TF (0x100)
 
-static struct dune_trap_regs trap_regs;
+static __thread struct dune_trap_regs trap_regs;
 static __thread int debug_fd = -1;
 
 void set_debug_fd(int fd)
