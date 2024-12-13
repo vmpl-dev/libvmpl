@@ -1,5 +1,5 @@
-#ifndef _MAPPING_H_
-#define _MAPPING_H_
+#ifndef _LAYOUT_H_
+#define _LAYOUT_H_
 
 #include <stdint.h>
 #include <stdbool.h>

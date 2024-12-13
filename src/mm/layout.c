@@ -142,6 +142,8 @@ static const address_mapping_t vmpl_mapping = {
     .pa_to_va = vmpl_pa_to_va,
     .is_valid_va = vmpl_is_valid_va,
     .is_valid_pa = vmpl_is_valid_pa,
+    .get_pagebase = vmpl_get_pagebase,
+    .get_max_pages = vmpl_get_max_pages,
 };
 
 static const address_mapping_t dune_mapping = {
@@ -151,6 +153,8 @@ static const address_mapping_t dune_mapping = {
     .pa_to_va = dune_pa_to_va,
     .is_valid_va = dune_is_valid_va,
     .is_valid_pa = dune_is_valid_pa,
+    .get_pagebase = dune_get_pagebase,
+    .get_max_pages = dune_get_max_pages,
 };
 
 // 当前使用的映射策略
