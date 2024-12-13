@@ -161,6 +161,13 @@ bool __put_page(struct page *pg)
 }
 
 // Dune Page Management [Common Functions]
+static int dune_grow_pages(size_t num_pages)
+{
+	grow_pages(&g_manager->dune_free_list, num_pages, true);
+	g_manager->dune_page_count += num_pages;
+	return 0;
+}
+
 int dune_page_init(void)
 {
 	log_info("dune_page_init");
@@ -168,10 +175,10 @@ int dune_page_init(void)
 	// 初始化dune的page管理
 	pthread_mutex_init(&g_manager->dune_mutex, NULL);
 	SLIST_INIT(&g_manager->dune_free_list);
+	g_manager->dune_page_count = 0;
 
 	// 分配初始页面
-	grow_pages(&g_manager->dune_free_list, CONFIG_DUNE_PAGE_GROW_SIZE, true);
-	g_manager->dune_page_count = CONFIG_DUNE_PAGE_GROW_SIZE;
+	dune_grow_pages(CONFIG_DUNE_PAGE_GROW_SIZE);
 
     return 0;
 }
@@ -189,11 +196,10 @@ struct page * dune_page_alloc(void)
 	pthread_mutex_lock(mutex);
 
 	if (SLIST_EMPTY(free_list)) {
-		if (grow_pages(free_list, CONFIG_DUNE_PAGE_GROW_SIZE, true)) {
+		if (dune_grow_pages(CONFIG_DUNE_PAGE_GROW_SIZE)) {
 			pthread_mutex_unlock(mutex);
 			return NULL;
 		}
-		g_manager->dune_page_count += CONFIG_DUNE_PAGE_GROW_SIZE;
 	}
 
 	pg = SLIST_FIRST(free_list);
@@ -259,6 +265,13 @@ static void dune_page_test(void)
 
 
 // VMPL Page Management [Common Functions]
+static int vmpl_grow_pages(size_t num_pages)
+{
+	grow_pages(&g_manager->vmpl_free_list, num_pages, true);
+	g_manager->vmpl_page_count += num_pages;
+	return 0;
+}
+
 int vmpl_page_init(void)
 {
 	log_info("vmpl_page_init");
@@ -266,10 +279,10 @@ int vmpl_page_init(void)
 	// 初始化vmpl的page管理
 	pthread_mutex_init(&g_manager->vmpl_mutex, NULL);
 	SLIST_INIT(&g_manager->vmpl_free_list);
+	g_manager->vmpl_page_count = 0;
 
 	// 分配初始页面
-	grow_pages(&g_manager->vmpl_free_list, CONFIG_VMPL_PAGE_GROW_SIZE, true);
-	g_manager->vmpl_page_count = CONFIG_VMPL_PAGE_GROW_SIZE;
+	vmpl_grow_pages(CONFIG_VMPL_PAGE_GROW_SIZE);
 
 	return 0;
 }
@@ -288,11 +301,10 @@ struct page* vmpl_page_alloc(void)
 	pthread_mutex_lock(mutex);
 
 	if (SLIST_EMPTY(free_list)) {
-		if (grow_pages(free_list, CONFIG_VMPL_PAGE_GROW_SIZE, true)) {
+		if (vmpl_grow_pages(CONFIG_VMPL_PAGE_GROW_SIZE)) {
 			pthread_mutex_unlock(mutex);
 			return NULL;
 		}
-		g_manager->vmpl_page_count += CONFIG_VMPL_PAGE_GROW_SIZE;
 	}
 
 	pg = SLIST_FIRST(free_list);
