@@ -19,6 +19,7 @@
 #include "page.h"
 #include "log.h"
 #include "vmpl.h"
+#include "layout.h"
 
 struct page_manager *g_manager = NULL;
 
@@ -374,8 +375,14 @@ int page_manager_init(void)
 {
 	int ret;
 
+	// 获取页面基址
+	uintptr_t pagebase = get_pagebase();
+
+	// 获取最大页面数
+	uint64_t max_pages = get_max_pages();
+
 	// 创建页面管理器，兼容dune的page管理
-	g_manager = page_manager_create(dune_fd, PAGEBASE, MAX_PAGES);
+	g_manager = page_manager_create(dune_fd, pagebase, max_pages);
 	if (!g_manager)
 		return -ENOMEM;
 

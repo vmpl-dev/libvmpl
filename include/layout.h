@@ -30,6 +30,8 @@ typedef struct {
     uint64_t (*pa_to_va)(uint64_t pa);        // 物理地址到虚拟地址的转换
     bool (*is_valid_va)(uint64_t va);         // 检查虚拟地址是否有效
     bool (*is_valid_pa)(uint64_t pa);         // 检查物理地址是否有效
+    uintptr_t (*get_pagebase)(void);         // 获取页面基址
+    uint64_t (*get_max_pages)(void);         // 获取最大页面数
 } address_mapping_t;
 
 // 获取VMPL映射策略
@@ -43,5 +45,11 @@ int mapping_init(bool use_dune);
 
 // 获取当前使用的映射策略
 const address_mapping_t* get_current_mapping(void);
+
+// 获取页面基址
+uintptr_t get_pagebase(void);
+
+// 获取最大页面数
+uint64_t get_max_pages(void);
 
 #endif /* _MAPPING_H_ */

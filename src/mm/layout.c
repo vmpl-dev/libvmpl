@@ -60,6 +60,14 @@ static uint64_t vmpl_pa_to_va(uint64_t pa) {
     return pa + vmpl_cfg.mmap_base;
 }
 
+static uintptr_t vmpl_get_pagebase(void) {
+    return vmpl_cfg.page_base;
+}
+
+static uint64_t vmpl_get_max_pages(void) {
+    return vmpl_cfg.max_pages;
+}
+
 // DUNE配置初始化
 static int dune_init_config(void) {
     int ret;
@@ -118,6 +126,14 @@ static uint64_t dune_pa_to_va(uint64_t pa) {
     }
 }
 
+static uintptr_t dune_get_pagebase(void) {
+    return 0;
+}
+
+static uint64_t dune_get_max_pages(void) {
+    return dune_cfg.phys_limit >> PAGE_SHIFT;
+}
+
 // 映射策略定义
 static const address_mapping_t vmpl_mapping = {
     .name = "VMPL",
@@ -174,4 +190,14 @@ int mapping_init(bool use_dune) {
 const address_mapping_t* get_current_mapping(void) {
     assert(current_mapping != NULL);
     return current_mapping;
+} 
+
+uintptr_t get_pagebase(void) {
+    assert(current_mapping != NULL);
+    return current_mapping->get_pagebase();
+}
+
+uint64_t get_max_pages(void) {
+    assert(current_mapping != NULL);
+    return current_mapping->get_max_pages();
 } 
