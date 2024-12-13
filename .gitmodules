@@ -4,3 +4,6 @@
 [submodule "libdict"]
 	path = libdict
 	url = https://github.com/fmela/libdict.git
+[submodule "libexecinfo"]
+	path = libexecinfo
+	url = https://github.com/resslinux/libexecinfo.git
