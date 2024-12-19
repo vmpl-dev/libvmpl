@@ -79,37 +79,38 @@ struct gdtr_entry {
 } __attribute__((packed));
 
 struct dune_tf {
-	/* manually saved, arguments */
-	uint64_t rdi;
-	uint64_t rsi;
-	uint64_t rdx;
-	uint64_t rcx;
-	uint64_t r8;
-	uint64_t r9;
-	uint64_t r10;
-	uint64_t r11;
-
-	/* saved by C calling conventions */
-	uint64_t rbx;
-	uint64_t rbp;
-	uint64_t r12;
-	uint64_t r13;
-	uint64_t r14;
-	uint64_t r15;
-
-	/* system call number, ret */
-	uint64_t rax;
-
-	/* exception frame */
-	uint32_t err;
-	uint32_t pad1;
-	uint64_t rip;
-	uint16_t cs;
-	uint16_t pad2[3];
-	uint64_t rflags;
-	uint64_t rsp;
-	uint16_t ss;
-	uint16_t pad3[3];
+/*
+ * C ABI says these regs are callee-preserved. They aren't saved on kernel entry
+ * unless syscall needs a complete, fully filled "struct pt_regs".
+ */
+	unsigned long r15;
+	unsigned long r14;
+	unsigned long r13;
+	unsigned long r12;
+	unsigned long rbp;
+	unsigned long rbx;
+/* These regs are callee-clobbered. Always saved on kernel entry. */
+	unsigned long r11;
+	unsigned long r10;
+	unsigned long r9;
+	unsigned long r8;
+	unsigned long rax;
+	unsigned long rcx;
+	unsigned long rdx;
+	unsigned long rsi;
+	unsigned long rdi;
+/*
+ * On syscall entry, this is syscall#. On CPU exception, this is error code.
+ * On hw interrupt, it's IRQ number:
+ */
+	unsigned long err;
+/* Return frame for iretq */
+	unsigned long rip;
+	unsigned long cs;
+	unsigned long rflags;
+	unsigned long rsp;
+	unsigned long ss;
+/* top of stack page */
 } __attribute__((packed));
 
 #define ARG0(tf) ((tf)->rdi)

@@ -20,27 +20,27 @@
  */
 
 /* arguments */
-#define RDI	(0)
-#define RSI	(8)
-#define RDX	(16)
-#define RCX	(24)
-#define R8	(32)
-#define R9	(40)
+#define RDI	(112)
+#define RSI	(104)
+#define RDX	(96)
+#define RCX	(88)
+#define R8	(72)
+#define R9	(64)
 
 /* other registers */
-#define R10	(48)
-#define R11	(56)
-#define RBX	(64)
-#define RBP	(72)
-#define R12	(80)
-#define R13	(88)
-#define R14	(96)
-#define R15	(104)
+#define R10	(56)
+#define R11	(48)
+#define RBX	(40)
+#define RBP	(32)
+#define R12	(24)
+#define R13	(16)
+#define R14	(8)
+#define R15	(0)
 
 #define REG_END	(112)
 
 /* syscall num / return code */
-#define RAX	(112)
+#define RAX	(80)
 
 /* exception frame */
 #define ERR	(120)
