@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(libdune VERSION 1.0.0)
+project(libdune VERSION 1.0.0 LANGUAGES C)
 
 # 设置C标准
 set(CMAKE_C_STANDARD 11)
@@ -30,11 +30,11 @@ set_target_properties(dune PROPERTIES
 # 安装规则使用组件
 install(TARGETS dune
     COMPONENT dune-lib
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(FILES ${DUNE_HEADERS}
     COMPONENT dune-dev
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/dune
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dune
 )

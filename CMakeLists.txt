@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.10)
 
-# 在project声明之前设置编译器
-set(CMAKE_C_COMPILER "musl-gcc") # 使用完整路径
+# 正确的设置方式 - 在project声明前设置
+set(CMAKE_C_COMPILER musl-gcc CACHE STRING "C compiler" FORCE)
 
-project(libvmpl VERSION 1.0.0)
+project(libvmpl VERSION 1.0.0 LANGUAGES C ASM)
 
 # 设置C标准
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # 设置安装前缀
-set(CMAKE_INSTALL_PREFIX /usr/local/musl)
+set(CMAKE_INSTALL_PREFIX /usr/local/ CACHE PATH "Installation prefix")
 
 # 添加编译选项
 add_compile_options(-Wall -Wextra)
@@ -38,11 +38,16 @@ file(GLOB_RECURSE SOURCES
 include_directories(
     ${PROJECT_SOURCE_DIR}/../vmpl-dev
     ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/src
 )
 
 # 创建共享库
 add_library(vmpl SHARED ${SOURCES})
+
+# 链接依赖
+target_link_libraries(vmpl 
+    dict
+    dl
+)
 
 # 设置全局打包变量
 set(CPACK_DEBIAN_ENABLE_COMPONENT_DEPENDS ON)
@@ -60,6 +65,8 @@ set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DUNE Team <dune@example.com>")
 
 # 添加包依赖
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "gcc (>= 12.0.0)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libhotcalls (>= 1.0.0), libc6 (>= 2.3.1-6)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsyscall_intercept (>= 0.1.1), libc6 (>= 2.3.1-6)")
 
 # 设置包描述
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DUNE Virtual Machine Protection Layer")
@@ -88,31 +95,32 @@ set(CPACK_COMPONENT_DEVEL_DEPENDS runtime)
 # 安装规则使用组件
 install(TARGETS vmpl dune dunify
     COMPONENT runtime
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 # 统一安装所有头文件
 install(FILES ${VMPL_HEADERS}
     COMPONENT devel
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/vmpl
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vmpl
 )
 
 install(FILES ${DUNE_HEADERS}
     COMPONENT devel
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/dune
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dune
 )
 
 install(FILES ${DUNIFY_HEADERS}
     COMPONENT devel
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/dunify
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dunify
 )
 
 # 设置库的版本信息
 set_target_properties(vmpl PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
-    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
+    INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 
@@ -122,17 +130,17 @@ if(CONFIG_DUNE_BOOT)
     add_definitions(-DCONFIG_DUNE_BOOT)
 endif()
 
-option(CONFIG_VMPL_TEST "Enable vmpl test" OFF)
+option(CONFIG_VMPL_TEST "Enable vmpl test" ON)
 if(CONFIG_VMPL_TEST)
     add_definitions(-DCONFIG_VMPL_TEST)
 endif()
 
-option(CONFIG_VMPL_CPUSET "Enable cpuset" OFF)
+option(CONFIG_VMPL_CPUSET "Enable cpuset" ON)
 if(CONFIG_VMPL_CPUSET)
     add_definitions(-DCONFIG_VMPL_CPUSET)
 endif()
 
-option(CONFIG_VMPL_SIGNAL "Enable signal" OFF)
+option(CONFIG_VMPL_SIGNAL "Enable signal" ON)
 if(CONFIG_VMPL_SIGNAL)
     add_definitions(-DCONFIG_VMPL_SIGNAL)
 endif()
@@ -152,7 +160,7 @@ if(CONFIG_VMPL_GHCB)
     add_definitions(-DCONFIG_VMPL_GHCB)
 endif()
 
-option(CONFIG_VMPL_MM "Enable mm" OFF)
+option(CONFIG_VMPL_MM "Enable mm" ON)
 if(CONFIG_VMPL_MM)
     add_definitions(-DCONFIG_VMPL_MM)
 endif()
@@ -162,12 +170,12 @@ if(CONFIG_VMPL_SEIMI)
     add_definitions(-DCONFIG_VMPL_SEIMI)
 endif()
 
-option(CONFIG_VMPL_HOTCALLS "Enable hotcalls" OFF)
+option(CONFIG_VMPL_HOTCALLS "Enable hotcalls" ON)
 if(CONFIG_VMPL_HOTCALLS)
     add_definitions(-DCONFIG_VMPL_HOTCALLS)
 endif()
 
-option(CONFIG_SYS_FILTER "Enable sys filter" OFF)
+option(CONFIG_SYS_FILTER "Enable sys filter" ON)
 if(CONFIG_SYS_FILTER)
     add_definitions(-DCONFIG_SYS_FILTER)
 endif()
@@ -182,7 +190,7 @@ if(CONFIG_PGTABLE_LA57)
     add_definitions(-DCONFIG_PGTABLE_LA57)
 endif()
 
-option(CONFIG_STACK_TRACE "Enable stack trace" OFF)
+option(CONFIG_STACK_TRACE "Enable stack trace" ON)
 if(CONFIG_STACK_TRACE)
     add_definitions(-DCONFIG_STACK_TRACE)
 endif()
@@ -209,12 +217,12 @@ set(CONFIG_DUNE_PAGE_GROW_SIZE "0x200" CACHE STRING "dune page grow size")
 
 # 确保 libdune 和 libdunify 也能找到 libvmpl
 set_target_properties(dune PROPERTIES
-    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
+    INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 
 set_target_properties(dunify PROPERTIES
-    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
+    INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 

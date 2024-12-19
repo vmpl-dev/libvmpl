@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(libdunify VERSION 1.0.0)
+project(libdunify VERSION 1.0.0 LANGUAGES C)
 
 # 设置C标准
 set(CMAKE_C_STANDARD 11)
@@ -17,7 +17,9 @@ add_library(dunify SHARED dunify.c)
 
 # 链接依赖
 target_link_libraries(dunify 
+    dict
     vmpl 
+    hotcalls
     dl
 )
 
@@ -30,13 +32,13 @@ set_target_properties(dunify PROPERTIES
 # 安装规则
 install(TARGETS dunify
     COMPONENT dunify-lib
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(FILES ${DUNIFY_HEADERS}
     COMPONENT dunify-dev
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/dunify
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dunify
 )
 
 # CPack配置
@@ -57,6 +59,7 @@ set(CPACK_COMPONENT_HEADERS_DEPENDS libraries)
 # DEB包配置
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DUNE")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libvmpl (>= ${PROJECT_VERSION}), libc6 (>= 2.3.1-6)")
+set(CPACK_DEBIAN_PACKAGE_SECTION "libsyscall_intercept" (>= 0.1.1))
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 
 # RPM包配置  
