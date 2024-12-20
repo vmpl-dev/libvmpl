@@ -48,7 +48,7 @@ static inline bool need_hotcalls(long sys_nr)
 	return (((cs & 0x3) == 0) && is_hotcall(sys_nr) && hotcalls_initialized());
 }
 
-long vmpl_hotcalls_call(struct dune_tf *tf)
+long vmpl_hotcalls_call(struct pt_regs *tf)
 {
 	if (!is_hotcall(tf->rax)) {
 		return -ENOSYS;

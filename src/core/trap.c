@@ -122,7 +122,7 @@ void print_stack(unsigned long *sp) {
     }
 }
 
-static void dune_dump_stack(struct dune_tf *tf)
+static void dune_dump_stack(struct pt_regs *tf)
 {
     int i;
     unsigned long *sp = (unsigned long *) tf->rsp;
@@ -133,7 +133,7 @@ static void dune_dump_stack(struct dune_tf *tf)
 	print_stack(sp);
 }
 #else
-static void dune_dump_stack(struct dune_tf *tf) { }
+static void dune_dump_stack(struct pt_regs *tf) { }
 #endif
 
 static void dune_hexdump(void *x, int len)
@@ -146,7 +146,7 @@ static void dune_hexdump(void *x, int len)
 	dune_printf("\n");
 }
 
-static void dump_ip(struct dune_tf *tf)
+static void dump_ip(struct pt_regs *tf)
 {
 	unsigned char *p = (void *)tf->rip;
 	int len = 20;
@@ -158,14 +158,14 @@ static void dump_ip(struct dune_tf *tf)
 	dune_hexdump(p, len);
 }
 
-void dune_dump_trap_frame(struct dune_tf *tf)
+void dune_dump_trap_frame(struct pt_regs *tf)
 {
 	// we use dune_printf() because this might
 	// have to work even if libc doesn't.
 	dune_printf("dune: --- Begin Trap Dump ---\n");
 	dune_printf("dune: RIP 0x%016lx\n", tf->rip);
 	dune_printf("dune: CS 0x%02x SS 0x%02x\n", tf->cs, tf->ss);
-	dune_printf("dune: ERR 0x%08x RFLAGS 0x%08lx\n", tf->err, tf->rflags);
+	dune_printf("dune: ORIG_RAX 0x%08x RFLAGS 0x%08lx\n", tf->orig_rax, tf->eflags);
 	dune_printf("dune: RAX 0x%016lx RCX 0x%016lx\n", tf->rax, tf->rcx);
 	dune_printf("dune: RDX 0x%016lx RBX 0x%016lx\n", tf->rdx, tf->rbx);
 	dune_printf("dune: RSP 0x%016lx RBP 0x%016lx\n", tf->rsp, tf->rbp);
@@ -179,7 +179,7 @@ void dune_dump_trap_frame(struct dune_tf *tf)
 	dune_printf("dune: --- End Trap Dump ---\n");
 }
 #else
-void dune_dump_trap_frame(struct dune_tf *tf) { }
+void dune_dump_trap_frame(struct pt_regs *tf) { }
 #endif
 
 /**
@@ -191,7 +191,7 @@ void dune_dump_trap_frame(struct dune_tf *tf) { }
  * If the system call is not handled, then the program exits.
  * @param tf trap frame
  */
-void dune_syscall_handler(struct dune_tf *tf)
+void dune_syscall_handler(struct pt_regs *tf)
 {
 	long ret;
 	if (syscall_cb) {
@@ -268,9 +268,9 @@ void dune_syscall_handler(struct dune_tf *tf)
  * @param tf trap frame
  * @return int 0 if the page fault is handled, -1 if the page fault is not handled
  */
-static int dune_pre_pf_handler(struct dune_tf *tf)
+static int dune_pre_pf_handler(struct pt_regs *tf)
 {
-	uint64_t fec = tf->err;
+	uint64_t fec = tf->orig_rax;
 	uintptr_t addr;
 	pte_t *ptep, old_pte;
 
@@ -326,12 +326,12 @@ exit:
  * @param tf trap frame
  * @return int 0 if the page fault is handled, -1 if the page fault is not handled
  */
-static int dune_post_pf_handler(struct dune_tf *tf)
+static int dune_post_pf_handler(struct pt_regs *tf)
 {
 #ifdef CONFIG_VMPL_MM
 	int ret;
 	pte_t *ptep, *child_ptep;
-	uint64_t fec = tf->err;
+	uint64_t fec = tf->orig_rax;
 	uintptr_t addr = read_cr2();
 	// Find the page table entry for the faulting address in the host sthread
 	ret = pgtable_lookup(pgroot, addr, CREATE_NONE, &ptep);
@@ -373,7 +373,7 @@ static int dune_post_pf_handler(struct dune_tf *tf)
  * @param tf trap frame
  * @return int 0 if the trap is handled, -1 if the trap is not handled
  */
-static int dune_pre_trap_handler(int num, struct dune_tf *tf)
+static int dune_pre_trap_handler(int num, struct pt_regs *tf)
 {
 	int ret;
 
@@ -397,7 +397,7 @@ static int dune_pre_trap_handler(int num, struct dune_tf *tf)
  * @param tf trap frame
  * @return int 0 if the trap is handled, -1 if the trap is not handled
  */
-static int dune_post_trap_handler(int num, struct dune_tf *tf)
+static int dune_post_trap_handler(int num, struct pt_regs *tf)
 {
 	int ret;
 	switch (num) {
@@ -421,7 +421,7 @@ static int dune_post_trap_handler(int num, struct dune_tf *tf)
  * @param num trap number
  * @param tf trap frame
  */
-void dune_trap_handler(int num, struct dune_tf *tf)
+void dune_trap_handler(int num, struct pt_regs *tf)
 {
 	if (intr_cbs[num]) {
 		intr_cbs[num](tf);

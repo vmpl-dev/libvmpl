@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <sys/ucontext.h>
+#include <asm/ptrace.h>
 
 #ifdef __GLIBC__
 #include <asm/prctl.h>
@@ -78,41 +79,6 @@ struct gdtr_entry {
     uint64_t g : 1;
 } __attribute__((packed));
 
-struct dune_tf {
-/*
- * C ABI says these regs are callee-preserved. They aren't saved on kernel entry
- * unless syscall needs a complete, fully filled "struct pt_regs".
- */
-	unsigned long r15;
-	unsigned long r14;
-	unsigned long r13;
-	unsigned long r12;
-	unsigned long rbp;
-	unsigned long rbx;
-/* These regs are callee-clobbered. Always saved on kernel entry. */
-	unsigned long r11;
-	unsigned long r10;
-	unsigned long r9;
-	unsigned long r8;
-	unsigned long rax;
-	unsigned long rcx;
-	unsigned long rdx;
-	unsigned long rsi;
-	unsigned long rdi;
-/*
- * On syscall entry, this is syscall#. On CPU exception, this is error code.
- * On hw interrupt, it's IRQ number:
- */
-	unsigned long err;
-/* Return frame for iretq */
-	unsigned long rip;
-	unsigned long cs;
-	unsigned long rflags;
-	unsigned long rsp;
-	unsigned long ss;
-/* top of stack page */
-} __attribute__((packed));
-
 #define ARG0(tf) ((tf)->rdi)
 #define ARG1(tf) ((tf)->rsi)
 #define ARG2(tf) ((tf)->rdx)
@@ -120,9 +86,9 @@ struct dune_tf {
 #define ARG4(tf) ((tf)->r8)
 #define ARG5(tf) ((tf)->r9)
 
-typedef void (*dune_intr_cb) (struct dune_tf *tf);
-typedef void (*dune_pgflt_cb) (uintptr_t addr, uint64_t fec, struct dune_tf *tf);
-typedef void (*dune_syscall_cb) (struct dune_tf *tf);
+typedef void (*dune_intr_cb) (struct pt_regs *tf);
+typedef void (*dune_pgflt_cb) (uintptr_t addr, uint64_t fec, struct pt_regs *tf);
+typedef void (*dune_syscall_cb) (struct pt_regs *tf);
 typedef void (*sighandler_t)(int);
 
 #define PF_ERR_P       0x1
@@ -158,11 +124,11 @@ extern int dune_register_signal_handler(int signum, dune_intr_cb cb);
 extern void dune_register_pgflt_handler(dune_pgflt_cb cb);
 extern void dune_register_syscall_handler(dune_syscall_cb cb);
 
-extern void dune_pop_trap_frame(struct dune_tf *tf);
-extern int dune_jump_to_user(struct dune_tf *tf);
+extern void dune_pop_trap_frame(struct pt_regs *tf);
+extern int dune_jump_to_user(struct pt_regs *tf);
 extern void dune_ret_from_user(int ret) __attribute__((noreturn));
-extern void dune_dump_trap_frame(struct dune_tf *tf);
-extern void dune_passthrough_syscall(struct dune_tf *tf);
+extern void dune_dump_trap_frame(struct pt_regs *tf);
+extern void dune_passthrough_syscall(struct pt_regs *tf);
 
 // apic routines
 uint32_t apic_get_id();
@@ -174,18 +140,18 @@ void apic_send_ipi(uint8_t vector, uint32_t dest_apic_id);
 void apic_eoi();
 
 // ucontext support
-extern void dune_getcontext(ucontext_t *ucp, struct dune_tf *tf);
-extern void dune_setcontext(const ucontext_t *ucp, struct dune_tf *tf);
+extern void dune_getcontext(ucontext_t *ucp, struct pt_regs *tf);
+extern void dune_setcontext(const ucontext_t *ucp, struct pt_regs *tf);
 
 // syscall filtering
-extern bool register_syscall_filter(bool (*filter)(struct dune_tf *tf));
+extern bool register_syscall_filter(bool (*filter)(struct pt_regs *tf));
 
 // hotcall routines
 typedef long (*hotcall_t)(long, ...);
 void register_hotcall(long syscall);
 void unregister_hotcall(long syscall);
 bool is_hotcall(long syscall);
-long vmpl_hotcalls_call(struct dune_tf *tf);
+long vmpl_hotcalls_call(struct pt_regs *tf);
 long exec_hotcall(long nr, ...);
 void setup_hotcalls();
 

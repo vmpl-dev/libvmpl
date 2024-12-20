@@ -16,7 +16,7 @@
 
 /*
  * Trap Frame Format
- * NOTE: this reflects the layout of struct dune_tf
+ * NOTE: this reflects the layout of struct pt_regs
  */
 
 /* arguments */

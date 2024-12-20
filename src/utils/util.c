@@ -57,7 +57,7 @@ void dune_die(void)
  * 
  * sets the return code in tf->rax
  */
-void dune_passthrough_syscall(struct dune_tf *tf)
+void dune_passthrough_syscall(struct pt_regs *tf)
 {
 	tf->rax = syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->rcx, tf->r8, tf->r9);
 }
@@ -75,10 +75,10 @@ sighandler_t dune_signal(int sig, sighandler_t cb)
 }
 
 /**
- * @brief Create an ucontext_t from a given dune_tf (i.e., from userspace state).
+ * @brief Create an ucontext_t from a given pt_regs (i.e., from userspace state).
  * Useful for e.g. libunwind of userspace.
  */
-void dune_getcontext(ucontext_t *ucp, struct dune_tf *tf)
+void dune_getcontext(ucontext_t *ucp, struct pt_regs *tf)
 {
 #define R(x) (ucp->uc_mcontext.gregs[x])
     R(0)  = tf->r8;
@@ -102,10 +102,10 @@ void dune_getcontext(ucontext_t *ucp, struct dune_tf *tf)
 }
 
 /**
- * @brief Set a dune_tf from a given ucontext_t (i.e., from userspace state).
+ * @brief Set a pt_regs from a given ucontext_t (i.e., from userspace state).
  * Useful for e.g. libunwind of userspace.
  */
-void dune_setcontext(const ucontext_t *ucp, struct dune_tf *tf)
+void dune_setcontext(const ucontext_t *ucp, struct pt_regs *tf)
 {
 #define R(x) (ucp->uc_mcontext.gregs[x])
     tf->r8  = R(0);

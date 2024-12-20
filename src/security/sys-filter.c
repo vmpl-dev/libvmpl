@@ -35,13 +35,13 @@ bool register_syscall_filter_single(struct syscall_filter *new_filter)
 	return true;
 }
 
-static default_error_handler(struct dune_tf *tf)
+static default_error_handler(struct pt_regs *tf)
 {
 	printf("Error: syscall filter failed\n");
 	dune_die();
 }
 
-bool register_syscall_filter(bool (*filter)(struct dune_tf *tf))
+bool register_syscall_filter(bool (*filter)(struct pt_regs *tf))
 {
 	struct syscall_filter *new_filter = (struct syscall_filter *)malloc(sizeof(struct syscall_filter));
 	if (!new_filter) {
@@ -57,7 +57,7 @@ bool register_syscall_filter(bool (*filter)(struct dune_tf *tf))
 	return register_syscall_filter_single(new_filter);
 }
 
-bool apply_syscall_filters(struct dune_tf *tf)
+bool apply_syscall_filters(struct pt_regs *tf)
 {
 	struct syscall_filter *current = syscall_filters;
 	while (current) {
@@ -86,7 +86,7 @@ bool apply_syscall_filters(struct dune_tf *tf)
 	return true;
 }
 
-bool remove_syscall_filter(bool (*filter)(struct dune_tf *tf))
+bool remove_syscall_filter(bool (*filter)(struct pt_regs *tf))
 {
 	struct syscall_filter *current = syscall_filters;
 	struct syscall_filter *prev = NULL;

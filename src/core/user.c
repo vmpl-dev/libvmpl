@@ -19,7 +19,7 @@ static int dune_call_user(void *func, struct user_args *args)
 {
 	int ret;
 	unsigned long sp;
-	struct dune_tf *tf = malloc(sizeof(struct dune_tf));
+	struct pt_regs *tf = malloc(sizeof(struct pt_regs));
 	if (!tf)
 		return -ENOMEM;
 
@@ -27,7 +27,7 @@ static int dune_call_user(void *func, struct user_args *args)
 	sp = sp - 0x10008;
 	tf->rip = (unsigned long) func;
 	tf->rsp = sp;
-	tf->rflags = 0x0;
+	tf->eflags = 0x0;
 
 	// Function arguments
 	tf->rdi = args->arg1;
