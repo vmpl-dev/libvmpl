@@ -268,7 +268,7 @@ static void dune_page_test(void)
 // VMPL Page Management [Common Functions]
 static int vmpl_grow_pages(size_t num_pages)
 {
-	grow_pages(&g_manager->vmpl_free_list, num_pages, true);
+	grow_pages(&g_manager->vmpl_free_list, num_pages, false);
 	g_manager->vmpl_page_count += num_pages;
 	return 0;
 }
