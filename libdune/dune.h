@@ -1,8 +1,8 @@
 #ifndef __DUNE_H_
 #define __DUNE_H_
 
-#include "vmpl.h"
-#include "pgtable.h"
+#include <vmpl/vmpl.h>
+#include <vmpl/pgtable.h>
 
 #define PTE_ADDR            pte_addr
 
