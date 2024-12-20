@@ -30,9 +30,9 @@ static struct page_manager* page_manager_create(int fd, uintptr_t pagebase, size
     if (!pm) return NULL;
 
 	// 获取页面描述符，用于VMPL页面管理，4KB页面
-	pm->get_pages = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+	pm->pages_desc = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
 	                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (!pm->get_pages) {
+	if (!pm->pages_desc) {
 		free(pm);
 		return NULL;
 	}
@@ -51,7 +51,7 @@ static struct page_manager* page_manager_create(int fd, uintptr_t pagebase, size
 
 static void page_manager_free(struct page_manager *pm)
 {
-	munmap(pm->get_pages, PAGE_SIZE);
+	munmap(pm->pages_desc, PAGE_SIZE);
     free(pm->pages);
     free(pm);
 }
@@ -87,7 +87,7 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 {
 	int rc;
 	struct page_manager *pm = g_manager;
-	struct get_pages_t *param = pm->get_pages;
+	struct pages_desc_t *param = pm->pages_desc;
 	struct page *begin, *end, *pg;
 	void *ptr;
 

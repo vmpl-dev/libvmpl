@@ -95,11 +95,22 @@ int vmpl_ioctl_get_cr3(int vmpl_fd, uint64_t *cr3) {
     return 0;
 }
 
-int vmpl_ioctl_get_pages(int vmpl_fd, struct get_pages_t *param) {
+int vmpl_ioctl_get_pages(int vmpl_fd, struct pages_desc_t *param) {
     int rc;
 	rc = ioctl(vmpl_fd, VMPL_IOCTL_GET_PAGES, param);
     if (rc != 0) {
         perror("dune: failed to get pages");
+        return -errno;
+    }
+
+    return 0;
+}
+
+int vmpl_ioctl_put_pages(int vmpl_fd, struct pages_desc_t *param) {
+    int rc;
+    rc = ioctl(vmpl_fd, VMPL_IOCTL_PUT_PAGES, param);
+    if (rc != 0) {
+        perror("dune: failed to put pages");
         return -errno;
     }
 

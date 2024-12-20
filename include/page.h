@@ -46,7 +46,7 @@ struct page {
 struct page_manager {
     struct page *pages;
 	// 获取页面描述符，用于VMPL页面管理
-	struct get_pages_t *get_pages;
+	struct pages_desc_t *pages_desc;
     
     // VMPL页面管理
     pthread_mutex_t vmpl_mutex;
