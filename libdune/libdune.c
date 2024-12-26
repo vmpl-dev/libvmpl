@@ -1,11 +1,12 @@
 #define _GNU_SOURCE
-#include "dune.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+
+#include "dune.h"
 
 void dune_apic_ipi(uint32_t dest, uint32_t vector)
 {

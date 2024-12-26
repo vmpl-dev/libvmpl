@@ -44,6 +44,7 @@ struct vmpl_percpu {
 	uint64_t gdt[NR_GDT_ENTRIES];
     struct Ghcb *ghcb;
 	hotcall_t hotcall;
+    uint64_t vmpl;
     struct fpu_area *fpu;
     char *xsave_area;
     uint64_t xsave_mask;
@@ -141,15 +142,34 @@ static int fpu_init(struct vmpl_percpu *percpu)
     log_info("fpu init");
     percpu->xsave_mask = _xgetbv(0);
     
-    percpu->xsave_area = memalign(64, XSAVE_SIZE);
-    if (!percpu->xsave_area) {
-        vmpl_set_last_error(VMPL_ERROR_OUT_OF_MEMORY);
-        return -1;
+    // 检查 percpu 是否有效
+    if (!percpu) {
+        log_err("Invalid percpu pointer\n");
+        return -EINVAL;
     }
 
-    memset(percpu->xsave_area, 0, XSAVE_SIZE);
-    _xsave64(percpu->xsave_area, percpu->xsave_mask);
+    // 使用 posix_memalign 分配对齐的内存
+    void *xsave_area = NULL;
+    if (posix_memalign(&xsave_area, 64, 4096)) {
+        log_err("Failed to allocate aligned FPU state memory\n");
+        return -ENOMEM;
+    }
+    percpu->xsave_area = xsave_area;
 
+    // 确保 FPU 状态区域已分配并对齐
+    if (!percpu->xsave_area || ((uintptr_t)percpu->xsave_area & 0x3F)) {
+        log_err("FPU state not properly allocated or aligned\n");
+        return -EINVAL;
+    }
+
+    // 清零 FPU 状态区域
+    memset(percpu->xsave_area, 0, 4096);
+
+    // 初始化 FPU
+    asm volatile("fninit");
+
+    // 保存 FPU 状态
+    _xsave64(percpu->xsave_area, percpu->xsave_mask);
     return 0;
 }
 
@@ -294,6 +314,7 @@ static int vmpl_percpu_init(void *__percpu)
 	percpu->in_usermode = 0;
     percpu->ghcb = NULL;
     percpu->hotcall = NULL;
+    percpu->vmpl = 0;
 
     // Setup CPU set for the thread
     if ((rc = setup_cpuset())) {

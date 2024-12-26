@@ -268,5 +268,8 @@ set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 # 设置包文件名格式
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-Linux")
 
+# 添加 FPU 相关的编译选项
+add_compile_options(-mfpmath=sse -msse -msse2 -mxsave)
+
 # 包含CPack模块
 include(CPack)

@@ -8,8 +8,10 @@ function build_with_musl() {
 
 function build_with_glibc() {
     cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
+        -DCMAKE_C_COMPILER=gcc-12
 }
 
+# 构建单个包: build_package <package_dir>
 function build_package() {
     local package_dir=$1
     local package_name=$(basename ${package_dir})
@@ -25,14 +27,63 @@ function build_package() {
     make clean
     make -j8 all
     cpack -G DEB
-    scp ${package_name}-1.0.0-Linux-devel.deb ${server}:~/
-    scp ${package_name}-1.0.0-Linux-runtime.deb ${server}:~/
-    sudo dpkg -i ${package_name}-1.0.0-Linux-runtime.deb
-    sudo dpkg -i ${package_name}-1.0.0-Linux-devel.deb
+    install_package ${package_dir}
     cd ..
     popd
 }
 
+# 批量执行操作: foreach_packages <operation> <package_dir1> <package_dir2> ...
+function foreach_packages() {
+    local operation=$1
+    shift
+    for package_dir in "$@"; do
+        case ${operation} in
+            build)
+                build_package ${package_dir}
+                ;;
+            install)
+                install_package ${package_dir}
+                ;;
+            clean)
+                clean_package ${package_dir}
+                ;;
+            check)
+                check_package ${package_dir}
+                ;;
+            sync)
+                sync_package ${package_dir}
+                ;;
+            *)
+                echo "Invalid operation: ${operation}"
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# 同步包: sync_package <package_dir>
+function sync_package() {
+    local package_dir=$1
+    local package_name=$(basename ${package_dir})
+    echo "Syncing package ${package_name}"
+    pushd ${package_dir}
+    scp build/${package_name}-1.0.0-Linux-runtime.deb ${server}:~/
+    scp build/${package_name}-1.0.0-Linux-devel.deb ${server}:~/
+    popd
+}
+
+# 安装包: install_package <package_dir>
+function install_package() {
+    local package_dir=$1
+    local package_name=$(basename ${package_dir})
+    echo "Installing package ${package_name}"
+    pushd ${package_dir}
+    sudo dpkg -i build/${package_name}-1.0.0-Linux-runtime.deb
+    sudo dpkg -i build/${package_name}-1.0.0-Linux-devel.deb
+    popd
+}
+
+# 清理包: clean_package <package_dir>
 function clean_package() {
     local package_dir=$1
     local package_name=$(basename ${package_dir})
@@ -43,6 +94,7 @@ function clean_package() {
     popd
 }
 
+# 检查包: check_package <package_dir>
 function check_package() {
     local package_dir=$1
     local package_name=$(basename ${package_dir})
@@ -67,46 +119,42 @@ if [ $# -eq 0 ]; then
 fi
 
 BUILD_WITH_MUSL=${2:-0}
+PACKAGE_DIRS="${PWD}/libdict ${PWD}/libhotcalls ${PWD} ${PWD}/libdune ${PWD}/libdunify"
 
+# 构建包: build <package_dir>
 case $1 in
     dict)
-        build_package ${PWD}/libdict
+        foreach_packages build ${PWD}/libdict
         ;;
     hotcalls)
-        build_package ${PWD}/libhotcalls
+        foreach_packages build ${PWD}/libhotcalls
         ;;
     vmpl)
-        build_package ${PWD}
+        foreach_packages build ${PWD}
         ;;
     dune)
-        build_package ${PWD}/libdune
+        foreach_packages build ${PWD}/libdune
         ;;
     dunify)
-        build_package ${PWD}/libdunify
+        foreach_packages build ${PWD}/libdunify
         ;;
     all)
-        build_package ${PWD}/libdict
-        build_package ${PWD}/libhotcalls
-        build_package ${PWD}
-        build_package ${PWD}/libdune
-        build_package ${PWD}/libdunify
+        foreach_packages build ${PACKAGE_DIRS}
+        ;;
+    install)
+        foreach_packages install ${PACKAGE_DIRS}
         ;;
     clean)
-        clean_package ${PWD}/libdict
-        clean_package ${PWD}
-        clean_package ${PWD}/libdune
-        clean_package ${PWD}/libdunify
-        clean_package ${PWD}/libhotcalls
+        foreach_packages clean ${PACKAGE_DIRS}
         ;;
     check)
-        check_package ${PWD}/libdict
-        check_package ${PWD}
-        check_package ${PWD}/libdune
-        check_package ${PWD}/libdunify
-        check_package ${PWD}/libhotcalls
+        foreach_packages check ${PACKAGE_DIRS}
+        ;;
+    sync)
+        foreach_packages sync ${PACKAGE_DIRS}
         ;;
     *)
-        echo "Usage: $0 {dict|vmpl|dune|dunify|hotcalls|all|clean|check}"
+        echo "Usage: $0 {dict|vmpl|dune|dunify|hotcalls|all|clean|check|sync}"
         exit 1
         ;;
 esac
