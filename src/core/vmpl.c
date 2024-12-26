@@ -297,6 +297,28 @@ static inline void hotcalls_enable(struct vmpl_percpu *percpu) {
 }
 #endif
 
+int get_current_vmpl(void)
+{
+    FILE *fp;
+    char line[256];
+    int vmpl = -1;
+
+    fp = fopen("/proc/vmpl_proc", "r");
+    if (!fp) {
+        log_err("Failed to open /proc/vmpl_proc");
+        return -errno;
+    }
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (sscanf(line, "Current VMPL: %d", &vmpl) == 1) {
+            break;
+        }
+    }
+
+    fclose(fp);
+    return vmpl;
+}
+
 static int vmpl_percpu_init(void *__percpu)
 {
     int rc;
@@ -314,7 +336,7 @@ static int vmpl_percpu_init(void *__percpu)
 	percpu->in_usermode = 0;
     percpu->ghcb = NULL;
     percpu->hotcall = NULL;
-    percpu->vmpl = 0;
+    percpu->vmpl = get_current_vmpl();
 
     // Setup CPU set for the thread
     if ((rc = setup_cpuset())) {
