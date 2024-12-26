@@ -1,58 +1,107 @@
 cmake_minimum_required(VERSION 3.10)
 
-# 正确的设置方式 - 在project声明前设置
-set(CMAKE_C_COMPILER musl-gcc CACHE STRING "C compiler" FORCE)
-
 project(libvmpl VERSION 1.0.0 LANGUAGES C ASM)
+
+# 设置安装前缀（如果没有指定，则使用 /usr/local）
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE PATH "Installation prefix" FORCE)
+endif()
+
+# 包含 GNUInstallDirs 以获取标准安装目录定义
+include(GNUInstallDirs)
 
 # 设置C标准
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# 设置安装前缀
-set(CMAKE_INSTALL_PREFIX /usr/local/ CACHE PATH "Installation prefix")
-
 # 添加编译选项
-add_compile_options(-Wall -Wextra)
+add_compile_options(-Wall -g -O3 -MD -fPIC -mxsave)
 
 # 添加x86特定指令集支持
-add_compile_options(-mxsave)  # 支持xsave指令
-add_compile_options(-mxsaveopt)  # 支持xsaveopt指令
-add_compile_options(-mavx)  # 支持AVX指令集
+# add_compile_options(-mxsave)  # 支持xsave指令
+# add_compile_options(-mxsaveopt)  # 支持xsaveopt指令
+# add_compile_options(-mavx)  # 支持AVX指令集
 
-# 源文件
-file(GLOB_RECURSE SOURCES 
-    "src/entry.c"
-    "src/error.c"
-    "src/core/*.S"
-    "src/core/*.c"
-    "src/mm/*.c"
-    "src/security/*.c"
-    "src/syscall/*.S"
-    "src/syscall/*.c"
-    "src/vc/*.c"
-    "src/utils/*.c"
+# 添加包含目录
+include_directories(
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/../vmpl-dev
 )
 
-# 头文件目录
-include_directories(
-    ${PROJECT_SOURCE_DIR}/../vmpl-dev
-    ${PROJECT_SOURCE_DIR}/include
+# 源文件列表
+set(VMPL_SOURCES
+    src/entry.c
+    src/error.c
+    src/core/_entry.S
+    src/core/ioctl.c
+    src/core/user.c
+    src/core/percpu.c
+    src/core/signals.c
+    src/core/apic.c
+    src/core/idt.c
+    src/core/trap.c
+    src/core/debug.c
+    src/core/vmpl.c
+    src/core/dune.c
+    src/core/platform.c
+    src/mm/page.c
+    src/mm/pgtable.c
+    src/mm/layout.c
+    src/mm/mapping.c
+    src/mm/procmap.c
+    src/mm/vma.c
+    src/mm/vm.c
+    src/mm/mm.c
+    src/syscall/hotcalls.c
+    src/syscall/syscall.c
+    src/syscall/vsyscall.S
+    src/vc/ghcb.c
+    src/vc/vc.c
+    src/vc/serial.c
+    src/security/seimi.c
+    src/security/sys-filter.c
+    src/utils/util.c
+    src/utils/elf.c
+    src/utils/env.c
+    src/utils/log.c
+)
+
+# 头文件列表
+set(VMPL_HEADERS
+    include/vmpl.h
+    include/error.h
+    include/sys.h
+    include/vc.h
+    include/pgtable.h
+    include/seimi.h
+    include/elf.h
+    include/bitmap.h
+    include/log.h
 )
 
 # 创建共享库
-add_library(vmpl SHARED ${SOURCES})
+add_library(vmpl SHARED ${VMPL_SOURCES})
 
-# 链接依赖
-target_link_libraries(vmpl 
-    dict
+# 设置链接选项
+target_link_libraries(vmpl
     dl
+    dict
+    hotcalls
 )
+
+# 设置库版本
+set_target_properties(vmpl PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+)
+
+# 设置链接目录
+link_directories(${CMAKE_INSTALL_PREFIX}/lib)
 
 # 设置全局打包变量
 set(CPACK_DEBIAN_ENABLE_COMPONENT_DEPENDS ON)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
-set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE) # 所有组件打包在一起
+set(CPACK_COMPONENTS_GROUPING IGNORE)
 
 # 设置全局包信息
 set(CPACK_PACKAGE_VENDOR "DUNE")
@@ -64,9 +113,7 @@ set(CPACK_PACKAGE_CONTACT "dune@example.com")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DUNE Team <dune@example.com>")
 
 # 添加包依赖
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "gcc (>= 12.0.0)")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libhotcalls (>= 1.0.0), libc6 (>= 2.3.1-6)")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsyscall_intercept (>= 0.1.1), libc6 (>= 2.3.1-6)")
 
 # 设置包描述
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DUNE Virtual Machine Protection Layer")
@@ -77,44 +124,40 @@ set(CPACK_PACKAGE_DESCRIPTION
     " libdunify - DUNE utilities library"
 )
 
-# 添加子项目
-add_subdirectory(libdune)
-add_subdirectory(libdunify)
+# 设置组件
+set(CPACK_DEB_COMPONENT_INSTALL ON)
+set(CPACK_COMPONENTS_GROUPING IGNORE)
 
-# 配置组件
-set(CPACK_COMPONENTS_ALL 
-    runtime   # 所有运行时库
-    devel     # 所有开发文件
-)
+# 设置包名称
+set(CPACK_DEBIAN_RUNTIME_PACKAGE_NAME "libvmpl")
+set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "libvmpl-dev")
 
-# 设置组件描述
-set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "VMPL runtime libraries")
+# 设置包依赖
+set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS "libc6 (>= 2.3.1-6)")
+set(CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS "libvmpl (= ${PROJECT_VERSION})")
+
+# 设置包描述
+set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "VMPL runtime library")
 set(CPACK_COMPONENT_DEVEL_DESCRIPTION "VMPL development files")
-set(CPACK_COMPONENT_DEVEL_DEPENDS runtime)
 
-# 安装规则使用组件
-install(TARGETS vmpl dune dunify
+# 确保生成独立的包
+set(CPACK_COMPONENTS_ALL runtime devel)
+
+# 运行时库安装
+install(TARGETS vmpl
     COMPONENT runtime
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}
 )
 
-# 统一安装所有头文件
+# 确保头文件被正确安装
 install(FILES ${VMPL_HEADERS}
     COMPONENT devel
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vmpl
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/vmpl
 )
 
-install(FILES ${DUNE_HEADERS}
-    COMPONENT devel
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dune
-)
-
-install(FILES ${DUNIFY_HEADERS}
-    COMPONENT devel
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dunify
-)
+# 确保生成独立的包
+set(CPACK_COMPONENTS_ALL runtime devel)
 
 # 设置库的版本信息
 set_target_properties(vmpl PROPERTIES
@@ -130,7 +173,7 @@ if(CONFIG_DUNE_BOOT)
     add_definitions(-DCONFIG_DUNE_BOOT)
 endif()
 
-option(CONFIG_VMPL_TEST "Enable vmpl test" ON)
+option(CONFIG_VMPL_TEST "Enable vmpl test" OFF)
 if(CONFIG_VMPL_TEST)
     add_definitions(-DCONFIG_VMPL_TEST)
 endif()
@@ -206,7 +249,7 @@ if(CONFIG_VMPL_DEBUG)
 endif()
 
 # 添加额外的编译标志
-add_compile_options(-mno-sse -mno-mmx -mno-sse2 -mno-3dnow -msoft-float)
+# add_compile_options(-mno-sse -mno-mmx -mno-sse2 -mno-3dnow -msoft-float)
 
 # 设置配置变量
 set(CONFIG_VMPL_VA_START "0x3fffff000000UL" CACHE STRING "vmpl va start")
@@ -214,17 +257,6 @@ set(CONFIG_VMPL_VA_SIZE "0x20000000UL" CACHE STRING "vmpl va size")
 set(CONFIG_VMPL_FIT_ALGORITHM "2" CACHE STRING "vmpl fit algorithm")
 set(CONFIG_VMPL_PAGE_GROW_SIZE "0x400" CACHE STRING "vmpl page grow size")
 set(CONFIG_DUNE_PAGE_GROW_SIZE "0x200" CACHE STRING "dune page grow size")
-
-# 确保 libdune 和 libdunify 也能找到 libvmpl
-set_target_properties(dune PROPERTIES
-    INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-
-set_target_properties(dunify PROPERTIES
-    INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 
 # 设置包名称和版本
 set(CPACK_PACKAGE_NAME "libvmpl")

@@ -28,10 +28,11 @@ static int vmpl_init_config(void) {
     vmpl_cfg.mmap_base = layout.mmap_base;
     vmpl_cfg.mmap_end = layout.mmap_end;
     vmpl_cfg.page_base = layout.phys_base;
-    vmpl_cfg.max_pages = (layout.phys_end - layout.phys_base) / PAGE_SIZE;
+    vmpl_cfg.max_pages = (SYSTEM_RAM - layout.phys_base) >> PAGE_SHIFT;
     vmpl_cfg.page_size = PAGE_SIZE;
 
-    log_debug("VMPL config initialized: mmap_base=0x%lx, mmap_end=0x%lx", 
+    log_debug("VMPL config initialized: page_base=0x%lx, max_pages=0x%lx, mmap_base=0x%lx, mmap_end=0x%lx", 
+              vmpl_cfg.page_base, vmpl_cfg.max_pages,
               vmpl_cfg.mmap_base, vmpl_cfg.mmap_end);
     return 0;
 }

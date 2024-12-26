@@ -4,7 +4,6 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
-#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>

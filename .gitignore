@@ -28,6 +28,11 @@ depcomp
 .dirstamp
 .libs
 .history
+.cache
+*.cmake
+_CPack_Packages
+CMakeFiles
+*.deb
 include/config.h
 install-sh
 libtool

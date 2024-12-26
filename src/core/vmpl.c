@@ -91,12 +91,12 @@ static struct vcpu_config *vcpu_config_alloc(struct vmpl_percpu *percpu)
     struct vcpu_config *config = malloc(sizeof(struct vcpu_config));
     memset(config, 0, sizeof(struct vcpu_config));
 
-    config->lstar = &__dune_syscall;
+    config->lstar = (uint64_t)&__dune_syscall;
     config->fs.base = percpu->kfs_base;
     config->gs.base = (uint64_t)percpu;
 
     config->tr.selector = GD_TSS;
-    config->tr.base = &percpu->tss;
+    config->tr.base = (uint64_t)&percpu->tss;
     config->tr.limit = sizeof(percpu->tss);
     config->tr.attrib = 0x0089; // refer to linux-svsm
 

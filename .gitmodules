@@ -7,3 +7,6 @@
 [submodule "libexecinfo"]
 	path = libexecinfo
 	url = https://github.com/resslinux/libexecinfo.git
+[submodule "libhotcalls"]
+	path = libhotcalls
+	url = git@github.com:vmpl-dev/vmpl-hotcalls.git

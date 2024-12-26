@@ -137,6 +137,32 @@ static int grow_pages(struct page_head *head, size_t num_pages, bool mapping)
 	return 0;
 }
 
+static struct page *__alloc_page(struct page_head *head, pthread_mutex_t *mutex, size_t num_pages, bool mapping)
+{
+	struct page *pg;
+
+	pthread_mutex_lock(mutex);
+	pg = SLIST_FIRST(head);
+
+	if (SLIST_EMPTY(head)) {
+		if (grow_pages(head, num_pages, mapping)) {
+			pthread_mutex_unlock(mutex);
+			return NULL;
+		}
+	}
+
+	SLIST_REMOVE_HEAD(head, link);
+	pthread_mutex_unlock(mutex);
+	return pg;
+}
+
+static void __free_page(struct page_head *head, pthread_mutex_t *mutex, struct page *pg)
+{
+	pthread_mutex_lock(mutex);
+	SLIST_INSERT_HEAD(head, pg, link);
+	pthread_mutex_unlock(mutex);
+}
+
 bool __get_page(struct page *pg)
 {
 	if (!page_in_range(pg))

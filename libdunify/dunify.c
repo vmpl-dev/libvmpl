@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/syscall.h>
