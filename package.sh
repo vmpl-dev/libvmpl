@@ -1,5 +1,15 @@
 CMAKE_PREFIX_PATH=/usr/local/
 
+function build_with_musl() {
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local/musl \
+        -DCMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT=OFF \
+        -DCMAKE_C_COMPILER=musl-gcc ..
+}
+
+function build_with_glibc() {
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
+}
+
 function build_package() {
     local package_dir=$1
     local package_name=$(basename ${package_dir})
@@ -7,9 +17,11 @@ function build_package() {
     pushd ${package_dir}
     mkdir -p build && cd build
     rm -rf CMakeCache.txt CMakeFiles
-    cmake -DCMAKE_INSTALL_PREFIX=/usr/local/musl \
-        -DCMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT=OFF \
-        -DCMAKE_C_COMPILER=musl-gcc ..
+    if [ ${BUILD_WITH_MUSL} -eq 1 ]; then
+        build_with_musl
+    else
+        build_with_glibc
+    fi
     make clean
     make -j8 all
     cpack -G DEB
@@ -38,12 +50,23 @@ function check_package() {
     pushd ${package_dir}
     dpkg -c build/${package_name}-1.0.0-Linux-runtime.deb
     dpkg -c build/${package_name}-1.0.0-Linux-devel.deb
-    ldd /usr/local/musl/lib/${package_name}.so
+    if [ ${BUILD_WITH_MUSL} -eq 1 ]; then
+        ldd /usr/local/musl/lib/${package_name}.so
+    else
+        ldd /usr/local/lib/${package_name}.so
+    fi
     popd
 }
 
 PWD=$(pwd)
 server=public@amd-guest
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 {dict|hotcalls|vmpl|dune|dunify|all|clean|check}"
+    exit 1
+fi
+
+BUILD_WITH_MUSL=${2:-0}
 
 case $1 in
     dict)
