@@ -138,29 +138,6 @@ failed:
 }
 
 // musl-gcc
-#if defined(__MUSL__)
-static int fpu_init(struct vmpl_percpu *percpu)
-{
-    log_info("fpu init");
-    percpu->xsave_mask = _xgetbv(0);
-    
-    percpu->xsave_area = memalign(64, XSAVE_SIZE);
-    if (!percpu->xsave_area) {
-        vmpl_set_last_error(VMPL_ERROR_OUT_OF_MEMORY);
-        return -1;
-    }
-
-    memset(percpu->xsave_area, 0, XSAVE_SIZE);
-
-    // 初始化 FPU
-    // asm volatile("fninit");
-
-    // 保存 FPU 状态
-    _xsave64(percpu->xsave_area, percpu->xsave_mask);
-
-    return 0;
-}
-#else
 static int fpu_init(struct vmpl_percpu *percpu)
 {
     log_info("fpu init");
@@ -196,7 +173,6 @@ static int fpu_init(struct vmpl_percpu *percpu)
     _xsave64(percpu->xsave_area, percpu->xsave_mask);
     return 0;
 }
-#endif
 
 static int fpu_finish(struct vmpl_percpu *percpu)
 {
