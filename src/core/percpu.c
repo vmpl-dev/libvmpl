@@ -13,7 +13,12 @@
 #include "percpu.h"
 #include "debug.h"
 
-static __thread void *lpercpu;
+static __thread struct percpu *lpercpu = NULL;
+
+const uint64_t TMP = offsetof(struct percpu, tmp);
+const uint64_t UFS_BASE = offsetof(struct percpu, ufs_base);
+const uint64_t KFS_BASE = offsetof(struct percpu, kfs_base);
+const uint64_t IN_USERMODE = offsetof(struct percpu, in_usermode);
 
 unsigned long dune_get_user_fs(void)
 {
@@ -100,7 +105,7 @@ static uint64_t gdt_template[NR_GDT_ENTRIES] = {
     TSS2,
 };
 
-void setup_gdt(uint64_t *gdt, struct Tss *tss)
+static void setup_gdt(uint64_t *gdt, struct Tss *tss)
 {
     log_info("setup gdt");
 	memcpy(gdt, gdt_template, sizeof(uint64_t) * NR_GDT_ENTRIES);
@@ -108,7 +113,7 @@ void setup_gdt(uint64_t *gdt, struct Tss *tss)
     gdt[GD_TSS2 >> 3] = SEG_BASEHI(tss);
 }
 
-void dump_gdt(uint64_t *gdt)
+static void dump_gdt(uint64_t *gdt)
 {
     log_debug("GDT Entries:");
     for (int i = 0; i < NR_GDT_ENTRIES; i++)
@@ -122,7 +127,7 @@ void dump_gdt(uint64_t *gdt)
     }
 }
 
-void dump_tss(struct Tss *tss)
+static void dump_tss(struct Tss *tss)
 {
     log_debug("TSS RSP Entries:");
     for (int i = 0; i < 3; i++)
@@ -137,7 +142,7 @@ void dump_tss(struct Tss *tss)
     log_debug("IOMB: %x, IOPB: %x", tss->tss_iomb, tss->tss_iopb);
 }
 
-int setup_safe_stack(struct Tss *tss)
+static int setup_safe_stack(struct Tss *tss)
 {
 	int i;
 	char *safe_stack;
@@ -161,6 +166,12 @@ int setup_safe_stack(struct Tss *tss)
 	return 0;
 }
 
+static int free_safe_stack(struct Tss *tss)
+{
+    munmap(tss->tss_ist[0], SAFE_STACK_SIZE);
+    return 0;
+}
+
 void *create_percpu(void)
 {
     log_debug("create percpu");
@@ -171,17 +182,123 @@ void *create_percpu(void)
     return percpu;
 }
 
-void free_percpu(void *percpu)
+int init_percpu(struct percpu *base)
 {
-    munmap(percpu, PGSIZE);
+    int rc;
+    unsigned long fs_base;
+
+    if ((rc = setup_safe_stack(&base->tss))) {
+		log_err("dune: failed to setup safe stack");
+		return rc;
+	}
+
+	fs_base = get_fs_base();
+	base->kfs_base = fs_base;
+	base->ufs_base = fs_base;
+	base->in_usermode = 0;
+
+    // Setup GDT for hypercall
+    setup_gdt(base->gdt, &base->tss);
+
+    return 0;
 }
 
-void *get_current_percpu(void)
+int free_percpu(struct percpu *base)
+{
+    free_safe_stack(&base->tss);
+    return 0;
+}
+
+void dump_percpu(struct percpu *base)
+{
+    log_debug("PerCpu Entry:");
+    log_debug("percpu_ptr: %lx", base->percpu_ptr);
+    log_debug("kfs_base: %lx ufs_base: %lx", base->kfs_base, base->ufs_base);
+    log_debug("in_usermode: %lx", base->in_usermode);
+    log_debug("tss: %p gdt: %p", &base->tss, base->gdt);
+#ifdef CONFIG_VMPL_DETAILS
+    dump_gdt(base->gdt);
+    dump_tss(&base->tss);
+#endif
+}
+
+struct vcpu_config *vcpu_config_alloc(struct percpu *base)
+{
+    struct vcpu_config *config = malloc(sizeof(struct vcpu_config));
+    memset(config, 0, sizeof(struct vcpu_config));
+
+    config->lstar = (uint64_t)&__dune_syscall;
+    config->fs.base = base->kfs_base;
+    config->gs.base = (uint64_t)base;
+
+    config->tr.selector = GD_TSS;
+    config->tr.base = (uint64_t)&base->tss;
+    config->tr.limit = sizeof(base->tss);
+    config->tr.attrib = 0x0089; // refer to linux-svsm
+
+    config->gdtr.base = (uint64_t)&base->gdt;
+    config->gdtr.limit = sizeof(base->gdt) - 1;
+
+    config->idtr.base = (uint64_t)&idt;
+    config->idtr.limit = sizeof(idt) - 1;
+
+    return config;
+}
+
+void boot_percpu(struct percpu *base)
+{
+	struct tptr _idtr, _gdtr;
+
+	_gdtr.base  = (uint64_t) &base->gdt;
+	_gdtr.limit = sizeof(base->gdt) - 1;
+
+	_idtr.base = (uint64_t) &idt;
+	_idtr.limit = sizeof(idt) - 1;
+
+	asm volatile(
+		// STEP 1: load the new GDT
+		"lgdt %0\n"
+
+		// STEP 2: initialize data segements
+		"mov %1, %%ax\n"
+        "mov %%ax, %%ds\n"
+        "mov %%ax, %%es\n"
+        "mov %%ax, %%ss\n"
+
+        // STEP 3: long jump into the new code segment
+        "mov %2, %%rax\n"
+        "pushq %%rax\n"
+        "leaq 1f(%%rip),%%rax\n"
+        "pushq %%rax\n"
+        "lretq\n"
+        "1:\n"
+        "nop\n"
+
+        // STEP 4: load the task register (for safe stack switching)
+        "mov %3, %%ax\n"
+        "ltr %%ax\n"
+
+        // STEP 5: load the new IDT and enable interrupts
+        "lidt %4\n"
+        "sti\n"
+
+		:
+		: "m"(_gdtr), "i"(GD_KD), "i"(GD_KT), "i"(GD_TSS), "m"(_idtr)
+		: "rax");
+	
+	// STEP 6: FS and GS require special initialization on 64-bit
+	wrmsrl(MSR_FS_BASE, base->kfs_base);
+	wrmsrl(MSR_GS_BASE, (unsigned long) base);
+
+    return 0;
+}
+
+struct percpu *get_current_percpu(void)
 {
     return lpercpu;
 }
 
-void set_current_percpu(void *percpu)
+void set_current_percpu(struct percpu *percpu)
 {
     lpercpu = percpu;
 }

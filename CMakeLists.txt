@@ -68,6 +68,7 @@ set(VMPL_SOURCES
 
 # 头文件列表
 set(VMPL_HEADERS
+    include/config.h
     include/vmpl.h
     include/error.h
     include/sys.h

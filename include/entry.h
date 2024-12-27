@@ -10,9 +10,14 @@
 
 // 虚拟机CPU操作接口
 struct vcpu_ops {
-    int (*init)(void *__percpu);         // 初始化函数
-    int (*enter)(void *__percpu);        // 进入虚拟化模式
-    int (*boot)(void *__percpu);        // 进入后处理函数
+    struct percpu *(*alloc)();
+    int (*free)(struct percpu *percpu);
+    int (*init)(struct percpu *percpu);
+    int (*enter)(struct percpu *percpu);
+    int (*boot)(struct percpu *percpu);
+    void (*dump)(struct percpu *percpu);
+    int (*fpu_init)(struct percpu *percpu);
+    int (*fpu_finish)(struct percpu *percpu);
 };
 
 // 虚拟化平台操作接口

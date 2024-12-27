@@ -82,7 +82,7 @@ int vmpl_init(bool map_full) {
  * @brief 统一进入虚拟化模式入口
  */
 int vmpl_enter(int argc, char *argv[]) {
-    void *percpu = NULL;
+    struct percpu *percpu = NULL;
     int ret = 0;
     
     // 检查虚拟化平台是否已初始化
@@ -109,14 +109,27 @@ int vmpl_enter(int argc, char *argv[]) {
     }
 
     // 创建percpu
-    percpu = create_percpu();
+    percpu = vcpu_ops->alloc();
     if (!percpu) {
         vmpl_set_last_error(VMPL_ERROR_OUT_OF_MEMORY);
         return -1;
     }
 
     // 进入虚拟化模式前处理
+    ret = init_percpu(percpu);
+    if (ret != 0) {
+        vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
+        goto failed;
+    }
+
     ret = vcpu_ops->init(percpu);
+    if (ret != 0) {
+        vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
+        goto failed;
+    }
+
+    // Save FPU state
+    ret = vcpu_ops->fpu_init(percpu);
     if (ret != 0) {
         vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
         goto failed;
@@ -126,6 +139,16 @@ int vmpl_enter(int argc, char *argv[]) {
     ret = vcpu_ops->enter(percpu);
     if (ret != 0) {
         vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
+        goto failed;
+    }
+
+    // Now we are in VMPL mode
+    percpu->in_usermode = 0;
+
+    // Restore FPU state
+    ret = vcpu_ops->fpu_finish(percpu);
+    if (ret != 0) {
+        vmpl_set_last_error(VMPL_ERROR_INVALID_STATE);
         goto failed;
     }
 
@@ -141,26 +164,47 @@ int vmpl_enter(int argc, char *argv[]) {
 
 #ifdef CONFIG_VMPL_BANNER
     // 打印banner
-    g_context->ops->banner();
+    platform_banner();
 #endif
+
 #ifdef CONFIG_VMPL_STATS
     // 打印统计信息
-    g_context->ops->stats();
+    platform_stats();
 #endif
+
 #ifdef CONFIG_VMPL_TEST
-    // 测试
-    g_context->ops->test();
+    // 测试函数
+    platform_test();
 #endif
 
     return 0;
 
 failed:
-    free_percpu(percpu);
+    ret = vcpu_ops->free(percpu);
+    if (ret != 0) {
+        log_err("Failed to free percpu");
+    }
     g_context->ops->cleanup();
     return ret;
 }
 
-int dune_enter_ex(void *percpu)
+// platform level routines
+void platform_banner(void)
+{
+    g_context->ops->banner();
+}
+
+void platform_stats(void)
+{
+    g_context->ops->stats();
+}
+
+void platform_test(void)
+{
+    g_context->ops->test();
+}
+
+int dune_enter_ex(struct percpu *percpu)
 {
 	int ret;
 

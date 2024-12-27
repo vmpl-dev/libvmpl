@@ -267,6 +267,11 @@ extern int dune_fd;
 extern int vmpl_init(bool map_full);
 extern int vmpl_enter(int argc, char *argv[]);
 
+// platform level routines
+extern void platform_banner(void);
+extern void platform_stats(void);
+extern void platform_test(void);
+
 // user mode entry
 extern int dune_call_user_func(void *func, ...);
 extern int dune_call_user_main(void *func, int argc, char **argv, char **envp);

@@ -35,15 +35,9 @@
 #include "platform.h"
 
 struct vmpl_percpu {
-	uint64_t percpu_ptr;
-	uint64_t tmp;
-	uint64_t kfs_base;
-	uint64_t ufs_base;
-	uint64_t in_usermode;
-	struct Tss tss;
-	uint64_t gdt[NR_GDT_ENTRIES];
+    struct percpu percpu;
     struct Ghcb *ghcb;
-	hotcall_t hotcall;
+    hotcall_t hotcall;
     uint64_t vmpl;
     struct fpu_area *fpu;
     char *xsave_area;
@@ -52,63 +46,15 @@ struct vmpl_percpu {
     int vcpu_fd;
 } __attribute__((packed));
 
-const uint64_t TMP = offsetof(struct vmpl_percpu, tmp);
-const uint64_t UFS_BASE = offsetof(struct vmpl_percpu, ufs_base);
-const uint64_t KFS_BASE = offsetof(struct vmpl_percpu, kfs_base);
-const uint64_t IN_USERMODE = offsetof(struct vmpl_percpu, in_usermode);
+#define to_vmpl_percpu(percpu_ptr) container_of(percpu_ptr, struct vmpl_percpu, percpu)
+
 const uint64_t GHCB = offsetof(struct vmpl_percpu, ghcb);
 const uint64_t HOTCALL = offsetof(struct vmpl_percpu, hotcall);
 
 #define VMPL_PERCPU_GHCB 216
 #define VMPL_PERCPU_HOTCALL 224
 
-#ifdef CONFIG_DUMP_DETAILS
-static void dump_percpu(struct vmpl_percpu *percpu)
-{
-    log_debug("PerCpu Entry:");
-    log_debug("percpu_ptr: %lx", percpu->percpu_ptr);
-    log_debug("kfs_base: %lx ufs_base: %lx", percpu->kfs_base, percpu->ufs_base);
-    log_debug("in_usermode: %lx", percpu->in_usermode);
-    log_debug("tss: %p gdt: %p", &percpu->tss, percpu->gdt);
-    log_debug("ghcb: %p", percpu->ghcb);
-}
-
-static void dump_configs(struct vmpl_percpu *percpu)
-{
-    log_debug("VMPL Configs:");
-    dump_idt(idt);
-    dump_gdt(percpu->gdt);
-    dump_tss(&percpu->tss);
-    dump_ghcb(percpu->ghcb);
-    dump_percpu(percpu);
-}
-#else
-static void dump_configs(struct vmpl_percpu *percpu) {}
-#endif
-
 // PerCPU Level Routines
-static struct vcpu_config *vcpu_config_alloc(struct vmpl_percpu *percpu)
-{
-    struct vcpu_config *config = malloc(sizeof(struct vcpu_config));
-    memset(config, 0, sizeof(struct vcpu_config));
-
-    config->lstar = (uint64_t)&__dune_syscall;
-    config->fs.base = percpu->kfs_base;
-    config->gs.base = (uint64_t)percpu;
-
-    config->tr.selector = GD_TSS;
-    config->tr.base = (uint64_t)&percpu->tss;
-    config->tr.limit = sizeof(percpu->tss);
-    config->tr.attrib = 0x0089; // refer to linux-svsm
-
-    config->gdtr.base = (uint64_t)&percpu->gdt;
-    config->gdtr.limit = sizeof(percpu->gdt) - 1;
-
-    config->idtr.base = (uint64_t)&idt;
-    config->idtr.limit = sizeof(idt) - 1;
-
-    return config;
-}
 
 static int create_vcpu(struct vmpl_percpu *percpu)
 {
@@ -116,7 +62,7 @@ static int create_vcpu(struct vmpl_percpu *percpu)
     struct vcpu_config *config;
     log_info("vcpu create");
 
-    config = vcpu_config_alloc(percpu);
+    config = vcpu_config_alloc(&percpu->percpu);
     rc = vmpl_ioctl_create_vcpu(dune_fd, config);
     if (rc < 0) {
         vmpl_set_last_error(VMPL_ERROR_DEVICE_NOT_FOUND);
@@ -137,10 +83,12 @@ failed:
     return rc;
 }
 
-// musl-gcc
-static int fpu_init(struct vmpl_percpu *percpu)
+// FPU Routines
+
+static int fpu_init(struct percpu *base)
 {
     log_info("fpu init");
+    struct vmpl_percpu *percpu = to_vmpl_percpu(base);
     percpu->xsave_mask = _xgetbv(0);
     
     // 检查 percpu 是否有效
@@ -174,8 +122,10 @@ static int fpu_init(struct vmpl_percpu *percpu)
     return 0;
 }
 
-static int fpu_finish(struct vmpl_percpu *percpu)
+static int fpu_finish(struct percpu *base)
 {
+    struct vmpl_percpu *percpu = to_vmpl_percpu(base);
+
     // Restore the XSAVE state
     _xsetbv(0, percpu->xsave_mask);
     _xrstor64(percpu->xsave_area, percpu->xsave_mask);
@@ -218,10 +168,9 @@ failed:
     return NULL;
 }
 
-int vc_init(void *__percpu) {
+int vc_init(struct vmpl_percpu *percpu) {
     Ghcb *ghcb_va;
     PhysAddr ghcb_pa;
-    struct vmpl_percpu *percpu = (struct vmpl_percpu *) __percpu;
     log_info("setup GHCB");
     ghcb_va = setup_ghcb(dune_fd);
     if (!ghcb_va) {
@@ -242,13 +191,12 @@ int vc_init(void *__percpu) {
     return 0;
 }
 
-int vc_init_percpu(void *__percpu)
+int vc_init_percpu(struct vmpl_percpu *percpu)
 {
     Ghcb *ghcb_va;
     pte_t *ptep;
     PhysAddr ghcb_pa;
     uint64_t value;
-    struct vmpl_percpu *percpu = (struct vmpl_percpu *) __percpu;
 
     // Save original GHCB page address
     ghcb_va = percpu->ghcb;
@@ -283,8 +231,8 @@ failed:
     return -1;
 }
 #else
-int vc_init(void *__percpu) { return 0; }
-static inline int vc_init_percpu(void *__percpu) { return 0; }
+static inline int vc_init(struct vmpl_percpu *percpu) { return 0; }
+static inline int vc_init_percpu(struct vmpl_percpu *percpu) { return 0; }
 #endif
 
 #ifdef CONFIG_VMPL_HOTCALLS
@@ -298,7 +246,7 @@ static inline void hotcalls_enable(struct vmpl_percpu *percpu) {
 }
 #endif
 
-int get_current_vmpl(void)
+static int get_current_vmpl(void)
 {
     FILE *fp;
     char line[256];
@@ -320,21 +268,46 @@ int get_current_vmpl(void)
     return vmpl;
 }
 
-static int vmpl_percpu_init(void *__percpu)
+// PerCPU Level Routines
+
+static struct percpu *vmpl_percpu_alloc(void)
+{
+    struct vmpl_percpu *percpu = (struct vmpl_percpu *)create_percpu();
+    if (!percpu) {
+        return NULL;
+    }
+    return &percpu->percpu;
+}
+
+static int vmpl_percpu_free(struct percpu *base)
+{
+    struct vmpl_percpu *percpu = to_vmpl_percpu(base);
+    free(percpu);
+    return 0;
+}
+
+static void vmpl_percpu_dump(struct percpu *base)
+{
+    struct vmpl_percpu *percpu = to_vmpl_percpu(base);
+    dump_percpu(base);
+    dump_ghcb(percpu->ghcb);
+    log_debug("hotcall: %p", percpu->hotcall);
+    log_debug("vmpl: %lx", percpu->vmpl);
+    log_debug("fpu: %p", percpu->fpu);
+    log_debug("xsave_area: %p", percpu->xsave_area);
+    log_debug("xsave_mask: %lx", percpu->xsave_mask);
+    log_debug("pkey: %d", percpu->pkey);
+    log_debug("vcpu_fd: %d", percpu->vcpu_fd);
+}
+
+static int vmpl_percpu_init(struct percpu *base)
 {
     int rc;
     unsigned long fs_base;
-    struct vmpl_percpu *percpu = (struct vmpl_percpu *) __percpu;
+    struct vmpl_percpu *percpu = to_vmpl_percpu(base);
 
-    if ((rc = setup_safe_stack(&percpu->tss))) {
-        vmpl_set_last_error(VMPL_ERROR_OUT_OF_MEMORY);
-        return rc;
-    }
+    log_debug("vmpl percpu init");
 
-    fs_base = get_fs_base();
-	percpu->kfs_base = fs_base;
-	percpu->ufs_base = fs_base;
-	percpu->in_usermode = 0;
     percpu->ghcb = NULL;
     percpu->hotcall = NULL;
     percpu->vmpl = get_current_vmpl();
@@ -345,17 +318,8 @@ static int vmpl_percpu_init(void *__percpu)
         goto failed;
     }
 
-    // Setup GDT for hypercall
-    setup_gdt(percpu->gdt, &percpu->tss);
-
     // Setup segments registers
     if ((rc = create_vcpu(percpu))) {
-        vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
-        goto failed;
-    }
-
-    // Setup XSAVE for FPU
-    if ((rc = fpu_init(percpu))) {
         vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
         goto failed;
     }
@@ -368,15 +332,9 @@ failed:
     return rc;
 }
 
-static int vmpl_boot(void *__percpu)
+static int vmpl_percpu_boot(struct percpu *base)
 {
-    struct vmpl_percpu *percpu = (struct vmpl_percpu *) __percpu;
-
-    // Now we are in VMPL mode
-    percpu->in_usermode = 0;
-
-    // Setup XSAVE for FPU
-    fpu_finish(percpu);
+    struct vmpl_percpu *percpu = to_vmpl_percpu(base);
 
     // Setup VC communication
     vc_init(percpu);
@@ -390,10 +348,10 @@ static int vmpl_boot(void *__percpu)
     return 0;
 }
 
-static int do_vmpl_enter(void *__percpu)
+static int do_vmpl_enter(struct percpu *base)
 {
     int rc;
-    struct vmpl_percpu *percpu = (struct vmpl_percpu *) __percpu;
+    struct vmpl_percpu *percpu = to_vmpl_percpu(base);
     struct dune_config *config = malloc(sizeof(struct dune_config));
     if (!config) {
         vmpl_set_last_error(VMPL_ERROR_OUT_OF_MEMORY);
@@ -602,9 +560,14 @@ static void vmpl_exit(struct dune_config *conf)
 
 // VCPU操作实现
 const static struct vcpu_ops vmpl_vcpu_ops = {
+    .alloc = vmpl_percpu_alloc,
+    .free = vmpl_percpu_free,
     .init = vmpl_percpu_init,
     .enter = do_vmpl_enter,
-    .boot = vmpl_boot,
+    .boot = vmpl_percpu_boot,
+    .dump = vmpl_percpu_dump,
+    .fpu_init = fpu_init,
+    .fpu_finish = fpu_finish,
 };
 
 // VMPL平台操作实现

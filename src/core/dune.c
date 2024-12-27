@@ -1,3 +1,4 @@
+#include <sys/mman.h>
 #define _GNU_SOURCE
 #include <stddef.h>
 #include <sys/syscall.h>
@@ -5,6 +6,7 @@
 
 #include "vmpl-dev.h"
 #include "log.h"
+#include "fpu.h"
 #include "error.h"
 #include "signals.h"
 #include "syscall.h"
@@ -19,43 +21,19 @@
 #include "vmpl.h"
 #include "platform.h"
 
-
 struct dune_percpu {
-	uint64_t percpu_ptr;
-	uint64_t tmp;
-	uint64_t kfs_base;
-	uint64_t ufs_base;
-	uint64_t in_usermode;
-	struct Tss tss;
-	uint64_t gdt[NR_GDT_ENTRIES];
+	struct percpu percpu;
 	struct fpu_area *fpu;
 };
 
-#ifdef CONFIG_DUMP_DETAILS
-static void dump_percpu(struct dune_percpu *percpu)
-{
-    log_debug("PerCpu Entry:");
-    log_debug("percpu_ptr: %lx", percpu->percpu_ptr);
-    log_debug("kfs_base: %lx ufs_base: %lx", percpu->kfs_base, percpu->ufs_base);
-    log_debug("in_usermode: %lx", percpu->in_usermode);
-    log_debug("tss: %p gdt: %p", &percpu->tss, percpu->gdt);
-}
+#define to_dune_percpu(percpu_ptr) container_of(percpu_ptr, struct dune_percpu, percpu)
 
-static void dump_configs(struct dune_percpu *percpu)
-{
-    log_debug("DUNE Configs:");
-    dump_idt(idt);
-    dump_gdt(percpu->gdt);
-    dump_tss(&percpu->tss);
-    dump_percpu(percpu);
-}
-#else
-static void dump_configs(struct dune_percpu *percpu) {}
-#endif
+// FPU Routines
 
-static int fpu_init(struct dune_percpu *percpu)
+static int fpu_init(struct percpu *base)
 {
     log_info("fpu init");
+    struct dune_percpu *percpu = to_dune_percpu(base);
     percpu->fpu = memalign(64, sizeof(struct fpu_area));
     if (!percpu->fpu) {
         vmpl_set_last_error(VMPL_ERROR_OUT_OF_MEMORY);
@@ -69,115 +47,73 @@ static int fpu_init(struct dune_percpu *percpu)
     return 0;
 }
 
-static int fpu_finish(struct dune_percpu *percpu)
+static int fpu_finish(struct percpu *base)
 {
+    struct dune_percpu *percpu = to_dune_percpu(base);
+
     dune_fpu_load(percpu->fpu);
 
     log_info("fpu finish");
     return 0;
 }
 
-static int dune_percpu_init(void *__percpu)
+// PerCPU Level Routines
+
+static struct percpu *dune_percpu_alloc(void)
+{
+    struct dune_percpu *percpu = (struct dune_percpu *)create_percpu();
+    if (!percpu) {
+        return NULL;
+    }
+
+    return &percpu->percpu;
+}
+
+static int dune_percpu_free(struct percpu *base)
+{
+    struct dune_percpu *percpu = to_dune_percpu(base);
+    free_percpu(base);
+	munmap(percpu, PGSIZE);
+    return 0;
+}
+
+static void dune_percpu_dump(struct percpu *base)
+{
+    struct dune_percpu *percpu = to_dune_percpu(base);
+    dump_percpu(base);
+	dune_fpu_dump(percpu->fpu);
+}
+
+static int dune_percpu_init(struct percpu *base)
 {
 	int rc;
 	unsigned long fs_base;
-	struct dune_percpu *percpu = (struct dune_percpu *) __percpu;
+	struct dune_percpu *percpu = to_dune_percpu(base);
 
     log_info("dune before enter");
 
-	if ((rc = setup_safe_stack(&percpu->tss))) {
-		vmpl_set_last_error(VMPL_ERROR_INVALID_STATE);
-		log_err("dune: failed to setup safe stack");
-		return rc;
-	}
-
-	fs_base = get_fs_base();
-	percpu->kfs_base = fs_base;
-	percpu->ufs_base = fs_base;
-	percpu->in_usermode = 0;
-
 	// map the safe stack
-	map_ptr(percpu->tss.tss_ist[0], SAFE_STACK_SIZE);
+	map_ptr(base->tss.tss_ist[0], SAFE_STACK_SIZE);
 	map_ptr(percpu, sizeof(*percpu));
 	map_stack();
 
 	// 设置debug_fd
 	set_debug_fd(dune_fd);
 
-	// 初始化xsave
-	rc = fpu_init(percpu);
-	if (rc) {
-		vmpl_set_last_error(VMPL_ERROR_INVALID_STATE);
-		log_err("dune: failed to initialize fpu");
-		return rc;
-	}
-
     return 0;
 }
 
-static int dune_boot(void *__percpu)
+static int dune_percpu_boot(struct percpu *base)
 {
-	struct dune_percpu *percpu = (struct dune_percpu *) __percpu;
-	struct tptr _idtr, _gdtr;
-
-	setup_gdt(percpu->gdt, &percpu->tss);
-
-	_gdtr.base  = (uint64_t) &percpu->gdt;
-	_gdtr.limit = sizeof(percpu->gdt) - 1;
-
-	_idtr.base = (uint64_t) &idt;
-	_idtr.limit = sizeof(idt) - 1;
-
-	asm volatile(
-		// STEP 1: load the new GDT
-		"lgdt %0\n"
-
-		// STEP 2: initialize data segements
-		"mov %1, %%ax\n"
-        "mov %%ax, %%ds\n"
-        "mov %%ax, %%es\n"
-        "mov %%ax, %%ss\n"
-
-        // STEP 3: long jump into the new code segment
-        "mov %2, %%rax\n"
-        "pushq %%rax\n"
-        "leaq 1f(%%rip),%%rax\n"
-        "pushq %%rax\n"
-        "lretq\n"
-        "1:\n"
-        "nop\n"
-
-        // STEP 4: load the task register (for safe stack switching)
-        "mov %3, %%ax\n"
-        "ltr %%ax\n"
-
-        // STEP 5: load the new IDT and enable interrupts
-        "lidt %4\n"
-        "sti\n"
-
-		:
-		: "m"(_gdtr), "i"(GD_KD), "i"(GD_KT), "i"(GD_TSS), "m"(_idtr)
-		: "rax");
-	
-	// STEP 6: FS and GS require special initialization on 64-bit
-	wrmsrl(MSR_FS_BASE, percpu->kfs_base);
-	wrmsrl(MSR_GS_BASE, (unsigned long) percpu);
-
-	// STEP 7: finish fpu
-	int rc = fpu_finish(percpu);
-	if (rc) {
-		vmpl_set_last_error(VMPL_ERROR_INVALID_STATE);
-		log_err("dune: failed to finish fpu");
-		return rc;
-	}
+	// 启动percpu
+	boot_percpu(base);
 
 	return 0;
 }
 
-static int do_dune_enter(void *__percpu)
+static int do_dune_enter(struct percpu *base)
 {
 	struct dune_config *conf;
-	struct dune_percpu *percpu = (struct dune_percpu *) __percpu;
 	int ret;
 
 	conf = malloc(sizeof(struct dune_config));
@@ -200,6 +136,8 @@ static int do_dune_enter(void *__percpu)
 
 	return 0;
 }
+
+// Platform Level Routines
 
 static void dune_banner(void)
 {
@@ -265,7 +203,7 @@ static void dune_exit(struct dune_config *conf)
 	exit(EXIT_FAILURE);
 }
 
-int dune_prepare(bool map_full)
+static int dune_prepare(bool map_full)
 {
 	int ret, i;
 
@@ -354,9 +292,14 @@ fail_open:
 
 // VCPU操作实现
 static const struct vcpu_ops dune_vcpu_ops = {
+    .alloc = dune_percpu_alloc,
+    .free = dune_percpu_free,
     .init = dune_percpu_init,
     .enter = do_dune_enter,
-    .boot = dune_boot,
+    .boot = dune_percpu_boot,
+    .dump = dune_percpu_dump,
+    .fpu_init = fpu_init,
+    .fpu_finish = fpu_finish,
 };
 
 // DUNE平台操作实现

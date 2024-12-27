@@ -16,6 +16,20 @@
 #include "ghcb.h"
 #include "vmpl.h"
 
+#define container_of(ptr, type, member) ({ \
+    const typeof(((type *)0)->member) *__mptr = (ptr); \
+    (type *)((char *)__mptr - offsetof(type, member)); })
+
+struct percpu {
+    uint64_t percpu_ptr;
+    uint64_t tmp;
+    uint64_t kfs_base;
+    uint64_t ufs_base;
+    uint64_t in_usermode;
+    struct Tss tss;
+    uint64_t gdt[NR_GDT_ENTRIES];
+} __attribute__((packed));
+
 extern const uint64_t TMP;
 extern const uint64_t UFS_BASE;
 extern const uint64_t KFS_BASE;
@@ -34,14 +48,14 @@ int setup_cpuset();
 #else
 static inline int setup_cpuset(void) { return 0; }
 #endif
-void setup_gdt(uint64_t *gdt, struct Tss *tss);
-void dump_gdt(uint64_t *gdt);
-void dump_tss(struct Tss *tss);
-int setup_safe_stack(struct Tss *tss);
 void *create_percpu(void);
-void free_percpu(void *percpu);
-void *get_current_percpu(void);
-void set_current_percpu(void *percpu);
+int init_percpu(struct percpu *base);
+int free_percpu(struct percpu *base);
+void dump_percpu(struct percpu *base);
+void boot_percpu(struct percpu *base);
+struct vcpu_config *vcpu_config_alloc(struct percpu *base);
+struct percpu *get_current_percpu(void);
+void set_current_percpu(struct percpu *base);
 unsigned long get_fs_base(void);
 
 #endif
