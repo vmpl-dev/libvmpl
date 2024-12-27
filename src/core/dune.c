@@ -121,7 +121,7 @@ static int do_dune_enter(struct percpu *base)
 	conf->vcpu = 0;
 	conf->rip = (uint64_t) &__dune_ret;
 	conf->rsp = 0;
-	conf->cr3 = (physaddr_t) pgroot;
+	conf->cr3 = (physaddr_t) pgtable_va_to_pa((VirtAddr)pgroot);
 	conf->rflags = 0x2;
 
 	/* NOTE: We don't setup the general purpose registers because __dune_ret

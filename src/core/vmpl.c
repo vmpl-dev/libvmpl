@@ -361,8 +361,11 @@ static int do_vmpl_enter(struct percpu *base)
     memset(config, 0, sizeof(struct dune_config));
     /* NOTE: We don't setup the general purpose registers because __dune_ret
      * will restore them as they were before the __dune_enter call */
+
+    config->vcpu = 0;
     config->rip = (uint64_t) &__dune_ret;
     config->rsp = 0;
+    config->cr3 = (physaddr_t) pgtable_va_to_pa((VirtAddr)pgroot);
     config->rflags = 0x202;
 
     // Initialize VMPL library
