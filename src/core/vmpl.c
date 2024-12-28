@@ -252,9 +252,9 @@ static int get_current_vmpl(void)
     char line[256];
     int vmpl = -1;
 
-    fp = fopen("/proc/vmpl_proc", "r");
+    fp = fopen("/proc/vmpl/info", "r");
     if (!fp) {
-        log_err("Failed to open /proc/vmpl_proc");
+        log_err("Failed to open /proc/vmpl/info");
         return -errno;
     }
 
