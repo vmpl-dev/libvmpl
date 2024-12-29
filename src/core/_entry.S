@@ -24,6 +24,7 @@
 #define RSI	(104)
 #define RDX	(96)
 #define RCX	(88)
+#define RAX	(80)
 #define R8	(72)
 #define R9	(64)
 
@@ -37,10 +38,7 @@
 #define R14	(8)
 #define R15	(0)
 
-#define REG_END	(112)
-
-/* syscall num / return code */
-#define RAX	(80)
+#define REG_END	(120)
 
 /* exception frame */
 #define ERR	(120)
@@ -69,8 +67,10 @@
 /*
  * macro to save destructable register state
  */
-	.macro SAVE_REGS save_full=1, include_rax=1
+	.macro SAVE_REGS save_full=1, include_rax=1, include_rdi=1
+	.if \include_rdi
 	movq	%rdi, RDI(%rsp)
+	.endif
 	movq	%rsi, RSI(%rsp)
 	movq	%rdx, RDX(%rsp)
 	movq	%r8, R8(%rsp)
@@ -105,7 +105,7 @@
 /*
  * macro to restore destructable register state
  */
-	.macro RESTORE_REGS rstor_full=1, include_rax=1
+	.macro RESTORE_REGS rstor_full=1, include_rax=1, include_rdi=1
 	.if \include_rax
 	movq	RAX(%rsp), %rax
 	.endif
@@ -120,7 +120,9 @@
 	movq	R8(%rsp), %r8
 	movq	RDX(%rsp), %rdx
 	movq	RSI(%rsp), %rsi
+	.if \include_rdi
 	movq	RDI(%rsp), %rdi
+	.endif
 	.endm
 
 /*
@@ -186,7 +188,7 @@
 __dune_enter:
 	pushfq
 	subq	$REG_END, %rsp
-	SAVE_REGS 1, 0
+	SAVE_REGS 1, 0, 1
 	SAVE_REST
 	movq	%rsp, DUNE_CFG_RSP(%rsi)
 	movq	%rsi, %rdx
@@ -229,7 +231,7 @@ __dune_ret:
 
 __dune_ret_fail:
 	RESTORE_REST
-	RESTORE_REGS 1, 0
+	RESTORE_REGS 1, 0, 1
 	addq	$REG_END, %rsp
 	popfq
 	retq
@@ -309,7 +311,7 @@ __dune_syscall:
 	movq	%rcx, RIP(%rsp)
 	movq	%r11, RFLAGS(%rsp)
 	movq	%r10, RCX(%rsp) /* fixup to standard 64-bit calling ABI */
-	SAVE_REGS 0, 1
+	SAVE_REGS 0, 1, 1
 	movq	%gs:TMP, %rax
 	movq	%rax, RSP(%rsp)
 
@@ -410,8 +412,8 @@ __dune_intr:
 	.if i <> 8 && (i <= 9 || i >= 15) && i <> 17 && i <> 29 && i <> 30
 		pushq	%rax /* placeholder for no error code */
 	.endif
-	pushq	%rax /* save %rax */
-	mov $i, %rax
+	pushq %rdi	/* save %rdi */
+	mov $i, %rdi
 	jmp __dune_intr_with_num
 	i = i + 1
 	.endr
@@ -419,9 +421,8 @@ __dune_intr:
 __dune_intr_with_num:
 	/* save all registers */
 	subq	$REG_END, %rsp
-	SAVE_REGS 1, 0 /* %rax already is pushed */
+	SAVE_REGS 1, 1, 0 /* %rdi already is pushed */
 	SAVE_REST
-	movq	%rax, %rdi
 
 	/* then restore the CPL0 FS base address */
 	testq	$3, CS(%rsp)
