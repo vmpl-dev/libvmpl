@@ -39,6 +39,7 @@ struct vmpl_percpu {
     struct Ghcb *ghcb;
     hotcall_t hotcall;
     uint64_t vmpl;
+    pte_t *ghcb_ptep;
     struct fpu_area *fpu;
     char *xsave_area;
     uint64_t xsave_mask;
@@ -139,14 +140,12 @@ static int fpu_finish(struct percpu *base)
 }
 
 #ifdef CONFIG_VMPL_GHCB
-Ghcb *setup_ghcb(int dune_fd)
+int setup_ghcb(struct vmpl_percpu *percpu)
 {
-    int rc;
-    Ghcb *ghcb;
     log_info("setup ghcb");
 
     // 映射ghcb, 用于hypercall
-    ghcb = mmap((void *)GHCB_MMAP_BASE, PAGE_SIZE, PROT_READ | PROT_WRITE,
+    Ghcb *ghcb = mmap((void *)GHCB_MMAP_BASE, PAGE_SIZE, PROT_READ,
                              MAP_SHARED | MAP_FIXED | MAP_POPULATE, dune_fd, 0);
     if (ghcb == MAP_FAILED) {
         perror("dune: failed to map GHCB");
@@ -154,81 +153,60 @@ Ghcb *setup_ghcb(int dune_fd)
         goto failed;
     }
 
-    // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
-    log_debug("dune: GHCB at %p", ghcb);
-    memset(ghcb, 0, sizeof(*ghcb));
-    ghcb_set_version(ghcb, GHCB_PROTOCOL_MIN);
-    ghcb_set_usage(ghcb, GHCB_DEFAULT_USAGE);
-    ghcb_set_sw_exit_code(ghcb, GHCB_NAE_RUN_VMPL);
-    ghcb_set_sw_exit_info_1(ghcb, 0);
-    ghcb_set_sw_exit_info_2(ghcb, 0);
-
-    return ghcb;
-failed:
-    return NULL;
-}
-
-int vc_init(struct vmpl_percpu *percpu) {
-    Ghcb *ghcb_va;
-    PhysAddr ghcb_pa;
-    log_info("setup GHCB");
-    ghcb_va = setup_ghcb(dune_fd);
-    if (!ghcb_va) {
-        log_err("failed to setup GHCB");
-        return -1;
+    // 获得ghcb的pte，以便修改ghcb的读写权限
+    pte_t *ptep;
+    if (pgtable_lookup(pgroot, (void *)ghcb, CREATE_NONE, &ptep) != 0) {
+        log_err("dune: failed to lookup page table entry for GHCB");
+        goto failed;
     }
 
-    log_info("setup VC");
-
-	ghcb_pa = (PhysAddr)pgtable_va_to_pa((VirtAddr)ghcb_va);
-    log_debug("ghcb_pa: %lx", ghcb_pa);
-
-    vc_establish_protocol();
-    vc_register_ghcb(ghcb_pa);
-    vc_set_ghcb(ghcb_va);
-
-    percpu->ghcb = ghcb_va;
+    percpu->ghcb_ptep = ptep;
+    // 设置ghcb, 用于hypercall, 详见AMD APM Vol. 2 15.31
+    log_info("dune: GHCB at %p", ghcb);
     return 0;
+failed:
+    return -1;
 }
 
-int vc_init_percpu(struct vmpl_percpu *percpu)
-{
-    Ghcb *ghcb_va;
-    pte_t *ptep;
-    PhysAddr ghcb_pa;
-    uint64_t value;
-
-    // Save original GHCB page address
-    ghcb_va = percpu->ghcb;
-    // Switch to the default MSR protocol
+void enable_msr_protocol(struct vmpl_percpu *percpu) {
     percpu->ghcb = NULL;
+}
 
-    // Look up the page table entry for the faulting address
-    if (pgtable_lookup(pgroot, ghcb_va, CREATE_NONE, &ptep) != 0)
-        goto failed;
-
+int vc_init_percpu()
+{
+    struct percpu *base;
+    struct vmpl_percpu *percpu;
+    uint64_t value;
+    
+    // CLI, 关闭中断
+    __asm__ volatile("cli");
+    // Save original GHCB page address
+    base = get_current_percpu();
+    percpu = to_vmpl_percpu(base);
+    Ghcb *ghcb_va = percpu->ghcb;
+    // Switch to the default MSR protocol
+    enable_msr_protocol(percpu);
     // Obtain physical address of the page
-    ghcb_pa = pte_addr(*ptep);
+    pte_t *ptep = percpu->ghcb_ptep;
+    PhysAddr ghcb_pa = pte_addr(*ptep);
     // Read the GHCB page and check if it is valid
     rdmsrl(MSR_AMD64_SEV_ES_GHCB, value);
-    /// If the GHCB page is not registered, register it
-    if (value == ghcb_pa)
-        goto restore_ghcb;
-
-    // Register the GHCB page
-    vc_register_ghcb(ghcb_pa);
-restore_ghcb:
+    // If the GHCB page is changed, register it
+    if (value != ghcb_pa) {
+        vc_establish_protocol();
+        vc_register_ghcb(ghcb_pa);
+        vc_set_ghcb(ghcb_va);
+    }
     // Set the RW permission for the GHCB page
     *ptep |= PTE_W;
     // Invalidate the TLB entry for the GHCB page
 	vmpl_flush_tlb_one(ghcb_va);
     // Restore the percpu GHCB page address
-    percpu->ghcb = (void *)ghcb_pa;
+    percpu->ghcb = (struct Ghcb *)GHCB_MMAP_BASE;
+    // 恢复中断
+    __asm__ volatile("sti");
     // The GHCB page is valid, return success
     return 0;
-failed:
-    // The GHCB page is not valid, terminate the VMPL with an error
-    return -1;
 }
 #else
 static inline int vc_init(struct vmpl_percpu *percpu) { return 0; }
@@ -324,6 +302,12 @@ static int vmpl_percpu_init(struct percpu *base)
         goto failed;
     }
 
+    // 设置ghcb
+    if ((rc = setup_ghcb(percpu)) != 0) {
+        vmpl_set_last_error(VMPL_ERROR_INVALID_OPERATION);
+        goto failed;
+    }
+
     // 设置debug_fd
     set_debug_fd(percpu->vcpu_fd);
 
@@ -335,9 +319,6 @@ failed:
 static int vmpl_percpu_boot(struct percpu *base)
 {
     struct vmpl_percpu *percpu = to_vmpl_percpu(base);
-
-    // Setup VC communication
-    vc_init(percpu);
 
     // Setup hotcall
     hotcalls_enable(percpu);

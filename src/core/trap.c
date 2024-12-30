@@ -286,7 +286,7 @@ static int dune_pre_pf_handler(struct pt_regs *tf)
 		// If the page is a GHCB page, we should first clear the percpu GHCB page address, such that
 		// we fall back to the default MSR protocol. Then we register the GHCB page.
 		if ((addr & PAGE_MASK) == (uint64_t)GHCB_MMAP_BASE) {
-			if (vc_init_percpu(lpercpu) == 0)
+			if (vc_init_percpu() == 0)
 				goto exit;
 		}
 #endif
