@@ -7,8 +7,8 @@ function build_with_musl() {
 }
 
 function build_with_glibc() {
-    cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
-        -DCMAKE_C_COMPILER=gcc-12
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCMAKE_C_COMPILER=gcc-12 ..
 }
 
 # 构建单个包: build_package <package_dir>

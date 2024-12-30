@@ -179,6 +179,16 @@ if(CONFIG_VMPL_TEST)
     add_definitions(-DCONFIG_VMPL_TEST)
 endif()
 
+option(CONFIG_VMPL_STATS "Enable vmpl stats" OFF)
+if(CONFIG_VMPL_STATS)
+    add_definitions(-DCONFIG_VMPL_STATS)
+endif()
+
+option(CONFIG_VMPL_BANNER "Enable vmpl banner" ON)
+if(CONFIG_VMPL_BANNER)
+    add_definitions(-DCONFIG_VMPL_BANNER)
+endif()
+
 option(CONFIG_VMPL_CPUSET "Enable cpuset" OFF)
 if(CONFIG_VMPL_CPUSET)
     add_definitions(-DCONFIG_VMPL_CPUSET)
@@ -253,11 +263,19 @@ endif()
 # add_compile_options(-mno-sse -mno-mmx -mno-sse2 -mno-3dnow -msoft-float)
 
 # 设置配置变量
+set(CONFIG_STACK_DEPTH "1024" CACHE STRING "vmpl stack depth")
 set(CONFIG_VMPL_VA_START "0x3fffff000000UL" CACHE STRING "vmpl va start")
 set(CONFIG_VMPL_VA_SIZE "0x20000000UL" CACHE STRING "vmpl va size")
 set(CONFIG_VMPL_FIT_ALGORITHM "2" CACHE STRING "vmpl fit algorithm")
 set(CONFIG_VMPL_PAGE_GROW_SIZE "0x400" CACHE STRING "vmpl page grow size")
 set(CONFIG_DUNE_PAGE_GROW_SIZE "0x200" CACHE STRING "dune page grow size")
+
+# 在文件开头的 project 声明后添加
+configure_file(
+    ${PROJECT_SOURCE_DIR}/include/config.in
+    ${PROJECT_SOURCE_DIR}/include/config.h
+    @ONLY
+)
 
 # 设置包名称和版本
 set(CPACK_PACKAGE_NAME "libvmpl")

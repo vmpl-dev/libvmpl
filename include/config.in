@@ -1,0 +1,49 @@
+#ifndef _VMPL_CONFIG_H_
+#define _VMPL_CONFIG_H_
+
+/* Version information */
+#define VMPL_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define VMPL_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define VMPL_VERSION_PATCH @PROJECT_VERSION_PATCH@
+
+/* Feature configurations */
+#cmakedefine CONFIG_DUNE_BOOT
+#cmakedefine CONFIG_VMPL_STATS
+#cmakedefine CONFIG_VMPL_BANNER
+#cmakedefine CONFIG_VMPL_TEST
+#cmakedefine CONFIG_VMPL_CPUSET
+#cmakedefine CONFIG_VMPL_SIGNAL
+#cmakedefine CONFIG_VMPL_APIC
+#cmakedefine CONFIG_VMPL_MSR_PROTOCOL
+#cmakedefine CONFIG_VMPL_GHCB
+#cmakedefine CONFIG_VMPL_MM
+#cmakedefine CONFIG_VMPL_SEIMI
+#cmakedefine CONFIG_VMPL_HOTCALLS
+#cmakedefine CONFIG_SYS_FILTER
+#cmakedefine CONFIG_DUMP_DETAILS
+#cmakedefine CONFIG_PGTABLE_LA57
+#cmakedefine CONFIG_STACK_TRACE
+#cmakedefine CONFIG_SERIAL_PORT
+#cmakedefine CONFIG_VMPL_DEBUG
+
+/* Memory configurations */
+#define CONFIG_STACK_DEPTH @CONFIG_STACK_DEPTH@
+#define CONFIG_VMPL_VA_START @CONFIG_VMPL_VA_START@
+#define CONFIG_VMPL_VA_SIZE @CONFIG_VMPL_VA_SIZE@
+#define CONFIG_VMPL_FIT_ALGORITHM @CONFIG_VMPL_FIT_ALGORITHM@
+#define CONFIG_VMPL_PAGE_GROW_SIZE @CONFIG_VMPL_PAGE_GROW_SIZE@
+#define CONFIG_DUNE_PAGE_GROW_SIZE @CONFIG_DUNE_PAGE_GROW_SIZE@
+
+/* Architecture specific configurations */
+#define ARCH_X86_64 1
+
+/* Compiler specific configurations */
+#ifdef __GNUC__
+#define PACKED __attribute__((packed))
+#define ALIGNED(x) __attribute__((aligned(x)))
+#else
+#define PACKED
+#define ALIGNED(x)
+#endif
+
+#endif /* _VMPL_CONFIG_H_ */
